@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -32,6 +32,7 @@
 ## Notes
 
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`
-- **Open**: FR-008 carries the one remaining [NEEDS CLARIFICATION] marker — how a collector supplies
-  the primary image (selecting a file from their device vs. providing a link to an image hosted
-  elsewhere). This materially changes scope, so it was left as a marker rather than assumed.
+- **Resolved 2026-09-06**: The image-supply question that FR-008 carried as a [NEEDS CLARIFICATION]
+  marker was answered — collectors upload the image from their device and Vaultory stores it
+  (JPEG/PNG/WebP, 10 MB maximum, one per collectible), and stored images are readable only by the
+  owning collector. Recorded under Clarifications and applied to FR-008 through FR-015.

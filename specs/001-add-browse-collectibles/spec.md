@@ -56,6 +56,21 @@ Explicitly exclude:
 - AI identification
 - barcode scanning"
 
+## Clarifications
+
+### Session 2026-09-06
+
+- Q: How does a collector supply the primary image for a collectible? (FR-008) → A: The collector
+  uploads the image from their own device and Vaultory stores it, rather than referencing an image
+  hosted elsewhere. The image stays optional. Accepted formats are JPEG, PNG, and WebP; the maximum
+  file size is 10 MB; at most one primary image per collectible. Invalid formats and oversized files
+  must produce a clear validation error. When no image is provided, a polished default placeholder
+  is shown. Stored images must display consistently in the gallery without the collector manually
+  resizing or cropping them.
+- Q: Who should be able to load a stored collectible image once they have its address? → A: Only the
+  collector who owns the collectible. Access is verified on every request; holding an image's
+  address does not by itself grant access.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Add a collectible to my vault (Priority: P1)
@@ -90,7 +105,10 @@ collection afterward. Delivers a usable personal record even with no other capab
 5. **Given** a collector who already has a collectible named "Kaiju Sentinel" marked Owned,
    **When** they add a second collectible with the same name and attributes, **Then** a separate
    second entry is created and both appear independently in their collection.
-6. **Given** a collector adding a collectible, **When** saving fails, **Then** an error state is
+6. **Given** a collector adding a collectible, **When** they upload a 12 MB photograph, **Then**
+   the image is refused with a message stating the 10 MB limit, and they can still save the
+   collectible with a smaller image or none.
+7. **Given** a collector adding a collectible, **When** saving fails, **Then** an error state is
    shown, the collectible is not saved, and the values they entered are preserved so they can
    retry without retyping.
 
@@ -196,9 +214,16 @@ collectibles are shown and that a no-match result is distinguishable from an emp
   and rejected.
 - A collector enters characters from non-Latin scripts, accented characters, or emoji in text
   attributes — these must be stored and displayed faithfully.
-- A collector supplies an image that is too large, or in a format Vaultory does not support — this
-  must be refused with a message stating the limit or the accepted formats, and must not prevent
-  the collectible from being saved without an image.
+- A collector uploads an image larger than 10 MB, or in a format other than JPEG, PNG, or WebP —
+  the image must be refused with a message stating the 10 MB limit or naming the accepted formats,
+  and the collector must still be able to save the collectible with a different image or none.
+- A collector uploads a file with an image extension whose actual content is not an image, or a
+  corrupt image file — it must be refused as an unsupported image rather than stored.
+- A collector uploads an image with extreme proportions (a very tall banner, a very wide panorama)
+  — the gallery must present it at consistent framing alongside every other entry without the
+  collector cropping it, and without distorting neighbouring entries.
+- Someone who is not the owning collector obtains the address of a stored image — loading it must
+  be refused.
 - A collector attempts to reach a collectible belonging to another collector — the attempt must be
   refused, and the refusal must not reveal whether that collectible exists.
 - A collector's session identity cannot be established when they open their collection — no other
@@ -224,78 +249,96 @@ collectibles are shown and that a no-match result is distinguishable from an emp
   date, release date, notes, and one primary image.
 - **FR-007**: System MUST store and display every optional value the collector supplied, and MUST
   distinguish an unrecorded value from an empty or zero value.
-- **FR-008**: System MUST accept one primary image per collectible.
-  [NEEDS CLARIFICATION: How does a collector supply the primary image — by selecting an image file
-  from their device, or by providing a link to an image hosted elsewhere?]
-- **FR-009**: System MUST allow a collectible to be saved with no image.
-- **FR-010**: System MUST record purchase price as an exact monetary amount and MUST NOT introduce
+
+**Primary image**
+
+- **FR-008**: System MUST allow a collector to upload one primary image for a collectible from
+  their own device, and MUST store that image under Vaultory's control rather than referencing an
+  image hosted elsewhere.
+- **FR-009**: System MUST accept primary images in JPEG, PNG, and WebP formats, and MUST reject any
+  other format with a validation message naming the accepted formats.
+- **FR-010**: System MUST reject a primary image larger than 10 MB with a validation message stating
+  the size limit.
+- **FR-011**: System MUST associate at most one primary image with a collectible.
+- **FR-012**: System MUST allow a collectible to be saved with no image.
+- **FR-013**: When an image is rejected, System MUST allow the collector to replace or omit it and
+  still save the collectible; a rejected image MUST NOT block saving the rest of the collectible.
+- **FR-014**: System MUST present stored images at consistent framing and proportions throughout the
+  gallery, without requiring the collector to resize or crop images themselves.
+- **FR-015**: System MUST restrict access to a stored image to the collector who owns the
+  collectible it belongs to, verified on every request; possession of an image's address MUST NOT by
+  itself grant access to it.
+
+**Recorded values and validation**
+
+- **FR-016**: System MUST record purchase price as an exact monetary amount and MUST NOT introduce
   rounding or precision loss in storage or display.
-- **FR-011**: System MUST reject a negative purchase price with a validation message, and MUST
+- **FR-017**: System MUST reject a negative purchase price with a validation message, and MUST
   accept a purchase price of zero as a recorded amount.
-- **FR-012**: System MUST reject a purchase date later than the current date with a validation
+- **FR-018**: System MUST reject a purchase date later than the current date with a validation
   message.
-- **FR-013**: System MUST accept a release date in the past or in the future, in any combination
+- **FR-019**: System MUST accept a release date in the past or in the future, in any combination
   with collection status and purchase date.
-- **FR-014**: System MUST validate a submission before saving and MUST report all validation
+- **FR-020**: System MUST validate a submission before saving and MUST report all validation
   problems in a single response rather than one at a time.
-- **FR-015**: System MUST confirm to the collector, through a visible success state, that a
+- **FR-021**: System MUST confirm to the collector, through a visible success state, that a
   collectible was added.
-- **FR-016**: System MUST present an error state when adding fails, MUST NOT save a partial
+- **FR-022**: System MUST present an error state when adding fails, MUST NOT save a partial
   collectible, and MUST preserve the values the collector entered so they can retry without
   re-entering them.
-- **FR-017**: System MUST allow a collector to add multiple collectibles sharing the same name and
+- **FR-023**: System MUST allow a collector to add multiple collectibles sharing the same name and
   attributes; each MUST be stored and displayed as an independent entry and MUST NOT be merged,
   de-duplicated, or represented as a quantity.
-- **FR-018**: System MUST allow each such entry to carry its own collection status, purchase price,
+- **FR-024**: System MUST allow each such entry to carry its own collection status, purchase price,
   purchase date, notes, and image, independently of the others.
 
 **Privacy and ownership**
 
-- **FR-019**: System MUST associate every collectible with the collector who added it.
-- **FR-020**: System MUST NOT allow a collector to view, browse, filter, or otherwise reach a
+- **FR-025**: System MUST associate every collectible with the collector who added it.
+- **FR-026**: System MUST NOT allow a collector to view, browse, filter, or otherwise reach a
   collectible belonging to another collector.
-- **FR-021**: System MUST refuse a request for another collector's collectible without revealing
+- **FR-027**: System MUST refuse a request for another collector's collectible without revealing
   whether that collectible exists.
-- **FR-022**: System MUST determine which collector a request belongs to on the server side, and
+- **FR-028**: System MUST determine which collector a request belongs to on the server side, and
   MUST NOT rely on a collector-supplied claim of identity or ownership.
-- **FR-023**: System MUST NOT display any collection content when the acting collector's identity
+- **FR-029**: System MUST NOT display any collection content when the acting collector's identity
   cannot be established.
 
 **Browsing the collection**
 
-- **FR-024**: System MUST present a collector's collection as a visual gallery in which each
+- **FR-030**: System MUST present a collector's collection as a visual gallery in which each
   collectible's imagery is the most prominent element of its entry.
-- **FR-025**: System MUST NOT use a row-and-column inventory table as the primary presentation of
+- **FR-031**: System MUST NOT use a row-and-column inventory table as the primary presentation of
   the collection.
-- **FR-026**: Each gallery entry MUST show at least the collectible's name and its collection
+- **FR-032**: Each gallery entry MUST show at least the collectible's name and its collection
   status.
-- **FR-027**: System MUST display an intentionally designed placeholder in place of missing imagery,
+- **FR-033**: System MUST display an intentionally designed placeholder in place of missing imagery,
   visually consistent with the rest of the gallery.
-- **FR-028**: System MUST order the collection with the most recently added collectible first by
+- **FR-034**: System MUST order the collection with the most recently added collectible first by
   default.
-- **FR-029**: System MUST remain responsive and navigable for large collections without presenting
+- **FR-035**: System MUST remain responsive and navigable for large collections without presenting
   the entire collection at once.
-- **FR-030**: System MUST present the collection legibly and usably on desktop, tablet, and mobile
+- **FR-036**: System MUST present the collection legibly and usably on desktop, tablet, and mobile
   screen sizes.
 
 **Filtering**
 
-- **FR-031**: Collectors MUST be able to filter their collection by collection status.
-- **FR-032**: System MUST provide a way to return to viewing all collectibles regardless of status.
-- **FR-033**: System MUST clearly indicate which status filter is currently active.
-- **FR-034**: System MUST show a no-results state when a filter matches no collectibles, visually
+- **FR-037**: Collectors MUST be able to filter their collection by collection status.
+- **FR-038**: System MUST provide a way to return to viewing all collectibles regardless of status.
+- **FR-039**: System MUST clearly indicate which status filter is currently active.
+- **FR-040**: System MUST show a no-results state when a filter matches no collectibles, visually
   and textually distinct from the empty-collection state.
 
 **Interface states**
 
-- **FR-035**: System MUST show a designed empty state, offering a path to add a first collectible,
+- **FR-041**: System MUST show a designed empty state, offering a path to add a first collectible,
   when a collector has no collectibles.
-- **FR-036**: System MUST show a loading state while a collection is being retrieved, without a
+- **FR-042**: System MUST show a loading state while a collection is being retrieved, without a
   blank screen and without briefly showing the empty state.
-- **FR-037**: System MUST show an error state, with a way to retry, when a collection cannot be
+- **FR-043**: System MUST show an error state, with a way to retry, when a collection cannot be
   retrieved.
-- **FR-038**: System MUST convey collection status by a means other than color alone.
-- **FR-039**: System MUST make adding and browsing operable by keyboard, and MUST provide a text
+- **FR-044**: System MUST convey collection status by a means other than color alone.
+- **FR-045**: System MUST make adding and browsing operable by keyboard, and MUST provide a text
   alternative for collectible imagery.
 
 ### Key Entities *(include if feature involves data)*
@@ -340,6 +383,13 @@ collectibles are shown and that a no-match result is distinguishable from an emp
   horizontal scrolling of the page and no overlapping or clipped content.
 - **SC-011**: Adding and browsing can be completed entirely by keyboard, and every collectible
   image exposes a text alternative.
+- **SC-012**: 100% of attempts by a collector to load another collector's stored image are refused,
+  including attempts made with the image's direct address.
+- **SC-013**: Every accepted image is presented at the gallery's consistent framing regardless of
+  its original proportions, verified across portrait, landscape, square, and extreme aspect ratios,
+  with no collector-side cropping or resizing.
+- **SC-014**: 100% of uploads over 10 MB or outside JPEG, PNG, and WebP are refused with a message
+  that states the limit or names the accepted formats.
 
 ## Assumptions
 
@@ -367,6 +417,12 @@ collectibles are shown and that a no-match result is distinguishable from an emp
 - The collection is ordered most-recently-added first. Collector-chosen sorting is not included.
 - Free-text search is not included in this feature; status filtering is the only way to narrow the
   collection.
+- A collectible carries at most one image. Multiple photographs, galleries per collectible, box or
+  detail shots, and image reordering are not included.
+- Because editing is out of scope, an image cannot be replaced after the collectible is saved. A
+  collector who uploads the wrong photo cannot correct it in this feature.
+- The 10 MB limit and the JPEG, PNG, WebP formats apply to what a collector uploads. Whatever
+  Vaultory derives for display is an internal concern and is not constrained by this spec.
 - Once added, a collectible's values are fixed for the life of this feature, because editing is out
   of scope. A collector who makes a mistake cannot correct it yet, and cannot remove the entry —
   this is an accepted, temporary consequence of the stated scope.
