@@ -55,8 +55,9 @@ total count — with no per-entry queries.
 Gallery renditions are small enough that a full page of entries costs far less than one original
 upload.
 
-**Constraints**: Uploads capped at 10 MB and rejected by decoding rather than by trusting a declared
-type. Monetary amounts held as exact decimals, never floating point. Every collectible and every
+**Constraints**: Gallery renditions fixed at 4:5 portrait, 800×1000. Uploads capped at 10 MB and
+rejected by decoding rather than by trusting a declared type. Add-collectible requests idempotent
+per submission key. Monetary amounts held as exact decimals, never floating point. Every collectible and every
 stored image authorized against the acting collector on every request. No horizontal page scrolling
 at any supported width. Adding and browsing fully keyboard operable.
 
@@ -76,7 +77,7 @@ Evaluated against Vaultory Constitution v1.0.0.
 |------|--------|--------|-------|
 | Collectible imagery is primary to the experience | I | PASS | Gallery is image-forward per FR-030; consistent framing per FR-014; designed placeholder per FR-033 |
 | Not an inventory or admin listing | I | PASS | FR-031 forbids a table as the primary presentation |
-| Dark mode first-class; consistent visual language | I | PASS | Frontend built on themed tokens; shadcn/ui defaults overridden, see Structure Decision |
+| Dark mode first-class; consistent visual language | I | PASS | FR-046 requires both appearances with dark as the default; SC-015 verifies every state in both; T091 and T092 build and test it. `/speckit-analyze` found this gate previously asserted without any spec requirement behind it — the spec was amended 2026-09-10 |
 | Works across desktop, tablet, mobile | I | PASS | FR-036, SC-010 |
 | Accessibility treated as part of the product | I | PASS | FR-044 (not color alone), FR-045 (keyboard, text alternatives), SC-011 |
 | All interface states intentionally designed | I | PASS | FR-041 empty, FR-042 loading, FR-043 error, FR-040 no-results, FR-021 success, FR-020 validation |

@@ -69,11 +69,14 @@ Covers User Story 1 scenario 1, FR-002, FR-005.
 ```bash
 curl -s -b /tmp/vaultory.jar -X POST http://localhost:3000/api/collectibles \
   -H 'Content-Type: application/json' \
-  -d '{"name":"Kaiju Sentinel","collectionStatus":"owned"}' | jq
+  -d '{"submissionKey":"'"$(uuidgen)"'","name":"Kaiju Sentinel","collectionStatus":"owned"}' | jq
 ```
 
 Expect `201` and a `Collectible` whose `id` is set, `image` is null, and every optional attribute is
 null. **This is the core proof**: a name and a status alone are sufficient.
+
+Every add request carries a `submissionKey` (FR-047). Omit it and the request is refused with
+`submissionKey: required` — the contract marks it required and rejects unknown fields.
 
 ## Walkthrough B — Add a collectible with every attribute
 
@@ -87,7 +90,7 @@ IMAGE_ID=$(curl -s -b /tmp/vaultory.jar -X POST http://localhost:3000/api/images
 
 curl -s -b /tmp/vaultory.jar -X POST http://localhost:3000/api/collectibles \
   -H 'Content-Type: application/json' \
-  -d "{\"name\":\"Kaiju Sentinel\",\"collectionStatus\":\"owned\",\"character\":\"Sentinel Prime\",
+  -d "{\"submissionKey\":\"$(uuidgen)\",\"name\":\"Kaiju Sentinel\",\"collectionStatus\":\"owned\",\"character\":\"Sentinel Prime\",
        \"series\":\"Kaiju Wars\",\"manufacturer\":\"Apex Studio\",\"category\":\"Statue\",
        \"scale\":\"1/4\",\"edition\":\"Deluxe Exclusive\",\"purchasePrice\":\"1250.00\",
        \"purchaseDate\":\"2026-08-14\",\"releaseDate\":\"2026-11-30\",
@@ -105,7 +108,7 @@ Covers User Story 1 scenarios 3 and 4, FR-002, FR-003, FR-017, FR-018, FR-020.
 ```bash
 curl -s -b /tmp/vaultory.jar -X POST http://localhost:3000/api/collectibles \
   -H 'Content-Type: application/json' \
-  -d '{"name":"   ","collectionStatus":"borrowed","purchasePrice":"-5.00","purchaseDate":"2030-01-01"}' \
+  -d '{"submissionKey":"'"$(uuidgen)"'","name":"   ","collectionStatus":"borrowed","purchasePrice":"-5.00","purchaseDate":"2030-01-01"}' \
   -w '\n%{http_code}\n' | jq
 ```
 
@@ -194,9 +197,46 @@ contains the first collector's entries.
 
 Covers User Story 1 scenario 5, FR-023, FR-024.
 
-Run Walkthrough A twice, then list. Expect two entries with distinct `id`s, both present. Add a
-third with the same name but `"collectionStatus":"sold"` and a different `purchasePrice`; confirm all
-three coexist with their own values and that nothing is merged or shown as a quantity.
+Run Walkthrough A twice — **each with a fresh `submissionKey`** — then list. Expect two entries with
+distinct `id`s, both present. Add a third with the same name but `"collectionStatus":"sold"` and a
+different `purchasePrice`; confirm all three coexist with their own values and that nothing is merged
+or shown as a quantity.
+
+A new key is what marks each of these as a deliberate copy rather than a retry.
+
+## Walkthrough I — A retry does not create a duplicate
+
+Covers FR-047, SC-016, and the reworded double-submit edge case. **The counterpart to Walkthrough H**:
+that one proves deliberate duplicates survive; this one proves accidental ones cannot happen.
+
+```bash
+KEY=$(uuidgen)
+BODY="{\"submissionKey\":\"$KEY\",\"name\":\"Retry Test\",\"collectionStatus\":\"owned\"}"
+
+# First submission
+FIRST=$(curl -s -b /tmp/vaultory.jar -X POST http://localhost:3000/api/collectibles \
+  -H 'Content-Type: application/json' -d "$BODY" | jq -r .id)
+
+# Replay the identical key, as a double-click or a post-timeout retry would
+SECOND=$(curl -s -b /tmp/vaultory.jar -X POST http://localhost:3000/api/collectibles \
+  -H 'Content-Type: application/json' -d "$BODY" | jq -r .id)
+
+[ "$FIRST" = "$SECOND" ] && echo "PASS: same collectible returned" || echo "FAIL: duplicate created"
+
+# A concurrent double submit must also yield exactly one
+KEY2=$(uuidgen)
+BODY2="{\"submissionKey\":\"$KEY2\",\"name\":\"Concurrent Test\",\"collectionStatus\":\"owned\"}"
+for i in 1 2 3 4 5; do
+  curl -s -b /tmp/vaultory.jar -X POST http://localhost:3000/api/collectibles \
+    -H 'Content-Type: application/json' -d "$BODY2" | jq -r .id &
+done; wait
+```
+
+Expect the replay to return the **same** `id`, and all five concurrent requests to return one shared
+`id`. The uniqueness constraint on `(collector_id, submission_key)` is what must hold here — a
+check-then-insert in application code would let two simultaneous requests both through.
+
+Then confirm the collection contains exactly one "Retry Test" and one "Concurrent Test".
 
 ---
 
@@ -213,7 +253,7 @@ What each layer must cover, mapped to the specification:
 | Layer | Coverage |
 |-------|----------|
 | Backend unit (`internal/domain`, `internal/imaging`) | Every validation rule in `data-model.md`: required name including whitespace-only, the four statuses, exact-decimal money including zero and negative and excess precision, date bounds, length caps, all-problems-at-once. Image decode, format refusal, EXIF orientation, fixed-aspect rendition. No database or HTTP involved (Principle II) |
-| Backend integration (real PostgreSQL) | Ownership isolation as a first-class test: a second collector can reach neither collectible nor image, and receives `404` rather than `403`. Keyset pagination with no repeats or gaps under concurrent inserts. Status filtering. `NUMERIC` round-trip exactness. Duplicate entries staying independent. Migrations apply and reverse cleanly |
+| Backend integration (real PostgreSQL) | Submission idempotency: a replayed key returns the same collectible, concurrent requests sharing a key create exactly one, a new key with identical values creates an independent entry. Ownership isolation as a first-class test: a second collector can reach neither collectible nor image, and receives `404` rather than `403`. Keyset pagination with no repeats or gaps under concurrent inserts. Status filtering. `NUMERIC` round-trip exactness. Duplicate entries staying independent. Migrations apply and reverse cleanly |
 | Backend contract | Every response conforms to `contracts/openapi.yaml`, including the error envelope and each documented status code |
 | Frontend unit | Each interface state renders and is distinguishable: empty, loading, error with retry, no-results, success, validation. Card shows name and status; placeholder for missing image; status conveyed without relying on colour |
 | Frontend e2e | The whole journey — add a collectible, see it in the gallery, filter to its status, filter to a status with no matches — plus the 10 MB refusal followed by a successful save with no image |
@@ -240,3 +280,5 @@ are demonstrably satisfied.
 | Photographs of figures appear rotated | EXIF orientation is not being applied before the rendition is derived |
 | `purchasePrice` comes back as a number, or a cent is lost | Money is being handled as a float somewhere; it must stay a string across the contract and `NUMERIC` in the database |
 | Another collector's request returns `403` | Existence is being revealed; FR-027 requires `404` |
+| Every add request returns 400 with `submissionKey: required` | The client is not sending a submission key; it is required by the contract (FR-047) |
+| A double-click creates two collectibles | The submission key is being regenerated per attempt rather than per collectible, or idempotency is enforced by a check-then-insert instead of the uniqueness constraint |

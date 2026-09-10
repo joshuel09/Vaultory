@@ -71,6 +71,28 @@ Explicitly exclude:
   collector who owns the collectible. Access is verified on every request; holding an image's
   address does not by itself grant access.
 
+### Session 2026-09-10
+
+Raised by `/speckit-analyze` as one constitution violation and two conflicts. Decided on the
+recommendations below after the questions were passed over; each is reversible by amending this
+section.
+
+- Q: Should the collection screens support both a dark and a light appearance, or commit to dark
+  only? → A: Dark is the default and light is fully supported, following the collector's system
+  preference. No manual toggle in this feature; one can be added later without rework. Recorded as
+  FR-046. Resolves the gap against the constitution's "dark mode MUST be treated as a first-class
+  experience", which this spec previously did not mention at all.
+- Q: A collector double-clicks Save, or retries after a connection loss — one collectible or two? →
+  A: One. A retry of the *same* submission must not create a second collectible, while a collector
+  deliberately adding an identical collectible a second time still gets an independent entry. The
+  client sends a submission key that the server treats as idempotent for a bounded window. Recorded
+  as FR-047; the double-submit edge case is reworded accordingly. This preserves FR-023 while
+  closing a defect that would be unrecoverable, since deleting is out of scope.
+- Q: What framing do gallery renditions use? → A: A 4:5 portrait ratio at 800×1000 pixels. Figures,
+  statues, and boxed collectibles are predominantly taller than wide, so portrait wastes the least
+  of the frame. Pinned in `data-model.md` and `research.md` rather than here, being a design value
+  rather than a user-visible requirement; FR-014 continues to state the requirement itself.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Add a collectible to my vault (Priority: P1)
@@ -190,8 +212,13 @@ collectibles are shown and that a no-match result is distinguishable from an emp
 - A status filter matches nothing — this must be presented differently from a collection that has
   no collectibles at all.
 - A collector submits the add form twice in quick succession, or retries after a connection loss —
-  only the collectible they intended is created, and a failed attempt must not leave a partial
-  entry behind.
+  the retry must not create a second collectible, and a failed attempt must not leave a partial
+  entry behind. This is distinct from a collector deliberately adding an identical collectible a
+  second time, which must create an independent entry (FR-023 versus FR-047).
+- A collector's retry arrives after the original submission already succeeded, but its response was
+  lost — the collector must end up with exactly one collectible and see it confirmed, not an error.
+- A collector adds an identical collectible weeks later, long after the first — this is a deliberate
+  second copy and must create an independent entry, never be treated as a retry.
 - A collector enters a purchase price of zero (a gift or a giveaway win) — this must be accepted and
   distinguished from no price being recorded.
 - A collector enters a negative purchase price — this must be rejected with a validation message.
@@ -341,6 +368,20 @@ collectibles are shown and that a no-match result is distinguishable from an emp
 - **FR-045**: System MUST make adding and browsing operable by keyboard, and MUST provide a text
   alternative for collectible imagery.
 
+**Appearance**
+
+- **FR-046**: System MUST present every screen in this feature in both a dark and a light
+  appearance, defaulting to dark and honouring the collector's system preference. Both appearances
+  MUST meet the same contrast and legibility expectations, and no interface state — empty, loading,
+  validation, success, error, or no-results — may be legible in only one of them.
+
+**Submission integrity**
+
+- **FR-047**: System MUST accept a submission key with each add-collectible request and MUST treat a
+  repeat of the same key, within a bounded window, as the same submission — returning the already
+  created collectible rather than creating a second one. A submission carrying a different key MUST
+  create an independent collectible even when every other value is identical, preserving FR-023.
+
 ### Key Entities *(include if feature involves data)*
 
 - **Collector**: The person who owns a vault. Owns zero or more collectibles. A collector's
@@ -390,6 +431,11 @@ collectibles are shown and that a no-match result is distinguishable from an emp
   with no collector-side cropping or resizing.
 - **SC-014**: 100% of uploads over 10 MB or outside JPEG, PNG, and WebP are refused with a message
   that states the limit or names the accepted formats.
+- **SC-015**: Every screen and every interface state in this feature is legible and contrast-compliant
+  in both the dark and the light appearance, verified state by state in both.
+- **SC-016**: Repeating a submission with an unchanged submission key yields exactly one collectible,
+  verified across an immediate double submit and a retry after a lost response; repeating it with a
+  new key yields a second, independent collectible.
 
 ## Assumptions
 
@@ -426,6 +472,11 @@ collectibles are shown and that a no-match result is distinguishable from an emp
 - Once added, a collectible's values are fixed for the life of this feature, because editing is out
   of scope. A collector who makes a mistake cannot correct it yet, and cannot remove the entry —
   this is an accepted, temporary consequence of the stated scope.
+
+- A collector cannot manually override the appearance in this feature; it follows the system
+  preference with dark as the default. A persisted toggle is an additive later change.
+- The submission key is generated by the client per add attempt. Its bounded window need only be
+  long enough to absorb a retry, not to deduplicate across sessions or days.
 
 **Scope boundaries** — the following are explicitly excluded from this feature:
 

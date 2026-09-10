@@ -101,9 +101,12 @@ Decision 3).
 | `rendition_key` | `text` | NOT NULL | Locator of the fixed-aspect gallery rendition |
 | `content_type` | `text` | NOT NULL, CHECK in (`image/jpeg`, `image/png`, `image/webp`) | FR-009 |
 | `byte_size` | `bigint` | NOT NULL, CHECK > 0 AND ≤ 10485760 | FR-010 |
-| `width` | `integer` | NOT NULL, CHECK > 0 | Recorded from the decode |
-| `height` | `integer` | NOT NULL, CHECK > 0 | Recorded from the decode |
+| `width` | `integer` | NOT NULL, CHECK > 0 | Original width, recorded from the decode |
+| `height` | `integer` | NOT NULL, CHECK > 0 | Original height, recorded from the decode |
 | `created_at` | `timestamptz` | NOT NULL, default `now()` | |
+
+Renditions are always 4:5 portrait at 800×1000 pixels (Clarifications, 2026-09-10), so their
+dimensions are a constant rather than a column. `width` and `height` describe the original.
 
 **Deliberate choices**
 
@@ -118,11 +121,39 @@ Decision 3).
 
 ---
 
+### `collectible_submissions`
+
+Records a collector's submission keys so a retried add is answered with the collectible it already
+created rather than a second one (FR-047). Deliberate duplicates are unaffected: they arrive with a
+different key.
+
+| Column | Type | Constraints | Requirement |
+|--------|------|-------------|-------------|
+| `submission_key` | `text` | NOT NULL, length 1–200, part of PK | FR-047 |
+| `collector_id` | `uuid` | NOT NULL, FK → `collectors(id)` ON DELETE CASCADE, part of PK | FR-047 |
+| `collectible_id` | `uuid` | NOT NULL, FK → `collectibles(id)` ON DELETE CASCADE | FR-047 |
+| `created_at` | `timestamptz` | NOT NULL, default `now()` | Basis of the bounded window |
+
+**Deliberate choices**
+
+- The primary key is `(collector_id, submission_key)`, so one collector's key can never collide with
+  another's, and the uniqueness constraint is what actually enforces single-creation under a
+  concurrent double submit — not an application-level check that two simultaneous requests could
+  both pass.
+- The row is written in the same transaction as the collectible. Either both exist or neither does.
+- A repeat within the window returns the referenced collectible unchanged. Rows older than the
+  window are reclaimable; nothing in this feature depends on retaining them.
+- Nothing here weakens FR-023 — a second deliberate add carries a new key and takes the normal path.
+
+---
+
 ## Relationships
 
 ```text
 collectors 1 ──── 0..n collectibles          (collectibles.collector_id, NOT NULL)
 collectors 1 ──── 0..n collectible_images    (collectible_images.collector_id, NOT NULL)
+collectors 1 ──── 0..n collectible_submissions (PK (collector_id, submission_key))
+collectibles 1 ──── 0..n collectible_submissions (collectible_submissions.collectible_id)
 collectibles 0..1 ──── 0..1 collectible_images (collectibles.(image_id, collector_id), NULL)
                                               same owner enforced by the composite key
 ```
@@ -151,6 +182,7 @@ either (Principle II). The database constraints above are the second line, not t
 | Purchase date, if present, not later than today. The domain performs this check against the collector's own current date; the database `CHECK` against `CURRENT_DATE` is a coarse backstop and is evaluated in the database session's timezone, so it is deliberately the looser of the two | FR-018 |
 | Release date, if present, accepted in the past or the future, in any combination with status and purchase date | FR-019 |
 | Image reference, if present, must name an image owned by the acting collector | FR-015 |
+| Submission key required, at most 200 characters; a repeat within the window returns the existing collectible rather than creating another | FR-047 |
 | All violations collected and returned together, never one at a time | FR-020 |
 | Text values preserved exactly as entered, including non-Latin scripts, accents, and emoji | Spec edge case |
 
@@ -162,7 +194,7 @@ Image validation, in `internal/imaging`:
 | Format determined by decoding, not by declared content type or file extension | FR-009, spec edge case |
 | A file that fails to decode, or decodes to an unsupported format, is refused as an unsupported image | Spec edge case |
 | EXIF orientation applied before the rendition is derived | Spec edge case on presentation |
-| Rendition derived at one fixed aspect ratio and bounded dimensions for every image, whatever its original proportions | FR-014, SC-013 |
+| Rendition derived at **4:5 portrait, 800×1000 pixels** for every image, whatever its original proportions — the frame is filled and overflow is trimmed centrally, never letterboxed and never distorted | FR-014, SC-013 |
 | A refused image leaves no stored bytes and no image row | FR-013 |
 
 ---

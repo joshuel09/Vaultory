@@ -105,8 +105,9 @@ Principle V).
 ## Decision 4 — Go validates images by decoding them and derives a fixed-aspect rendition
 
 **Decision**: On upload, Go enforces the byte limit while reading, decodes the image to confirm it
-genuinely is JPEG, PNG, or WebP, applies any EXIF orientation, and derives a gallery rendition at a
-single fixed aspect ratio and bounded dimensions. Both the original and the rendition are stored.
+genuinely is JPEG, PNG, or WebP, applies any EXIF orientation, and derives a gallery rendition at
+**4:5 portrait, 800×1000 pixels** — filling the frame and trimming overflow centrally, never
+letterboxing and never distorting. Both the original and the rendition are stored.
 The gallery is served renditions; the original is retained as the collector's asset. Renditions are
 encoded as JPEG.
 
@@ -118,10 +119,19 @@ collector, decides presentation geometry; deriving it once at upload also satisf
 constraint that images be optimized, and keeps a grid of entries from shipping many megabytes.
 EXIF orientation matters concretely here: phone photographs of figures otherwise appear rotated.
 
+**Why 4:5 at 800×1000**: figures, statues, and boxed collectibles are predominantly taller than
+wide, so a portrait frame wastes the least of the card on empty space; a square frame would trim the
+top of a tall statue or strand it in margins. 800×1000 covers a roughly 400-pixel-wide card at
+double density, which is the largest the gallery grid uses at any supported width.
+
 **Alternatives considered**:
 
 - *Trust the declared content type or the file extension.* Rejected: trivially spoofed, and
   contradicted by an explicit spec edge case.
+- *A square rendition.* Rejected: it either trims tall collectibles badly or leaves large margins,
+  and collectible photography is mostly portrait.
+- *Preserve each image's own proportions.* Rejected outright by FR-014 — the gallery must frame
+  every entry identically without the collector cropping anything.
 - *Store only the original and size it in the browser with CSS.* Rejected: fails the optimization
   constraint and SC-004 — a 500-entry gallery would transfer originals — and offers no defence
   against extreme aspect ratios.
@@ -222,6 +232,56 @@ conversion), a state-management library, and a component library beyond shadcn/u
 
 ---
 
+## Decision 9 — Dark is the default appearance, light is fully supported
+
+**Decision**: Both appearances are built from one set of themed tokens, dark is the default, and the
+collector's system preference is honoured. No manual toggle in this feature.
+
+**Rationale**: The constitution requires dark mode be a first-class experience, and this spec did not
+mention appearance at all until the 2026-09-10 clarification — a gap `/speckit-analyze` raised as a
+constitution violation. Dark suits a cinematic gallery and collectible photography reads better
+against dark surfaces, which is why dark is the default rather than merely available. Supporting
+light from the start costs a second palette on the same tokens; discovering it is needed after every
+surface is styled costs a revisit of all of them.
+
+**Alternatives considered**:
+
+- *Dark only.* Rejected: a collector in a bright room has no recourse, and adding light later touches
+  every component.
+- *Light default with dark available.* Rejected: it inverts the constitution's emphasis.
+- *A persisted manual toggle now.* Deferred, not rejected — additive once both palettes exist, and no
+  requirement asks for it yet (Principle V).
+
+---
+
+## Decision 10 — A client-supplied submission key makes retries idempotent
+
+**Decision**: The add-collectible request carries a submission key the client generates per attempt.
+The server records `(collector_id, submission_key)` in the same transaction as the collectible; a
+repeat within a bounded window returns the collectible already created. A different key always
+creates an independent collectible.
+
+**Rationale**: The spec's edge cases required that a double submit or a post-failure retry produce
+only the collectible the collector intended, while FR-023 requires that identical collectibles stay
+independent — a direct contradiction `/speckit-analyze` flagged. A per-attempt key separates the two
+cases exactly: a retry replays a key, a deliberate second copy brings a new one. It matters more than
+it might seem, because deleting is out of scope, so an accidental duplicate would be permanent for
+the collector.
+
+The uniqueness constraint on the key, not an application-level lookup, is what holds under a genuine
+concurrent double submit — two simultaneous requests cannot both pass a check-then-insert.
+
+**Alternatives considered**:
+
+- *Deduplicate by comparing field values.* Rejected: it directly violates FR-023 and would silently
+  swallow a collector's legitimate second copy.
+- *Disable the button after the first click.* Necessary but insufficient — it does nothing for a
+  retry after a lost response, and nothing for a client that never received the reply.
+- *A server-issued token fetched before the form is submitted.* Rejected: an extra round trip for the
+  same guarantee a client-generated key provides.
+
+---
+
 ## Deferred, with reasons
 
 - **Reclaiming unreferenced uploads** (from Decision 3) — needs a retention policy nobody has asked
@@ -231,5 +291,8 @@ conversion), a state-management library, and a component library beyond shadcn/u
 - **Catalog and owned-instance split** (Decision 6) — additive when a requirement calls for it.
 - **Currency selection** — the spec assumes a single currency; a `currency` column is a later
   additive change.
+- **A persisted appearance toggle** (Decision 9) — additive once both palettes exist.
+- **Reclaiming expired submission keys** (Decision 10) — rows outside the window are reclaimable;
+  nothing depends on retaining them.
 - **Rate limiting on upload** — no requirement in this spec. Worth revisiting before the feature is
   exposed publicly, since decoding a 10 MB image is the most expensive operation here.

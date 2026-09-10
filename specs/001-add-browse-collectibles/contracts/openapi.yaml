@@ -35,8 +35,13 @@ paths:
         Creates one collectible owned by the acting collector (FR-001). A name and a collection
         status are required; every other attribute is optional (FR-002, FR-005, FR-006).
 
-        Repeated submissions of identical content create independent collectibles; nothing is merged
-        or de-duplicated (FR-023).
+        Every request carries a `submissionKey` the client generates per add attempt. Replaying the
+        same key within the idempotency window returns the collectible that key already created,
+        rather than creating a second one (FR-047) — so a double-click or a retry after a lost
+        response cannot strand the collector with an undeletable duplicate.
+
+        A request with a *different* key creates an independent collectible even when every other
+        value is identical; deliberate duplicates are never merged or de-duplicated (FR-023).
 
         All validation problems are reported together in a single response (FR-020).
       requestBody:
@@ -47,7 +52,13 @@ paths:
               $ref: '#/components/schemas/AddCollectibleRequest'
       responses:
         '201':
-          description: The collectible was added.
+          description: |
+            The collectible was added.
+
+            Also returned when a `submissionKey` is replayed within the idempotency window, carrying
+            the collectible that key already created. The status is deliberately identical: the
+            client cannot distinguish the two cases and has no need to — in both, exactly one
+            collectible exists for that key (FR-047).
           content:
             application/json:
               schema:
@@ -250,6 +261,16 @@ components:
                     - field: collectionStatus
                       code: required
                       message: A collection status is required.
+            missingSubmissionKey:
+              summary: The request carried no submission key
+              value:
+                error:
+                  code: validation_failed
+                  message: This collectible could not be saved.
+                  fields:
+                    - field: submissionKey
+                      code: required
+                      message: A submission key is required.
             invalidValues:
               summary: Several rules violated at once
               value:
@@ -338,9 +359,22 @@ components:
         Values for a new collectible. `name` and `collectionStatus` are required; everything else is
         optional (FR-005, FR-006). An omitted field means the collector recorded nothing, which is
         distinct from an empty string or zero (FR-007).
-      required: [name, collectionStatus]
+      required: [submissionKey, name, collectionStatus]
       additionalProperties: false
       properties:
+        submissionKey:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: |
+            A key the client generates once per add attempt and replays on retry. Replaying it
+            within the idempotency window returns the collectible it already created instead of
+            creating another (FR-047). A new key always creates an independent collectible, which
+            is what keeps deliberate duplicates working (FR-023).
+
+            Regenerate it only when the collector starts a new collectible — never per keystroke,
+            and never per network attempt.
+          examples: ['01J8Z3K7QX4M9V2N6P0R5T8W1Y']
         name:
           type: string
           minLength: 1
@@ -390,9 +424,11 @@ components:
             Identifier returned by a prior upload. Must name an image owned by the acting collector
             (FR-015). At most one image per collectible (FR-011); omit for none (FR-012).
       examples:
-        - name: Kaiju Sentinel
+        - submissionKey: 01J8Z3K7QX4M9V2N6P0R5T8W1Y
+          name: Kaiju Sentinel
           collectionStatus: owned
-        - name: Kaiju Sentinel
+        - submissionKey: 01J8Z3M2WB7C4D9F1G6H0J5K3L
+          name: Kaiju Sentinel
           collectionStatus: owned
           character: Sentinel Prime
           series: Kaiju Wars

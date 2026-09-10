@@ -62,7 +62,7 @@ harness. Everything here is shared by all three stories.
 - [ ] T010 Add the migration tooling and a `migrate` target in `backend/Makefile`, with `backend/migrations/` as the migration directory per Principle IV (version-controlled, reversible)
 - [ ] T011 Write the `collectors` table migration in `backend/migrations/000001_create_collectors.up.sql` and its reverse in `000001_create_collectors.down.sql`, matching `data-model.md`
 - [ ] T012 Write the `collectible_images` table migration in `backend/migrations/000002_create_collectible_images.up.sql` (and `.down.sql`), including the `content_type` CHECK, the `byte_size` CHECK bounded at 10485760, and the `UNIQUE (id, collector_id)` constraint that the composite reference from `collectibles` targets
-- [ ] T013 Write the `collectibles` table migration in `backend/migrations/000003_create_collectibles.up.sql` (and `.down.sql`) with every column, CHECK, and default from `data-model.md`, the trimmed-name length CHECK, the four-value status CHECK, `purchase_price NUMERIC(12,2)`, and the **composite** foreign key `(image_id, collector_id) REFERENCES collectible_images(id, collector_id) ON DELETE SET NULL`
+- [ ] T013 Write the `collectibles` table migration in `backend/migrations/000003_create_collectibles.up.sql` (and `.down.sql`) with every column, CHECK, and default from `data-model.md` (FR-006, FR-025), the trimmed-name length CHECK, the four-value status CHECK, `purchase_price NUMERIC(12,2)`, and the **composite** foreign key `(image_id, collector_id) REFERENCES collectible_images(id, collector_id) ON DELETE SET NULL`
 - [ ] T014 Write the two gallery indexes in `backend/migrations/000004_create_gallery_indexes.up.sql` (and `.down.sql`): `collectibles_gallery_idx` and `collectibles_status_gallery_idx` as specified in `data-model.md`
 - [ ] T015 Seed the development collector in `backend/migrations/000005_seed_dev_collector.up.sql` (and `.down.sql`), guarded so it is a no-op outside development
 - [ ] T016 Verify migrations apply and reverse cleanly against a real database in `backend/tests/integration/migrations_test.go`
@@ -102,7 +102,7 @@ into the designed visual gallery.
 
 > Write these first and confirm they fail before implementing.
 
-- [ ] T027 [P] [US1] Unit-test every domain validation rule in `backend/tests/unit/collectible_validation_test.go`: name required, whitespace-only name rejected (FR-003), name length cap, status required and constrained, name-plus-status alone valid (FR-005), optional values trimmed with empty treated as absent (FR-007), notes length cap, purchase date not in the future (FR-018), release date accepted past or future in any combination (FR-019), and **all problems returned together rather than one at a time** (FR-020)
+- [ ] T027 [P] [US1] Unit-test every domain validation rule in `backend/tests/unit/collectible_validation_test.go`: name and status both required (FR-002), whitespace-only name rejected (FR-003), name length cap, status required and constrained, name-plus-status alone valid (FR-005), optional values trimmed with empty treated as absent (FR-007), notes length cap, purchase date not in the future (FR-018), release date accepted past or future in any combination (FR-019), and **all problems returned together rather than one at a time** (FR-020)
 - [ ] T028 [P] [US1] Unit-test image validation in `backend/tests/unit/imaging_test.go`: over-10 MB refused (FR-010), each of JPEG, PNG, and WebP accepted, a non-image with an image extension and declared image content type refused (FR-009), a corrupt file refused, EXIF orientation applied, and a rendition produced at the one fixed aspect ratio from portrait, landscape, square, and extreme-ratio inputs (FR-014, SC-013)
 - [ ] T029 [P] [US1] Contract-test `POST /collectibles` in `backend/tests/contract/add_collectible_test.go` against `contracts/openapi.yaml`: 201 body shape, the 400 error envelope with multiple field entries, 401, and that `purchasePrice` is carried as a string
 - [ ] T030 [P] [US1] Contract-test `POST /images` and `GET /images/{imageId}/rendition` in `backend/tests/contract/images_test.go`: 201 body shape, 413 with `image_too_large`, 400 with `unsupported_image_format`, 404 for another collector's image, and 200 with `image/jpeg`
@@ -116,10 +116,10 @@ into the designed visual gallery.
 
 ### Backend implementation for User Story 1
 
-- [ ] T038 [P] [US1] Implement the `Collectible` domain type and its complete validation in `backend/internal/domain/collectible/collectible.go`, accumulating all violations before returning, with no import of HTTP or SQL packages (Principle II)
-- [ ] T039 [P] [US1] Implement image decoding and validation in `backend/internal/imaging/decode.go`: enforce the 10 MB ceiling while reading, determine the format by decoding rather than by the declared content type or extension, and reject anything that is not a decodable JPEG, PNG, or WebP
+- [ ] T038 [P] [US1] Implement the `Collectible` domain type and its complete validation in `backend/internal/domain/collectible/collectible.go`, covering the required and optional attributes (FR-001, FR-002, FR-006), accumulating all violations before returning, with no import of HTTP or SQL packages (Principle II)
+- [ ] T039 [P] [US1] Implement image decoding and validation in `backend/internal/imaging/decode.go`: enforce the 10 MB ceiling while reading (FR-008), determine the format by decoding rather than by the declared content type or extension, and reject anything that is not a decodable JPEG, PNG, or WebP
 - [ ] T040 [US1] Implement EXIF orientation handling and fixed-aspect rendition derivation in `backend/internal/imaging/rendition.go`, emitting JPEG renditions at one aspect ratio and bounded dimensions for every input (depends on T039)
-- [ ] T041 [P] [US1] Implement collectible persistence in `backend/internal/store/postgres/collectibles.go`: insert, and a single-statement page read joining `collectible_images` for the rendition locator, with `collector_id` as a predicate in **every** query (research Decision 5)
+- [ ] T041 [P] [US1] Implement collectible persistence in `backend/internal/store/postgres/collectibles.go`: insert, and a single-statement page read joining `collectible_images` for the rendition locator, with `collector_id` as a predicate in **every** query (FR-025) (research Decision 5)
 - [ ] T042 [P] [US1] Implement image persistence in `backend/internal/store/postgres/images.go`: insert an image row owned by the acting collector, and read one by identifier scoped to its owner
 - [ ] T043 [US1] Implement the image upload use case in `backend/internal/collection/upload_image.go`, composing validation, rendition derivation, storage, and the image row within a transaction so a failure leaves nothing behind (depends on T039, T040, T042, T025)
 - [ ] T044 [US1] Implement the add-collectible use case in `backend/internal/collection/add_collectible.go`, verifying that any referenced image is owned by the acting collector before insert (depends on T038, T041, T042)
@@ -134,7 +134,7 @@ into the designed visual gallery.
 - [ ] T050 [P] [US1] Implement typed request wrappers over the contract in `frontend/lib/api/collectibles.ts` and `frontend/lib/api/images.ts`, using the generated types from `frontend/lib/types/api.ts` with no hand-written response shapes and no `any`
 - [ ] T051 [US1] Build the add-collectible form in `frontend/components/collection/AddCollectibleForm.tsx` as a Client Component: name and status required, the eleven optional attributes, and one image picker. Client-side checks are courtesy only — **the server's verdict is authoritative** (Principle III)
 - [ ] T052 [US1] Render server-returned field errors against their inputs, and preserve every entered value when a save fails, in `frontend/components/collection/AddCollectibleForm.tsx` (FR-020, FR-022)
-- [ ] T053 [US1] Implement the image picker with its own upload, refusal messages naming the 10 MB limit and the accepted formats, and the ability to proceed with no image, in `frontend/components/collection/ImagePicker.tsx` (FR-009, FR-010, FR-013)
+- [ ] T053 [US1] Implement the image picker with its own upload, refusal messages naming the 10 MB limit and the accepted formats, and the ability to proceed with no image (FR-011, FR-012), in `frontend/components/collection/ImagePicker.tsx` (FR-009, FR-010, FR-013)
 - [ ] T054 [US1] Add the add-collectible route and its success confirmation in `frontend/app/collection/new/page.tsx` (FR-021)
 - [ ] T055 [US1] Add the collection route in `frontend/app/collection/page.tsx` as a Server Component that lists the collector's collectibles plainly, sufficient to confirm a newly added collectible is present. User Story 2 replaces this presentation with the designed gallery
 
@@ -223,6 +223,29 @@ distinguishable from an empty vault.
 
 ---
 
+## Phase 7: Remediation from `/speckit-analyze` (2026-09-10)
+
+**Purpose**: Close the one constitution violation and the two conflicts the analysis found. T091 and
+T093 are **not optional polish** — they carry requirements added to the spec on 2026-09-10.
+
+**Ordering**: T091 belongs with Phase 4's visual work (do it alongside T061, not after). T093 and
+T094 belong with Phase 3's add path (do them alongside T044 and T046). They are listed separately
+only because they postdate the original breakdown.
+
+- [ ] T091 Define both appearance palettes on one set of themed tokens in `frontend/app/globals.css` and `frontend/tailwind.config.ts` — dark as the default, light honoured from the collector's system preference, no manual toggle — and apply them across `frontend/components/collection/` and `frontend/components/ui/` (FR-046). **Do this with T061; retrofitting a second palette after the gallery is styled means revisiting every surface**
+- [ ] T092 [P] Verify every screen and every interface state in both appearances in `frontend/tests/e2e/appearance.spec.ts` — empty, loading, validation, success, error, and no-results — asserting contrast compliance in each (SC-015)
+- [ ] T093 Write the `collectible_submissions` table migration in `backend/migrations/000006_create_collectible_submissions.up.sql` (and `.down.sql`) with the composite primary key `(collector_id, submission_key)` from `data-model.md`, then make the add-collectible use case in `backend/internal/collection/add_collectible.go` idempotent per submission key — recording the key in the same transaction as the collectible and returning the existing collectible on a repeat (FR-047)
+- [ ] T094 Accept and validate the submission key in `backend/internal/transport/httpapi/add_collectible.go`, and generate one per add attempt in `frontend/components/collection/AddCollectibleForm.tsx`, regenerating it only when the collector begins a new collectible so a retry replays the same key (FR-047)
+- [ ] T095 [P] Integration-test submission idempotency in `backend/tests/integration/idempotency_test.go`: a replayed key returns the same collectible and creates no second row, two **concurrent** requests with one key create exactly one collectible (the uniqueness constraint, not a check-then-insert, must be what holds), and a different key with identical values creates an independent entry — **proving FR-047 without weakening FR-023** (SC-016)
+- [ ] T096 [P] Regenerate `frontend/lib/types/api.ts` from the contract and confirm the generated request type carries the required `submissionKey`. The contract already declares it — `specs/001-add-browse-collectibles/contracts/openapi.yaml` was amended 2026-09-10 — so this task only proves the generated types have not drifted (Principle III)
+- [ ] T097 [P] Pin the rendition geometry — 4:5 portrait at 800×1000, filling the frame and trimming centrally — as named constants in `backend/internal/imaging/rendition.go`, and match the card's frame to it in `frontend/components/collection/CollectibleCard.tsx` so the two cannot drift (FR-014)
+
+**Checkpoint**: The constitution's dark-mode requirement is satisfied and verified, a retried add can
+no longer strand a collector with an undeletable duplicate, and the gallery's framing is a stated
+constant rather than an incidental choice.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase dependencies
@@ -233,6 +256,8 @@ distinguishable from an empty vault.
 - **User Story 2 (Phase 4)**: needs Foundational. Depends on US1 only for the list operation and image renditions it consumes; against a seeded collection it is independently testable
 - **User Story 3 (Phase 5)**: needs Foundational. Extends the list operation from US1; independently testable against a seeded collection
 - **Polish (Phase 6)**: needs the user stories you intend to ship
+- **Remediation (Phase 7)**: not a trailing phase. T091 runs with T061 in US2; T093, T094, T096, and
+  T097 run with US1's add path; T092 and T095 follow their implementations
 
 ### Critical path
 
