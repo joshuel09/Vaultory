@@ -1,0 +1,38 @@
+# Universal
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.idea/
+
+# Environment / secrets — never commit (Constitution IV)
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Go
+*.exe
+*.test
+*.out
+vendor/
+backend/bin/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+build/
+coverage/
+*.log
+.turbo/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+# Local development image store
+backend/.imagestore/

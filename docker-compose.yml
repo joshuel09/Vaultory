@@ -1,0 +1,23 @@
+# Local development dependencies for Vaultory.
+# The Go service and the Next.js frontend run on the host; this provides PostgreSQL only.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: vaultory-postgres
+    environment:
+      POSTGRES_DB: vaultory_dev
+      POSTGRES_USER: vaultory
+      # Development-only credential. Real environments supply this from a secret store.
+      POSTGRES_PASSWORD: vaultory_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - vaultory_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vaultory -d vaultory_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  vaultory_pgdata:

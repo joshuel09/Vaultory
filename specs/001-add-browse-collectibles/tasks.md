@@ -38,15 +38,15 @@ Two separated applications per the plan's Structure Decision: `backend/` (Go) an
 **Purpose**: Bring both applications into existence with the toolchain, contract generation, and the
 same-origin proxy the design depends on.
 
-- [ ] T001 Create the two-application directory structure — `backend/` and `frontend/` — exactly as listed in `specs/001-add-browse-collectibles/plan.md` under Source Code, including empty package directories with a `doc.go` or `.gitkeep` so the layout is committed
-- [ ] T002 Initialize the Go module in `backend/go.mod` and add the dependencies justified in `research.md` Decision 8: `pgx`, `golang.org/x/image`, and nothing more
-- [ ] T003 [P] Initialize the Next.js App Router application in `frontend/` with TypeScript, Tailwind CSS, and shadcn/ui, writing `frontend/package.json` and `frontend/tsconfig.json` with `strict: true` per Principle III
-- [ ] T004 [P] Configure Go formatting, `go vet`, and a linter in `backend/Makefile` (or `backend/.golangci.yml`) so the constitution's type-check and lint gates are runnable
-- [ ] T005 [P] Configure frontend linting and formatting in `frontend/eslint.config.mjs`, including a rule that forbids `any` per Principle III
-- [ ] T006 [P] Add a local PostgreSQL and image-store development environment in `docker-compose.yml` at the repository root, plus `backend/.env.example` listing every variable in `quickstart.md`'s Environment table and no real secrets
-- [ ] T007 Configure the same-origin proxy in `frontend/next.config.ts`: rewrite `/api/*` to the Go service and raise the proxy body limit above 10 MB, per `research.md` Decision 2. **Without this, image authorization and 10 MB uploads both fail**
-- [ ] T008 [P] Add an `openapi-typescript` generation script to `frontend/package.json` that writes `frontend/lib/types/api.ts` from `specs/001-add-browse-collectibles/contracts/openapi.yaml`, and run it so generated types are committed
-- [ ] T009 [P] Add the frontend test toolchain — Vitest with Testing Library and Playwright — in `frontend/vitest.config.ts` and `frontend/playwright.config.ts`
+- [X] T001 Create the two-application directory structure — `backend/` and `frontend/` — exactly as listed in `specs/001-add-browse-collectibles/plan.md` under Source Code, including empty package directories with a `doc.go` or `.gitkeep` so the layout is committed
+- [X] T002 Initialize the Go module in `backend/go.mod` and add the dependencies justified in `research.md` Decision 8: `pgx`, `golang.org/x/image`, and nothing more
+- [X] T003 [P] Initialize the Next.js App Router application in `frontend/` with TypeScript, Tailwind CSS, and shadcn/ui, writing `frontend/package.json` and `frontend/tsconfig.json` with `strict: true` per Principle III
+- [X] T004 [P] Configure Go formatting, `go vet`, and a linter in `backend/Makefile` (or `backend/.golangci.yml`) so the constitution's type-check and lint gates are runnable
+- [X] T005 [P] Configure frontend linting and formatting in `frontend/eslint.config.mjs`, including a rule that forbids `any` per Principle III
+- [X] T006 [P] Add a local PostgreSQL and image-store development environment in `docker-compose.yml` at the repository root, plus `backend/.env.example` listing every variable in `quickstart.md`'s Environment table and no real secrets
+- [X] T007 Configure the same-origin proxy in `frontend/next.config.ts`: rewrite `/api/*` to the Go service and raise the proxy body limit above 10 MB, per `research.md` Decision 2. **Without this, image authorization and 10 MB uploads both fail**
+- [X] T008 [P] Add an `openapi-typescript` generation script to `frontend/package.json` that writes `frontend/lib/types/api.ts` from `specs/001-add-browse-collectibles/contracts/openapi.yaml`, and run it so generated types are committed
+- [X] T009 [P] Add the frontend test toolchain — Vitest with Testing Library and Playwright — in `frontend/vitest.config.ts` and `frontend/playwright.config.ts`
 
 ---
 
@@ -59,25 +59,25 @@ harness. Everything here is shared by all three stories.
 
 ### Database schema and migrations
 
-- [ ] T010 Add the migration tooling and a `migrate` target in `backend/Makefile`, with `backend/migrations/` as the migration directory per Principle IV (version-controlled, reversible)
-- [ ] T011 Write the `collectors` table migration in `backend/migrations/000001_create_collectors.up.sql` and its reverse in `000001_create_collectors.down.sql`, matching `data-model.md`
-- [ ] T012 Write the `collectible_images` table migration in `backend/migrations/000002_create_collectible_images.up.sql` (and `.down.sql`), including the `content_type` CHECK, the `byte_size` CHECK bounded at 10485760, and the `UNIQUE (id, collector_id)` constraint that the composite reference from `collectibles` targets
-- [ ] T013 Write the `collectibles` table migration in `backend/migrations/000003_create_collectibles.up.sql` (and `.down.sql`) with every column, CHECK, and default from `data-model.md` (FR-006, FR-025), the trimmed-name length CHECK, the four-value status CHECK, `purchase_price NUMERIC(12,2)`, and the **composite** foreign key `(image_id, collector_id) REFERENCES collectible_images(id, collector_id) ON DELETE SET NULL`
-- [ ] T014 Write the two gallery indexes in `backend/migrations/000004_create_gallery_indexes.up.sql` (and `.down.sql`): `collectibles_gallery_idx` and `collectibles_status_gallery_idx` as specified in `data-model.md`
-- [ ] T015 Seed the development collector in `backend/migrations/000005_seed_dev_collector.up.sql` (and `.down.sql`), guarded so it is a no-op outside development
+- [X] T010 Add the migration tooling and a `migrate` target in `backend/Makefile`, with `backend/migrations/` as the migration directory per Principle IV (version-controlled, reversible)
+- [X] T011 Write the `collectors` table migration in `backend/migrations/000001_create_collectors.up.sql` and its reverse in `000001_create_collectors.down.sql`, matching `data-model.md`
+- [X] T012 Write the `collectible_images` table migration in `backend/migrations/000002_create_collectible_images.up.sql` (and `.down.sql`), including the `content_type` CHECK, the `byte_size` CHECK bounded at 10485760, and the `UNIQUE (id, collector_id)` constraint that the composite reference from `collectibles` targets
+- [X] T013 Write the `collectibles` table migration in `backend/migrations/000003_create_collectibles.up.sql` (and `.down.sql`) with every column, CHECK, and default from `data-model.md` (FR-006, FR-025), the trimmed-name length CHECK, the four-value status CHECK, `purchase_price NUMERIC(12,2)`, and the **composite** foreign key `(image_id, collector_id) REFERENCES collectible_images(id, collector_id) ON DELETE SET NULL`
+- [X] T014 Write the two gallery indexes in `backend/migrations/000004_create_gallery_indexes.up.sql` (and `.down.sql`): `collectibles_gallery_idx` and `collectibles_status_gallery_idx` as specified in `data-model.md`
+- [X] T015 Seed the development collector in `backend/migrations/000005_seed_dev_collector.up.sql` (and `.down.sql`), guarded so it is a no-op outside development
 - [ ] T016 Verify migrations apply and reverse cleanly against a real database in `backend/tests/integration/migrations_test.go`
 
 ### Core backend infrastructure
 
-- [ ] T017 [P] Implement environment configuration loading in `backend/internal/config/config.go`, reading every variable from `quickstart.md`'s Environment table and failing fast on a missing required value; no secret has a default
-- [ ] T018 [P] Implement the PostgreSQL connection pool in `backend/internal/store/postgres/pool.go` using `pgx`
-- [ ] T019 [P] Define `CollectionStatus` with exactly the four permitted values and their parsing and rejection behaviour in `backend/internal/domain/collectible/status.go`, per FR-004
-- [ ] T020 [P] Define the exact-decimal monetary type in `backend/internal/domain/collectible/money.go` — parsing from a decimal string, at most two fractional digits, rejecting negatives and out-of-range values, and never converting through a float, per FR-016 and FR-017
-- [ ] T021 [P] Unit-test status parsing and money parsing in `backend/tests/unit/status_test.go` and `backend/tests/unit/money_test.go`, covering zero, negative, excess precision, very large amounts, and every invalid status
-- [ ] T022 Implement the structured error envelope and its mapping to status codes in `backend/internal/transport/httpapi/errors.go`, matching the `ErrorResponse` schema in the contract: all field problems reported together (FR-020), no internal detail exposed, 404 rather than 403 for another collector's resource (FR-027), 401 with no content when identity is unresolvable (FR-029)
-- [ ] T023 Implement the acting-collector resolution seam in `backend/internal/identity/identity.go` — one operation returning the acting collector or a failure — plus the development-only implementation in `backend/internal/identity/dev.go` (signed HTTP-only cookie mapping to the seeded collector), enabled solely by `VAULTORY_DEV_IDENTITY`, per `research.md` Decision 1. **No collector identifier may be accepted from a request body, header, or query parameter** (FR-028)
+- [X] T017 [P] Implement environment configuration loading in `backend/internal/config/config.go`, reading every variable from `quickstart.md`'s Environment table and failing fast on a missing required value; no secret has a default
+- [X] T018 [P] Implement the PostgreSQL connection pool in `backend/internal/store/postgres/pool.go` using `pgx`
+- [X] T019 [P] Define `CollectionStatus` with exactly the four permitted values and their parsing and rejection behaviour in `backend/internal/domain/collectible/status.go`, per FR-004
+- [X] T020 [P] Define the exact-decimal monetary type in `backend/internal/domain/collectible/money.go` — parsing from a decimal string, at most two fractional digits, rejecting negatives and out-of-range values, and never converting through a float, per FR-016 and FR-017
+- [X] T021 [P] Unit-test status parsing and money parsing in `backend/tests/unit/status_test.go` and `backend/tests/unit/money_test.go`, covering zero, negative, excess precision, very large amounts, and every invalid status
+- [X] T022 Implement the structured error envelope and its mapping to status codes in `backend/internal/transport/httpapi/errors.go`, matching the `ErrorResponse` schema in the contract: all field problems reported together (FR-020), no internal detail exposed, 404 rather than 403 for another collector's resource (FR-027), 401 with no content when identity is unresolvable (FR-029)
+- [X] T023 Implement the acting-collector resolution seam in `backend/internal/identity/identity.go` — one operation returning the acting collector or a failure — plus the development-only implementation in `backend/internal/identity/dev.go` (signed HTTP-only cookie mapping to the seeded collector), enabled solely by `VAULTORY_DEV_IDENTITY`, per `research.md` Decision 1. **No collector identifier may be accepted from a request body, header, or query parameter** (FR-028)
 - [ ] T024 Implement request routing, middleware, and server wiring in `backend/internal/transport/httpapi/router.go` and `backend/cmd/vaultory-api/main.go`, with identity resolution applied before any handler and structured request logging that records no collector-supplied content verbatim
-- [ ] T025 [P] Define the image storage interface and its filesystem implementation in `backend/internal/imagestore/store.go` and `backend/internal/imagestore/filesystem.go` — put, get, and delete by locator, with no image-format knowledge
+- [X] T025 [P] Define the image storage interface and its filesystem implementation in `backend/internal/imagestore/store.go` and `backend/internal/imagestore/filesystem.go` — put, get, and delete by locator, with no image-format knowledge
 - [ ] T026 Build the integration test harness in `backend/tests/integration/main_test.go`: a real PostgreSQL instance, migrations applied per run, and helpers that create two distinct collectors so cross-collector isolation is testable throughout
 
 **Checkpoint**: Schema, identity, errors, routing, storage, and the test harness exist. User story
@@ -102,8 +102,8 @@ into the designed visual gallery.
 
 > Write these first and confirm they fail before implementing.
 
-- [ ] T027 [P] [US1] Unit-test every domain validation rule in `backend/tests/unit/collectible_validation_test.go`: name and status both required (FR-002), whitespace-only name rejected (FR-003), name length cap, status required and constrained, name-plus-status alone valid (FR-005), optional values trimmed with empty treated as absent (FR-007), notes length cap, purchase date not in the future (FR-018), release date accepted past or future in any combination (FR-019), and **all problems returned together rather than one at a time** (FR-020)
-- [ ] T028 [P] [US1] Unit-test image validation in `backend/tests/unit/imaging_test.go`: over-10 MB refused (FR-010), each of JPEG, PNG, and WebP accepted, a non-image with an image extension and declared image content type refused (FR-009), a corrupt file refused, EXIF orientation applied, and a rendition produced at the one fixed aspect ratio from portrait, landscape, square, and extreme-ratio inputs (FR-014, SC-013)
+- [X] T027 [P] [US1] Unit-test every domain validation rule in `backend/tests/unit/collectible_validation_test.go`: name and status both required (FR-002), whitespace-only name rejected (FR-003), name length cap, status required and constrained, name-plus-status alone valid (FR-005), optional values trimmed with empty treated as absent (FR-007), notes length cap, purchase date not in the future (FR-018), release date accepted past or future in any combination (FR-019), and **all problems returned together rather than one at a time** (FR-020)
+- [X] T028 [P] [US1] Unit-test image validation in `backend/tests/unit/imaging_test.go`: over-10 MB refused (FR-010), each of JPEG, PNG, and WebP accepted, a non-image with an image extension and declared image content type refused (FR-009), a corrupt file refused, EXIF orientation applied, and a rendition produced at the one fixed aspect ratio from portrait, landscape, square, and extreme-ratio inputs (FR-014, SC-013)
 - [ ] T029 [P] [US1] Contract-test `POST /collectibles` in `backend/tests/contract/add_collectible_test.go` against `contracts/openapi.yaml`: 201 body shape, the 400 error envelope with multiple field entries, 401, and that `purchasePrice` is carried as a string
 - [ ] T030 [P] [US1] Contract-test `POST /images` and `GET /images/{imageId}/rendition` in `backend/tests/contract/images_test.go`: 201 body shape, 413 with `image_too_large`, 400 with `unsupported_image_format`, 404 for another collector's image, and 200 with `image/jpeg`
 - [ ] T031 [P] [US1] Integration-test ownership and privacy in `backend/tests/integration/ownership_test.go`: a second collector receives 404 (**not 403**) for the first collector's collectible and image (FR-026, FR-027), an unauthenticated request receives 401 with no content (FR-029), and no request can assert an identity through a body field, header, or query parameter (FR-028)
@@ -116,9 +116,9 @@ into the designed visual gallery.
 
 ### Backend implementation for User Story 1
 
-- [ ] T038 [P] [US1] Implement the `Collectible` domain type and its complete validation in `backend/internal/domain/collectible/collectible.go`, covering the required and optional attributes (FR-001, FR-002, FR-006), accumulating all violations before returning, with no import of HTTP or SQL packages (Principle II)
-- [ ] T039 [P] [US1] Implement image decoding and validation in `backend/internal/imaging/decode.go`: enforce the 10 MB ceiling while reading (FR-008), determine the format by decoding rather than by the declared content type or extension, and reject anything that is not a decodable JPEG, PNG, or WebP
-- [ ] T040 [US1] Implement EXIF orientation handling and fixed-aspect rendition derivation in `backend/internal/imaging/rendition.go`, emitting JPEG renditions at one aspect ratio and bounded dimensions for every input (depends on T039)
+- [X] T038 [P] [US1] Implement the `Collectible` domain type and its complete validation in `backend/internal/domain/collectible/collectible.go`, covering the required and optional attributes (FR-001, FR-002, FR-006), accumulating all violations before returning, with no import of HTTP or SQL packages (Principle II)
+- [X] T039 [P] [US1] Implement image decoding and validation in `backend/internal/imaging/decode.go`: enforce the 10 MB ceiling while reading (FR-008), determine the format by decoding rather than by the declared content type or extension, and reject anything that is not a decodable JPEG, PNG, or WebP
+- [X] T040 [US1] Implement EXIF orientation handling and fixed-aspect rendition derivation in `backend/internal/imaging/rendition.go`, emitting JPEG renditions at one aspect ratio and bounded dimensions for every input (depends on T039)
 - [ ] T041 [P] [US1] Implement collectible persistence in `backend/internal/store/postgres/collectibles.go`: insert, and a single-statement page read joining `collectible_images` for the rendition locator, with `collector_id` as a predicate in **every** query (FR-025) (research Decision 5)
 - [ ] T042 [P] [US1] Implement image persistence in `backend/internal/store/postgres/images.go`: insert an image row owned by the acting collector, and read one by identifier scoped to its owner
 - [ ] T043 [US1] Implement the image upload use case in `backend/internal/collection/upload_image.go`, composing validation, rendition derivation, storage, and the image row within a transaction so a failure leaves nothing behind (depends on T039, T040, T042, T025)
