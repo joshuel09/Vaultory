@@ -189,6 +189,11 @@ func (s *Store) Add(
 // same answer whether it never existed or belongs to someone else (FR-027).
 var ErrUnknownImage = errors.New("unknown image for this collector")
 
+// findBySubmissionKey looks for a collectible already created under this key, inside the window.
+//
+// The window is passed as seconds through make_interval rather than as a duration string: Go
+// renders 24h as "24h0m0s", and relying on PostgreSQL's interval tokenizer to read that is a
+// dependency worth not having when the alternative is exact.
 func (s *Store) findBySubmissionKey(
 	ctx context.Context, collectorID uuid.UUID, key string, window time.Duration,
 ) (Row, bool, error) {
@@ -197,8 +202,9 @@ func (s *Store) findBySubmissionKey(
 		FROM collectible_submissions s
 		JOIN collectibles c ON c.id = s.collectible_id AND c.collector_id = s.collector_id
 		LEFT JOIN collectible_images i ON i.id = c.image_id AND i.collector_id = c.collector_id
-		WHERE s.collector_id = $1 AND s.submission_key = $2 AND s.created_at > now() - $3::interval`,
-		collectorID, key, window.String()))
+		WHERE s.collector_id = $1 AND s.submission_key = $2
+		  AND s.created_at > now() - make_interval(secs => $3)`,
+		collectorID, key, window.Seconds()))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Row{}, false, nil
 	}

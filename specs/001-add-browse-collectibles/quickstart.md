@@ -31,8 +31,10 @@ The backend reads all configuration from the environment; nothing secret is comm
 | `VAULTORY_DEV_IDENTITY` | `enabled` — activates the development-only collector resolution (research Decision 1). Never enabled outside development |
 | `VAULTORY_LISTEN_ADDR` | Address the Go service listens on |
 
-The frontend needs the backend's address for its `/api/*` rewrite. Confirm the rewrite's body limit
-is above 10 MB, or uploads fail before the backend can apply the size rule (research Decision 2).
+The frontend needs the backend's address for its `/api/*` rewrite. Next streams a rewritten request
+body through without a size cap of its own, so nothing needs raising for a 10 MB upload — what
+matters is `experimental.proxyTimeout` in `frontend/next.config.ts`, so a large upload over a slow
+connection is not cut off before the backend applies the size rule (research Decision 2).
 
 ## Setup
 
@@ -276,7 +278,7 @@ are demonstrably satisfied.
 | Symptom | Likely cause |
 |---------|--------------|
 | Images 404 in the browser but `curl` with a cookie works | The `<img>` is bypassing the same-origin rewrite, so no session cookie is sent. Check `next.config.ts` and that `next/image` optimization is not fetching server-side (research Decision 2) |
-| A 10 MB upload fails before the backend responds | The rewrite proxy's body limit is below 10 MB |
+| A 10 MB upload fails before the backend responds | The rewrite proxy timed out rather than hit a size cap — Next streams a rewritten body with no limit of its own. Raise `experimental.proxyTimeout` in `frontend/next.config.ts` |
 | Photographs of figures appear rotated | EXIF orientation is not being applied before the rendition is derived |
 | `purchasePrice` comes back as a number, or a cent is lost | Money is being handled as a float somewhere; it must stay a string across the contract and `NUMERIC` in the database |
 | Another collector's request returns `403` | Existence is being revealed; FR-027 requires `404` |

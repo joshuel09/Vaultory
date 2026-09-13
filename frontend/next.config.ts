@@ -15,8 +15,9 @@ const nextConfig: NextConfig = {
     return [{ source: '/api/:path*', destination: `${backendOrigin}/api/:path*` }]
   },
   experimental: {
-    // Uploads are capped at 10 MB by the backend (FR-010). The proxy limit must sit above that,
-    // or an oversized upload is refused here and never reaches the rule that states the limit.
+    // A 10 MB upload over a slow connection needs time, not a larger cap: Next streams a rewritten
+    // request body through without a size limit of its own, so there is no body cap here to raise.
+    // The only limit is the backend's, which is the rule that states it (FR-010).
     proxyTimeout: 60_000,
   },
   images: {

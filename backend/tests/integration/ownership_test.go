@@ -128,3 +128,6 @@ func TestCannotAttachAnotherCollectorsImage(t *testing.T) {
 		t.Errorf("message %q reveals more than it should", violations[0].Message)
 	}
 }
+
+// bytesReader keeps the image helpers readable at their call sites.
+func bytesReader(b []byte) *bytes.Reader { return bytes.NewReader(b) }

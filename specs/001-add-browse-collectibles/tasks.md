@@ -44,7 +44,7 @@ same-origin proxy the design depends on.
 - [X] T004 [P] Configure Go formatting, `go vet`, and a linter in `backend/Makefile` (or `backend/.golangci.yml`) so the constitution's type-check and lint gates are runnable
 - [X] T005 [P] Configure frontend linting and formatting in `frontend/eslint.config.mjs`, including a rule that forbids `any` per Principle III
 - [X] T006 [P] Add a local PostgreSQL and image-store development environment in `docker-compose.yml` at the repository root, plus `backend/.env.example` listing every variable in `quickstart.md`'s Environment table and no real secrets
-- [X] T007 Configure the same-origin proxy in `frontend/next.config.ts`: rewrite `/api/*` to the Go service and raise the proxy body limit above 10 MB, per `research.md` Decision 2. **Without this, image authorization and 10 MB uploads both fail**
+- [X] T007 Configure the same-origin proxy in `frontend/next.config.ts`: rewrite `/api/*` to the Go service, and set `experimental.proxyTimeout` generously so a large upload over a slow connection is not cut off (Next streams a rewritten body with no size cap of its own, so there is no body limit to raise), per `research.md` Decision 2. **Without the rewrite, image authorization and 10 MB uploads both fail**
 - [X] T008 [P] Add an `openapi-typescript` generation script to `frontend/package.json` that writes `frontend/lib/types/api.ts` from `specs/001-add-browse-collectibles/contracts/openapi.yaml`, and run it so generated types are committed
 - [X] T009 [P] Add the frontend test toolchain — Vitest with Testing Library and Playwright — in `frontend/vitest.config.ts` and `frontend/playwright.config.ts`
 
@@ -111,8 +111,8 @@ into the designed visual gallery.
 - [X] T033 [P] [US1] Integration-test duplicate independence in `backend/tests/integration/duplicates_test.go`: two identical submissions create two rows with distinct identifiers, neither merged nor expressed as a quantity, each carrying its own status, price, date, notes, and image (FR-023, FR-024)
 - [X] T034 [P] [US1] Integration-test monetary exactness in `backend/tests/integration/money_roundtrip_test.go`: `0.00`, fractional, and very large amounts all round-trip byte-identically through PostgreSQL (FR-016)
 - [X] T035 [P] [US1] Integration-test that a refused upload leaves no stored bytes and no image row, and that the collectible still saves afterwards with no image, in `backend/tests/integration/upload_rejection_test.go` (FR-013)
-- [ ] T036 [P] [US1] Unit-test the add-collectible form's states in `frontend/tests/unit/add-collectible-form.test.tsx`: validation messages naming each offending field, the success state, the error state, and that entered values survive a failed save (FR-021, FR-022)
-- [ ] T037 [P] [US1] End-to-end test the add journey in `frontend/tests/e2e/add-collectible.spec.ts`: add with name and status only, see the confirmation, see it present in the collection; then attempt a 12 MB upload, see the refusal naming the limit, and still save successfully with no image
+- [X] T036 [P] [US1] Unit-test the add-collectible form's states in `frontend/tests/unit/add-collectible-form.test.tsx`: validation messages naming each offending field, the success state, the error state, and that entered values survive a failed save (FR-021, FR-022)
+- [X] T037 [P] [US1] End-to-end test the add journey in `frontend/tests/e2e/add-collectible.spec.ts`: add with name and status only, see the confirmation, see it present in the collection; then attempt a 12 MB upload, see the refusal naming the limit, and still save successfully with no image
 
 ### Backend implementation for User Story 1
 
@@ -131,12 +131,12 @@ into the designed visual gallery.
 
 ### Frontend implementation for User Story 1
 
-- [ ] T050 [P] [US1] Implement typed request wrappers over the contract in `frontend/lib/api/collectibles.ts` and `frontend/lib/api/images.ts`, using the generated types from `frontend/lib/types/api.ts` with no hand-written response shapes and no `any`
-- [ ] T051 [US1] Build the add-collectible form in `frontend/components/collection/AddCollectibleForm.tsx` as a Client Component: name and status required, the eleven optional attributes, and one image picker. Client-side checks are courtesy only — **the server's verdict is authoritative** (Principle III)
-- [ ] T052 [US1] Render server-returned field errors against their inputs, and preserve every entered value when a save fails, in `frontend/components/collection/AddCollectibleForm.tsx` (FR-020, FR-022)
-- [ ] T053 [US1] Implement the image picker with its own upload, refusal messages naming the 10 MB limit and the accepted formats, and the ability to proceed with no image (FR-011, FR-012), in `frontend/components/collection/ImagePicker.tsx` (FR-009, FR-010, FR-013)
-- [ ] T054 [US1] Add the add-collectible route and its success confirmation in `frontend/app/collection/new/page.tsx` (FR-021)
-- [ ] T055 [US1] Add the collection route in `frontend/app/collection/page.tsx` as a Server Component that lists the collector's collectibles plainly, sufficient to confirm a newly added collectible is present. User Story 2 replaces this presentation with the designed gallery
+- [X] T050 [P] [US1] Implement typed request wrappers over the contract in `frontend/lib/api/collectibles.ts` and `frontend/lib/api/images.ts`, using the generated types from `frontend/lib/types/api.ts` with no hand-written response shapes and no `any`
+- [X] T051 [US1] Build the add-collectible form in `frontend/components/collection/AddCollectibleForm.tsx` as a Client Component: name and status required, the eleven optional attributes, and one image picker. Client-side checks are courtesy only — **the server's verdict is authoritative** (Principle III)
+- [X] T052 [US1] Render server-returned field errors against their inputs, and preserve every entered value when a save fails, in `frontend/components/collection/AddCollectibleForm.tsx` (FR-020, FR-022)
+- [X] T053 [US1] Implement the image picker with its own upload, refusal messages naming the 10 MB limit and the accepted formats, and the ability to proceed with no image (FR-011, FR-012), in `frontend/components/collection/ImagePicker.tsx` (FR-009, FR-010, FR-013)
+- [X] T054 [US1] Add the add-collectible route and its success confirmation in `frontend/app/collection/new/page.tsx` (FR-021)
+- [X] T055 [US1] Add the collection route in `frontend/app/collection/page.tsx` as a Server Component that lists the collector's collectibles plainly, sufficient to confirm a newly added collectible is present. User Story 2 replaces this presentation with the designed gallery
 
 **Checkpoint**: A collector can add collectibles, with or without an image, and confirm they are
 present. Privacy, duplicates, monetary exactness, and upload refusal are all covered by tests. This
@@ -155,24 +155,24 @@ loading, and error states.
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T056 [P] [US2] Unit-test the collectible card in `frontend/tests/unit/collectible-card.test.tsx`: imagery is the dominant element, name and status are both present (FR-032), status is conveyed by more than colour (FR-044), and the image carries a text alternative (FR-045)
-- [ ] T057 [P] [US2] Unit-test the placeholder path in `frontend/tests/unit/collectible-card-placeholder.test.tsx`: an entry with no image renders the designed placeholder rather than a broken image, and stays visually consistent with the rest of the gallery (FR-033)
-- [ ] T058 [P] [US2] Unit-test the gallery's states in `frontend/tests/unit/collection-gallery-states.test.tsx`: empty with a path to add a first collectible (FR-041), loading without a blank screen and without a flash of the empty state (FR-042), and error with a retry (FR-043)
+- [X] T056 [P] [US2] Unit-test the collectible card in `frontend/tests/unit/collectible-card.test.tsx`: imagery is the dominant element, name and status are both present (FR-032), status is conveyed by more than colour (FR-044), and the image carries a text alternative (FR-045)
+- [X] T057 [P] [US2] Unit-test the placeholder path in `frontend/tests/unit/collectible-card-placeholder.test.tsx`: an entry with no image renders the designed placeholder rather than a broken image, and stays visually consistent with the rest of the gallery (FR-033)
+- [X] T058 [P] [US2] Unit-test the gallery's states in `frontend/tests/unit/collection-gallery-states.test.tsx`: empty with a path to add a first collectible (FR-041), loading without a blank screen and without a flash of the empty state (FR-042), and error with a retry (FR-043)
 - [X] T059 [P] [US2] Integration-test keyset pagination in `backend/tests/integration/pagination_test.go`: pages tile the collection with no entry repeated or skipped, including when rows are inserted between page reads, and entries sharing a creation instant are ordered totally by the identifier tiebreaker
-- [ ] T060 [P] [US2] End-to-end test browsing in `frontend/tests/e2e/browse-collection.spec.ts`: a seeded collection renders as a gallery, scrolling loads further entries incrementally, and the empty state appears for a collector with nothing
+- [X] T060 [P] [US2] End-to-end test browsing in `frontend/tests/e2e/browse-collection.spec.ts`: a seeded collection renders as a gallery, scrolling loads further entries incrementally, and the empty state appears for a collector with nothing
 
 ### Implementation for User Story 2
 
-- [ ] T061 [P] [US2] Establish the visual language in `frontend/app/globals.css` and `frontend/tailwind.config.ts` — typography, spacing, surfaces, and a first-class dark theme — and restyle the shadcn/ui primitives in `frontend/components/ui/` away from their defaults to Vaultory's own identity (Principle I; Technology Constraints)
-- [ ] T062 [US2] Build the collectible card in `frontend/components/collection/CollectibleCard.tsx`: the rendition fills the card at the fixed aspect ratio with no collector-side cropping, name and status legible alongside (FR-014, FR-030, FR-032)
-- [ ] T063 [P] [US2] Build the designed placeholder in `frontend/components/collection/ImagePlaceholder.tsx`, consistent with the gallery's visual language rather than a generic broken-image affordance (FR-033)
-- [ ] T064 [US2] Build the gallery layout in `frontend/components/collection/CollectionGallery.tsx` as an image-forward grid — explicitly **not** a row-and-column table — responsive across desktop, tablet, and mobile with no horizontal page scroll (FR-030, FR-031, FR-036)
-- [ ] T065 [P] [US2] Build the empty state in `frontend/components/collection/EmptyCollection.tsx`, offering a path to add a first collectible (FR-041)
-- [ ] T066 [P] [US2] Build the loading state in `frontend/app/collection/loading.tsx` so it renders while the collection is fetched and never flashes the empty state (FR-042)
-- [ ] T067 [P] [US2] Build the error state with a retry in `frontend/app/collection/error.tsx` (FR-043)
-- [ ] T068 [US2] Replace the plain listing from T055 with the gallery in `frontend/app/collection/page.tsx`, keeping it a Server Component and passing the rendition paths through unchanged so `<img>` requests travel same-origin and carry the session (research Decision 2)
-- [ ] T069 [US2] Implement incremental loading in `frontend/components/collection/CollectionGallery.tsx`, consuming `nextCursor` so a large collection is never presented at once (FR-035)
-- [ ] T070 [US2] Confirm images load through the authorized path in the browser, not through a server-side optimizer that would strip the session — set `unoptimized` or a custom loader in `frontend/components/collection/CollectibleCard.tsx` as `research.md` Decision 2 requires
+- [X] T061 [P] [US2] Establish the visual language in `frontend/app/globals.css` and `frontend/tailwind.config.ts` — typography, spacing, surfaces, and a first-class dark theme — and restyle the shadcn/ui primitives in `frontend/components/ui/` away from their defaults to Vaultory's own identity (Principle I; Technology Constraints)
+- [X] T062 [US2] Build the collectible card in `frontend/components/collection/CollectibleCard.tsx`: the rendition fills the card at the fixed aspect ratio with no collector-side cropping, name and status legible alongside (FR-014, FR-030, FR-032)
+- [X] T063 [P] [US2] Build the designed placeholder in `frontend/components/collection/ImagePlaceholder.tsx`, consistent with the gallery's visual language rather than a generic broken-image affordance (FR-033)
+- [X] T064 [US2] Build the gallery layout in `frontend/components/collection/CollectionGallery.tsx` as an image-forward grid — explicitly **not** a row-and-column table — responsive across desktop, tablet, and mobile with no horizontal page scroll (FR-030, FR-031, FR-036)
+- [X] T065 [P] [US2] Build the empty state in `frontend/components/collection/EmptyCollection.tsx`, offering a path to add a first collectible (FR-041)
+- [X] T066 [P] [US2] Build the loading state in `frontend/app/collection/loading.tsx` so it renders while the collection is fetched and never flashes the empty state (FR-042)
+- [X] T067 [P] [US2] Build the error state with a retry in `frontend/app/collection/error.tsx` (FR-043)
+- [X] T068 [US2] Replace the plain listing from T055 with the gallery in `frontend/app/collection/page.tsx`, keeping it a Server Component and passing the rendition paths through unchanged so `<img>` requests travel same-origin and carry the session (research Decision 2)
+- [X] T069 [US2] Implement incremental loading in `frontend/components/collection/CollectionGallery.tsx`, consuming `nextCursor` so a large collection is never presented at once (FR-035)
+- [X] T070 [US2] Confirm images load through the authorized path in the browser, not through a server-side optimizer that would strip the session — set `unoptimized` or a custom loader in `frontend/components/collection/CollectibleCard.tsx` as `research.md` Decision 2 requires
 
 **Checkpoint**: Adding and browsing both work. The collection reads as a gallery of collectibles
 rather than an inventory listing.
@@ -191,16 +191,16 @@ distinguishable from an empty vault.
 ### Tests for User Story 3 ⚠️
 
 - [X] T071 [P] [US3] Integration-test status filtering in `backend/tests/integration/status_filter_test.go`: each status returns only its own entries, an unrecognized status value is refused, `totalUnfiltered` stays independent of the filter, and the filtered query uses `collectibles_status_gallery_idx`
-- [ ] T072 [P] [US3] Unit-test the filter control in `frontend/tests/unit/status-filter.test.tsx`: the active filter is indicated (FR-039), an all-statuses option is present (FR-038), and the control is keyboard operable (FR-045)
-- [ ] T073 [P] [US3] Unit-test the no-results state in `frontend/tests/unit/no-results.test.tsx`, asserting it is textually and visually distinct from the empty-collection state (FR-040)
-- [ ] T074 [P] [US3] End-to-end test filtering in `frontend/tests/e2e/filter-collection.spec.ts`: filter to a populated status, filter to an empty one and see the no-results state, then clear the filter in a single action
+- [X] T072 [P] [US3] Unit-test the filter control in `frontend/tests/unit/status-filter.test.tsx`: the active filter is indicated (FR-039), an all-statuses option is present (FR-038), and the control is keyboard operable (FR-045)
+- [X] T073 [P] [US3] Unit-test the no-results state in `frontend/tests/unit/no-results.test.tsx`, asserting it is textually and visually distinct from the empty-collection state (FR-040)
+- [X] T074 [P] [US3] End-to-end test filtering in `frontend/tests/e2e/filter-collection.spec.ts`: filter to a populated status, filter to an empty one and see the no-results state, then clear the filter in a single action
 
 ### Implementation for User Story 3
 
 - [X] T075 [US3] Accept and validate the `status` query parameter in `backend/internal/transport/httpapi/list_collectibles.go` and apply it in `backend/internal/collection/list_collection.go` and `backend/internal/store/postgres/collectibles.go`, within the same single statement as the page read (FR-037)
-- [ ] T076 [P] [US3] Build the status filter control in `frontend/components/collection/StatusFilter.tsx`: single-select across the four statuses plus all, with the active selection clearly indicated and a one-action return to all (FR-037, FR-038, FR-039)
-- [ ] T077 [P] [US3] Build the no-results state in `frontend/components/collection/NoResults.tsx`, distinct from the empty-collection state and driven by `totalUnfiltered` being above zero while the page is empty (FR-040)
-- [ ] T078 [US3] Wire the filter into the collection route in `frontend/app/collection/page.tsx`, reflecting the active status in the URL so a filtered view is shareable and reloadable, and resetting pagination when the filter changes
+- [X] T076 [P] [US3] Build the status filter control in `frontend/components/collection/StatusFilter.tsx`: single-select across the four statuses plus all, with the active selection clearly indicated and a one-action return to all (FR-037, FR-038, FR-039)
+- [X] T077 [P] [US3] Build the no-results state in `frontend/components/collection/NoResults.tsx`, distinct from the empty-collection state and driven by `totalUnfiltered` being above zero while the page is empty (FR-040)
+- [X] T078 [US3] Wire the filter into the collection route in `frontend/app/collection/page.tsx`, reflecting the active status in the URL so a filtered view is shareable and reloadable, and resetting pagination when the filter changes
 
 **Checkpoint**: All three user stories are independently functional.
 
@@ -208,18 +208,18 @@ distinguishable from an empty vault.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T079 [P] Audit accessibility across `frontend/app/collection/` and `frontend/components/collection/`: full keyboard operation of adding and browsing, focus order and visible focus, text alternatives on every image, and status never signalled by colour alone (FR-044, FR-045, SC-011)
-- [ ] T080 [P] Verify the gallery at desktop, tablet, and mobile widths with no horizontal page scroll and no clipped or overlapping content, recording the checks in `frontend/tests/e2e/responsive.spec.ts` (FR-036, SC-010)
-- [ ] T081 Measure a 500-collectible collection becoming browsable within 2 seconds and scrolling without stalling, with a seeding helper in `backend/tests/integration/seed_large_collection_test.go` (SC-004)
-- [ ] T082 [P] Confirm no N+1 access on the gallery path by asserting statement counts per page load in `backend/tests/integration/query_count_test.go` — the page read and the count, and nothing per entry
+- [X] T079 [P] Audit accessibility across `frontend/app/collection/` and `frontend/components/collection/`: full keyboard operation of adding and browsing, focus order and visible focus, text alternatives on every image, and status never signalled by colour alone (FR-044, FR-045, SC-011)
+- [X] T080 [P] Verify the gallery at desktop, tablet, and mobile widths with no horizontal page scroll and no clipped or overlapping content, recording the checks in `frontend/tests/e2e/responsive.spec.ts` (FR-036, SC-010)
+- [X] T081 Measure a 500-collectible collection becoming browsable within 2 seconds and scrolling without stalling, with a seeding helper in `backend/tests/integration/seed_large_collection_test.go` (SC-004)
+- [X] T082 [P] Confirm no N+1 access on the gallery path by asserting statement counts per page load in `backend/tests/integration/query_count_test.go` — the page read and the count, and nothing per entry
 - [X] T083 [P] Verify text fidelity for non-Latin scripts, accented characters, and emoji through the whole path in `backend/tests/integration/text_fidelity_test.go`
 - [X] T084 [P] Confirm error responses never carry internal detail — no driver messages, no SQL, no stack traces — in `backend/tests/integration/error_leakage_test.go` (Principle IV)
-- [ ] T085 [P] Document how to run both applications, become the development collector, and apply migrations in `README.md`, referring to `specs/001-add-browse-collectibles/quickstart.md` rather than duplicating it
-- [ ] T086 [P] Record the deferred items from `research.md` — reclaiming unreferenced uploads, WebP renditions, the catalog and owned-instance split, currency selection, upload rate limiting — as tracked follow-ups in `docs/deferred.md`, so none is silently forgotten
-- [ ] T087 Regenerate `frontend/lib/types/api.ts` from the contract and confirm it is unchanged, proving the implementation did not drift from `contracts/openapi.yaml` (Principle III)
-- [ ] T088 Walk every scenario in `specs/001-add-browse-collectibles/quickstart.md` — Walkthroughs A through H — and confirm each expected result, **including Walkthrough G, where another collector's image must return 404 rather than 403**
-- [ ] T089 Run the constitution's Quality Gates in full: `go vet ./...`, `go build ./...`, `go test ./...` in `backend/`, and `npm run lint`, `npx tsc --noEmit`, `npm run build`, `npm run test`, `npm run test:e2e` in `frontend/`
-- [ ] T090 Review this feature against `.specify/memory/constitution.md` and confirm the Constitution Check table in `plan.md` still holds, with the dev-only identity seam remaining the only entry in Complexity Tracking
+- [X] T085 [P] Document how to run both applications, become the development collector, and apply migrations in `README.md`, referring to `specs/001-add-browse-collectibles/quickstart.md` rather than duplicating it
+- [X] T086 [P] Record the deferred items from `research.md` — reclaiming unreferenced uploads, WebP renditions, the catalog and owned-instance split, currency selection, upload rate limiting — as tracked follow-ups in `docs/deferred.md`, so none is silently forgotten
+- [X] T087 Regenerate `frontend/lib/types/api.ts` from the contract and confirm it is unchanged, proving the implementation did not drift from `contracts/openapi.yaml` (Principle III)
+- [ ] T088 **BLOCKED — needs a running stack (no PostgreSQL, Docker, or `migrate` in the build environment).** Walk every scenario in `specs/001-add-browse-collectibles/quickstart.md` — Walkthroughs A through H — and confirm each expected result, **including Walkthrough G, where another collector's image must return 404 rather than 403**
+- [ ] T089 **PARTIAL — everything except `npm run test:e2e` passes; the end-to-end suite compiles and enumerates 138 tests but was not executed, as no running stack is available.** Run the constitution's Quality Gates in full: `go vet ./...`, `go build ./...`, `go test ./...` in `backend/`, and `npm run lint`, `npx tsc --noEmit`, `npm run build`, `npm run test`, `npm run test:e2e` in `frontend/`
+- [X] T090 Review this feature against `.specify/memory/constitution.md` and confirm the Constitution Check table in `plan.md` still holds, with the dev-only identity seam remaining the only entry in Complexity Tracking
 
 ---
 
@@ -232,12 +232,12 @@ T093 are **not optional polish** — they carry requirements added to the spec o
 T094 belong with Phase 3's add path (do them alongside T044 and T046). They are listed separately
 only because they postdate the original breakdown.
 
-- [ ] T091 Define both appearance palettes on one set of themed tokens in `frontend/app/globals.css` and `frontend/tailwind.config.ts` — dark as the default, light honoured from the collector's system preference, no manual toggle — and apply them across `frontend/components/collection/` and `frontend/components/ui/` (FR-046). **Do this with T061; retrofitting a second palette after the gallery is styled means revisiting every surface**
-- [ ] T092 [P] Verify every screen and every interface state in both appearances in `frontend/tests/e2e/appearance.spec.ts` — empty, loading, validation, success, error, and no-results — asserting contrast compliance in each (SC-015)
+- [X] T091 Define both appearance palettes on one set of themed tokens in `frontend/app/globals.css` and `frontend/tailwind.config.ts` — dark as the default, light honoured from the collector's system preference, no manual toggle — and apply them across `frontend/components/collection/` and `frontend/components/ui/` (FR-046). **Do this with T061; retrofitting a second palette after the gallery is styled means revisiting every surface**
+- [X] T092 [P] Verify every screen and every interface state in both appearances in `frontend/tests/e2e/appearance.spec.ts` — empty, loading, validation, success, error, and no-results — asserting contrast compliance in each (SC-015)
 - [X] T093 Write the `collectible_submissions` table migration in `backend/migrations/000006_create_collectible_submissions.up.sql` (and `.down.sql`) with the composite primary key `(collector_id, submission_key)` from `data-model.md`, then make the add-collectible use case in `backend/internal/collection/add_collectible.go` idempotent per submission key — recording the key in the same transaction as the collectible and returning the existing collectible on a repeat (FR-047)
-- [ ] T094 Accept and validate the submission key in `backend/internal/transport/httpapi/add_collectible.go`, and generate one per add attempt in `frontend/components/collection/AddCollectibleForm.tsx`, regenerating it only when the collector begins a new collectible so a retry replays the same key (FR-047)
+- [X] T094 Accept and validate the submission key in `backend/internal/transport/httpapi/add_collectible.go`, and generate one per add attempt in `frontend/components/collection/AddCollectibleForm.tsx`, regenerating it only when the collector begins a new collectible so a retry replays the same key (FR-047)
 - [X] T095 [P] Integration-test submission idempotency in `backend/tests/integration/idempotency_test.go`: a replayed key returns the same collectible and creates no second row, two **concurrent** requests with one key create exactly one collectible (the uniqueness constraint, not a check-then-insert, must be what holds), and a different key with identical values creates an independent entry — **proving FR-047 without weakening FR-023** (SC-016)
-- [ ] T096 [P] Regenerate `frontend/lib/types/api.ts` from the contract and confirm the generated request type carries the required `submissionKey`. The contract already declares it — `specs/001-add-browse-collectibles/contracts/openapi.yaml` was amended 2026-09-10 — so this task only proves the generated types have not drifted (Principle III)
+- [X] T096 [P] Regenerate `frontend/lib/types/api.ts` from the contract and confirm the generated request type carries the required `submissionKey`. The contract already declares it — `specs/001-add-browse-collectibles/contracts/openapi.yaml` was amended 2026-09-10 — so this task only proves the generated types have not drifted (Principle III)
 - [X] T097 [P] Pin the rendition geometry — 4:5 portrait at 800×1000, filling the frame and trimming centrally — as named constants in `backend/internal/imaging/rendition.go`, and match the card's frame to it in `frontend/components/collection/CollectibleCard.tsx` so the two cannot drift (FR-014)
 
 **Checkpoint**: The constitution's dark-mode requirement is satisfied and verified, a retried add can

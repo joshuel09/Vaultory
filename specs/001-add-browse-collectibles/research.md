@@ -68,8 +68,10 @@ Principle II requires, and avoids cross-origin credential handling entirely.
   ways to get wrong, and `<img>` still would not send credentials cross-origin without further
   contortions.
 
-**Note for implementation**: the rewrite proxy has its own request body limit; it must be raised
-above 10 MB, or the upload will be refused before Go ever applies the rule in FR-010.
+**Note for implementation**: Next streams a rewritten request body through without a size cap of its
+own, so there is no proxy body limit to raise for a 10 MB upload. What does matter is
+`experimental.proxyTimeout`: a large upload over a slow connection must not be cut off before Go
+applies the rule in FR-010.
 
 ---
 

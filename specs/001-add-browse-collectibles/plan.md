@@ -118,6 +118,27 @@ Evaluated against Vaultory Constitution v1.0.0.
 Result: **PASS**, with one documented deviation — no real authentication — recorded in Complexity
 Tracking.
 
+**Post-implementation verification (2026-09-13)**
+
+Re-checked against the built code rather than the design, per T090. Verified mechanically:
+
+- `internal/domain` directly imports only `fmt`, `strings`, `time`, and `google/uuid` — no
+  transport, no driver. (`database/sql/driver` appears transitively because `google/uuid`
+  implements `sql.Scanner`; that is the library's surface, not a coupling of the domain.)
+- No float type appears anywhere in the money path — parsing, storage, or serialisation. The only
+  `float64` in the backend is image-scaling arithmetic in `imaging/rendition.go`, which is not a
+  financial calculation.
+- `http.StatusForbidden` is never written. The only mentions of 403 are comments explaining why it
+  is absent (FR-027).
+- All six `WHERE` clauses in the stores carry `collector_id`, and all four `JOIN` conditions
+  constrain it as well, so no query can reach across collectors.
+- No `any` in hand-written TypeScript; no SQL or persistence concept appears in the frontend.
+- No credentials in tracked files; no `.env` is tracked.
+- Generated frontend types regenerate byte-identically from `contracts/openapi.yaml`, so the
+  implementation has not drifted from the contract.
+
+Complexity Tracking still holds exactly one entry: the development-only identity seam.
+
 **Post-Phase 1 re-check**: Re-evaluated after `research.md`, `data-model.md`, `contracts/openapi.yaml`,
 and `quickstart.md` were written. All gates above still hold. The design added no new abstraction
 beyond the two justified interfaces, introduced no business rule into the frontend, and left the

@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Vaultory's two appearances (FR-046).
+ *
+ * Dark is the default: a collectibles gallery reads better against dark surfaces, and the
+ * constitution requires dark mode be a first-class experience. Light is fully supported and
+ * selected by the collector's system preference — there is no manual toggle in this feature.
+ *
+ * Both palettes are defined on the same token names, so every component is written once. A
+ * component that hard-codes a colour has escaped this system and will look wrong in one of them.
+ */
+
+@layer base {
+  :root {
+    /* Dark — the default appearance. */
+    --canvas: 12 12 16;
+    --surface: 22 22 28;
+    --surface-raised: 32 32 40;
+    --edge: 52 52 64;
+    --ink: 244 244 248;
+    --ink-muted: 168 168 184;
+    --ink-faint: 118 118 134;
+    --accent: 196 154 92;
+    --accent-ink: 18 14 8;
+    --danger: 248 128 128;
+    --danger-ink: 32 8 8;
+    --success: 122 206 150;
+
+    --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    color-scheme: dark;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --canvas: 248 247 245;
+      --surface: 255 255 255;
+      --surface-raised: 255 255 255;
+      --edge: 222 219 213;
+      --ink: 26 24 22;
+      --ink-muted: 92 88 82;
+      --ink-faint: 134 130 122;
+      /* Darkened against white so text on the accent and the accent as text both stay legible. */
+      --accent: 133 96 40;
+      --accent-ink: 255 252 246;
+      --danger: 168 32 32;
+      --danger-ink: 255 245 245;
+      --success: 22 110 62;
+      color-scheme: light;
+    }
+  }
+
+  html {
+    background-color: rgb(var(--canvas));
+  }
+
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+  }
+
+  /* A visible focus ring in both appearances. Keyboard operation is a requirement, not a
+     nicety (FR-045), and an invisible focus ring is the same as none. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-canvas;
+  }
+
+  /* Respect a collector who has asked for less motion. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* The shimmer used by the loading state. Deliberately slow and low-contrast: a loading screen
+     should not compete with the collection it is about to show. */
+  .shimmer {
+    background-image: linear-gradient(
+      90deg,
+      rgb(var(--surface)) 0%,
+      rgb(var(--surface-raised)) 50%,
+      rgb(var(--surface)) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+}
