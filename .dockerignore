@@ -1,0 +1,42 @@
+# Repository-root build context.
+#
+# Everything here is either irrelevant to a build or actively harmful in one: host-built
+# dependencies that would shadow the container's own, build output, and local state.
+
+.git/
+.gitignore
+
+# Documentation and specifications never affect a build.
+specs/
+docs/
+*.md
+!README.md
+
+# Host-built dependencies. A node_modules from macOS inside a Linux container fails confusingly,
+# and it is by far the largest thing that would otherwise be copied.
+**/node_modules/
+**/.next/
+**/out/
+
+# Build output and local state.
+backend/bin/
+backend/.imagestore/
+**/coverage/
+**/test-results/
+**/playwright-report/
+
+# Local configuration and anything secret.
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Editor, tooling, and OS noise.
+.DS_Store
+.idea/
+.vscode/
+.claude/
+.specify/
+.qodo/

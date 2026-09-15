@@ -1,0 +1,252 @@
+# Vaultory — the whole stack, organised by profile.
+#
+#   make up        dev profile:  database, migrations, backend, frontend
+#   make test      test profile: a throwaway database and the backend suites
+#   make test-e2e  e2e profile:  the browser suite against a running stack
+#
+# Every value below has a development-only default, so a clone runs with no configuration at all.
+# To override any of them, create a `.env` file beside this one — Compose reads it automatically,
+# and it is gitignored, so your local ports never show up in a diff (FR-009, FR-022).
+#
+# Production images are in compose.prod.yaml. They share almost nothing with these services, which
+# is why they are a separate file rather than another profile.
+
+name: vaultory
+
+# ---------------------------------------------------------------------------------------------
+# Anchors. The two databases are configured almost identically; the differences that matter are
+# spelled out at each use site rather than hidden here.
+# ---------------------------------------------------------------------------------------------
+x-postgres-image: &postgres-image postgres:17-alpine
+x-migrate-image: &migrate-image migrate/migrate:v4.18.1
+
+services:
+  # -------------------------------------------------------------------------------------------
+  # Development database. Data lives on a named volume and survives `make down` (FR-006).
+  # -------------------------------------------------------------------------------------------
+  postgres:
+    profiles: [dev]
+    image: *postgres-image
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-vaultory_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-vaultory}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vaultory_dev_password}
+    ports:
+      # Published so you can inspect your data with a GUI client. This is the most likely port
+      # collision, since many developers already run PostgreSQL.
+      - "${VAULTORY_DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # The backend waits on this, so it must mean "ready for queries", not "process started".
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vaultory} -d ${POSTGRES_DB:-vaultory_dev}"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  # -------------------------------------------------------------------------------------------
+  # Migrations as a one-shot. The backend waits for this to exit successfully, which is how
+  # FR-002 is expressed declaratively rather than with a sleep or a retry loop.
+  #
+  # `up` applies only what is outstanding, so running it repeatedly is safe (FR-005).
+  # -------------------------------------------------------------------------------------------
+  migrate:
+    profiles: [dev]
+    image: *migrate-image
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend/migrations:/migrations:ro
+    command:
+      - -path=/migrations
+      - -database=postgres://${POSTGRES_USER:-vaultory}:${POSTGRES_PASSWORD:-vaultory_dev_password}@postgres:5432/${POSTGRES_DB:-vaultory_dev}?sslmode=disable
+      - up
+    restart: "no"
+
+  # -------------------------------------------------------------------------------------------
+  # The Go service.
+  # -------------------------------------------------------------------------------------------
+  backend:
+    profiles: [dev]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    environment:
+      # 0.0.0.0, not 127.0.0.1: a service bound to loopback inside a container is unreachable
+      # from every other container, including the frontend.
+      VAULTORY_LISTEN_ADDR: 0.0.0.0:8080
+      VAULTORY_DATABASE_URL: postgres://${POSTGRES_USER:-vaultory}:${POSTGRES_PASSWORD:-vaultory_dev_password}@postgres:5432/${POSTGRES_DB:-vaultory_dev}?sslmode=disable
+      VAULTORY_IMAGE_STORE: filesystem
+      VAULTORY_IMAGE_STORE_PATH: /var/lib/vaultory/images
+      VAULTORY_SESSION_SECRET: ${VAULTORY_SESSION_SECRET:-dev-only-not-a-real-secret}
+      # Mints a session for anyone who asks, with no authentication. Development only —
+      # authentication is out of scope for feature 001.
+      VAULTORY_DEV_IDENTITY: ${VAULTORY_DEV_IDENTITY:-enabled}
+      VAULTORY_IDEMPOTENCY_WINDOW: ${VAULTORY_IDEMPOTENCY_WINDOW:-24h}
+    ports:
+      - "${VAULTORY_BACKEND_PORT:-8080}:8080"
+    volumes:
+      - ./backend:/app
+      # Uploaded images on a named volume. Without this, every rebuild would orphan every image
+      # row in the database — rows pointing at bytes that no longer exist (FR-006).
+      - imagestore:/var/lib/vaultory/images
+      # Dependency and build caches, so a routine start does not re-download the module tree
+      # (FR-011).
+      - gomodcache:/go/pkg/mod
+      - gobuildcache:/root/.cache/go-build
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./backend
+          target: /app
+          ignore:
+            - tests/
+            - .imagestore/
+        # A dependency change is the one case where rebuilding is correct.
+        - action: rebuild
+          path: ./backend/go.mod
+        - action: rebuild
+          path: ./backend/go.sum
+
+  # -------------------------------------------------------------------------------------------
+  # The Next.js frontend. It proxies /api/* to the backend, which is what keeps the session
+  # cookie same-origin and makes per-request image authorization work in a browser.
+  # -------------------------------------------------------------------------------------------
+  frontend:
+    profiles: [dev]
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    depends_on:
+      backend:
+        condition: service_started
+    environment:
+      # Inside the Compose network the backend is reachable by service name.
+      VAULTORY_BACKEND_ORIGIN: http://backend:8080
+      NEXT_TELEMETRY_DISABLED: "1"
+      # Some filesystems do not deliver inotify events into containers; this is the documented
+      # fallback for Next's dev server.
+      WATCHPACK_POLLING: "${WATCHPACK_POLLING:-false}"
+    ports:
+      - "${VAULTORY_FRONTEND_PORT:-3000}:3000"
+    volumes:
+      - ./frontend:/app
+      # node_modules stays in a named volume rather than shadowed by the host's. A macOS-built
+      # native binary does not run inside a Linux container.
+      - frontend_node_modules:/app/node_modules
+      - frontend_next_cache:/app/.next
+    develop:
+      watch:
+        - action: sync
+          path: ./frontend
+          target: /app
+          ignore:
+            - node_modules/
+            - .next/
+            - tests/e2e/
+        - action: rebuild
+          path: ./frontend/package.json
+
+  # -------------------------------------------------------------------------------------------
+  # Test database. Separate service, no published port, and nothing but tmpfs behind it.
+  #
+  # This is deliberate and load-bearing: the integration harness truncates tables between tests.
+  # Pointed at the development database it would delete a developer's collection without warning.
+  # A separate service removes the possibility rather than trusting an environment variable
+  # (FR-015).
+  # -------------------------------------------------------------------------------------------
+  postgres-test:
+    profiles: [test]
+    image: *postgres-image
+    environment:
+      POSTGRES_DB: vaultory_test
+      POSTGRES_USER: vaultory
+      POSTGRES_PASSWORD: vaultory_test_password
+      # Safe here and nowhere else: this database is created, used, and destroyed within one run.
+      PGDATA: /var/lib/postgresql/data
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vaultory -d vaultory_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 3s
+
+  migrate-test:
+    profiles: [test]
+    image: *migrate-image
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    volumes:
+      - ./backend/migrations:/migrations:ro
+    command:
+      - -path=/migrations
+      - -database=postgres://vaultory:vaultory_test_password@postgres-test:5432/vaultory_test?sslmode=disable
+      - up
+    restart: "no"
+
+  # -------------------------------------------------------------------------------------------
+  # The backend suites: unit, integration, and contract. Its exit code is the command's exit
+  # code, so a failing suite fails the command (FR-016).
+  # -------------------------------------------------------------------------------------------
+  backend-test:
+    profiles: [test]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    depends_on:
+      migrate-test:
+        condition: service_completed_successfully
+    environment:
+      # Note what is absent: VAULTORY_DATABASE_URL. This service has no way to reach the
+      # development database, by construction rather than by discipline.
+      VAULTORY_TEST_DATABASE_URL: postgres://vaultory:vaultory_test_password@postgres-test:5432/vaultory_test?sslmode=disable
+      CGO_ENABLED: "0"
+    volumes:
+      - ./backend:/app
+      - gomodcache:/go/pkg/mod
+      - gobuildcache:/root/.cache/go-build
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        echo "── unit ─────────────────────────────────────────"
+        go test ./tests/unit/... ./internal/...
+        echo "── integration and contract ─────────────────────"
+        go test -tags=integration ./tests/integration/... ./tests/contract/...
+
+  # -------------------------------------------------------------------------------------------
+  # The browser suite, run against a stack that is already up.
+  # -------------------------------------------------------------------------------------------
+  e2e:
+    profiles: [e2e]
+    # Pinned to the @playwright/test version in frontend/package.json. A mismatch between the
+    # library and the browsers in the image is a confusing class of failure.
+    image: mcr.microsoft.com/playwright:v1.63.0-noble
+    working_dir: /app
+    environment:
+      # Reached by service name, not localhost: inside a container, localhost is the container.
+      VAULTORY_BASE_URL: http://frontend:3000
+      CI: "true"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    command: ["npx", "playwright", "test"]
+
+volumes:
+  pgdata:
+  imagestore:
+  gomodcache:
+  gobuildcache:
+  frontend_node_modules:
+  frontend_next_cache:

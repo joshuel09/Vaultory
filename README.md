@@ -33,27 +33,55 @@ supersedes informal convention where they conflict. The ones that shape the code
 
 ## Running it locally
 
-Full instructions, including every walkthrough that demonstrates the feature, are in
-[specs/001-add-browse-collectibles/quickstart.md](specs/001-add-browse-collectibles/quickstart.md).
-The short version:
+### With Docker — the short way
+
+Docker is the only prerequisite. No Go, no Node, no PostgreSQL, no migration tool.
 
 ```bash
-# 1. PostgreSQL
-docker compose up -d postgres
+make up
+```
 
-# 2. Schema
-cp backend/.env.example backend/.env          # then edit if your setup differs
-export $(grep -v '^#' backend/.env | xargs)
+That starts the database, applies every migration, waits for them to finish, then starts the
+backend and the frontend. Open <http://localhost:3000>.
+
+```bash
+make            # list every command
+make watch      # start, and sync your edits into the running stack
+make logs       # follow the logs
+make down       # stop; your data is kept
+make reset      # DESTROY all data, then stop
+```
+
+To change a port or any other value, create a `.env` beside `compose.yaml`. Compose reads it
+automatically and it is gitignored, so your local settings never appear in a diff:
+
+```bash
+echo 'VAULTORY_DB_PORT=5433' >> .env    # if you already run PostgreSQL on 5432
+```
+
+Every variable has a development-only default documented inline in `compose.yaml`; there is nothing
+you must set to get started.
+
+### Without Docker — running from the host
+
+Still supported. You need Go, Node, PostgreSQL, and `golang-migrate` installed:
+
+```bash
+createdb vaultory_dev
+export VAULTORY_DATABASE_URL="postgres://$(whoami)@localhost:5432/vaultory_dev?sslmode=disable"
 migrate -path backend/migrations -database "$VAULTORY_DATABASE_URL" up
 
-# 3. Backend
-cd backend && go run ./cmd/vaultory-api
+# Shell 1
+cd backend
+export VAULTORY_SESSION_SECRET=dev-only VAULTORY_DEV_IDENTITY=enabled
+go run ./cmd/vaultory-api
 
-# 4. Frontend, in a second shell
+# Shell 2
 cd frontend && npm install && npm run dev
 ```
 
-Then open <http://localhost:3000>.
+Full instructions, including every walkthrough that demonstrates the feature, are in
+[specs/001-add-browse-collectibles/quickstart.md](specs/001-add-browse-collectibles/quickstart.md).
 
 ### Becoming a collector
 
@@ -69,29 +97,36 @@ The second collector exists so that cross-collector privacy can actually be exer
 endpoint requires `VAULTORY_DEV_IDENTITY=enabled` and **must never be enabled outside local
 development**: it issues a session to anyone who asks.
 
-## Quality gates
+## Testing
 
-The constitution requires all of these to pass before a feature is complete:
+With Docker, everything is two commands:
+
+```bash
+make test        # backend: unit, integration, and contract suites
+make up && make test-e2e    # the browser suite against a running stack
+```
+
+`make test` runs against a throwaway database on tmpfs, never your development one. That is not a
+convention to remember — the test services have no route to the development database at all. The
+integration harness truncates tables between tests, so pointing it at your own data would delete
+your collection without warning.
+
+Tests that need a real database sit behind a build tag, because the guarantees they check — the
+composite foreign key, submission-key uniqueness under concurrency, `numeric(12,2)` exactness —
+live in the schema, and a fake would only assert that the Go code believes in them.
+
+### Without Docker
 
 ```bash
 cd backend  && go vet ./... && go build ./... && go test ./tests/unit/... ./internal/...
 cd frontend && npm run lint && npm run typecheck && npm run build && npm run test
-```
 
-Tests that need a real database are behind a build tag, because the guarantees they check — the
-composite foreign key, submission-key uniqueness under concurrency, `numeric(12,2)` exactness —
-live in the schema, and a fake would only assert that the Go code believes in them:
-
-```bash
 export VAULTORY_TEST_DATABASE_URL="$VAULTORY_DATABASE_URL"
 cd backend && go test -tags=integration ./tests/integration/... ./tests/contract/...
-```
-
-End-to-end journeys need the whole stack running:
-
-```bash
 cd frontend && npm run test:e2e
 ```
+
+The constitution requires all of these to pass before a feature is complete.
 
 ## Working on it
 

@@ -1,0 +1,22 @@
+# Frontend build context.
+#
+# node_modules is the important line here: on a Node project it is by far the largest thing in the
+# context, and copying a macOS-built tree into a Linux image produces native binaries that do not
+# run. The image installs its own.
+
+node_modules/
+.next/
+out/
+coverage/
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+.dockerignore
+Dockerfile*
+.env
+.env.*
+!.env.example
+
+next-env.d.ts
