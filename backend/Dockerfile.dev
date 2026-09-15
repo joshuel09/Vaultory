@@ -1,0 +1,28 @@
+# Development image for the Go service.
+#
+# Deliberately not multi-stage and deliberately not optimised: it carries the toolchain, the source
+# is mounted over it, and `go run` compiles on start. The production image is a separate file
+# (backend/Dockerfile) — one file trying to be both is how a compiler ends up in a shipped image.
+
+FROM golang:1.26-bookworm
+
+WORKDIR /app
+
+# Module and build caches live on named volumes mounted at these paths, so a routine start does not
+# re-download or rebuild the dependency tree (FR-011).
+ENV GOPATH=/go \
+    GOCACHE=/root/.cache/go-build \
+    CGO_ENABLED=0
+
+# Fetch dependencies as their own layer. Source changes are synced in at runtime and must not
+# invalidate this.
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+EXPOSE 8080
+
+# `go run` rather than a pre-built binary: Compose's watch syncs source in and restarts this
+# process, so the compile has to happen at start.
+CMD ["go", "run", "./cmd/vaultory-api"]

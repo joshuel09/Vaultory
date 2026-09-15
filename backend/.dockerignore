@@ -1,0 +1,15 @@
+# Backend build context.
+
+.dockerignore
+Dockerfile*
+.env
+.env.*
+!.env.example
+
+# Uploaded images are runtime state, never part of a build.
+.imagestore/
+bin/
+
+# Tests are excluded from the build context. The development image mounts the source, so it still
+# sees them; a shipped image has no business carrying test files (FR-017).
+tests/

@@ -89,12 +89,24 @@ Current features:
 
 ## Running and testing
 
-Full instructions in `README.md`. What runs today with no database:
+With Docker — the normal path, and the only prerequisite:
+
+```bash
+make up          # database, migrations, backend, frontend
+make watch       # the same, syncing your edits into the running stack
+make test        # backend unit, integration, and contract suites
+make test-e2e    # the browser suite; needs `make up` first
+make down        # stop, keeping data.   make reset destroys it.
+```
+
+`make test` uses a throwaway database with no route to the development one. That isolation is
+structural, not a convention — the integration harness truncates tables between tests.
+
+Without Docker, and what runs with no database at all:
 
 ```bash
 cd backend  && go vet ./... && go build ./... && go test ./tests/unit/...   # 33 tests
 cd frontend && npm run lint && npm run typecheck && npm run test && npm run build   # 30 tests
 ```
 
-The integration, contract, and end-to-end suites need PostgreSQL and have never been executed.
-Making them reachable is the point of feature 002.
+Full instructions in `README.md`.
