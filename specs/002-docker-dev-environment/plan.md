@@ -156,6 +156,21 @@ over `docker compose` and adds no logic of its own.
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
-| **FR-019 requires changing `cmd/vaultory-api/main.go`, contradicting the spec's "no application source changes" assumption** | The server currently *requires* `VAULTORY_DEV_IDENTITY=enabled` and refuses to start otherwise — deliberate in feature 001, so no deployment could silently resolve every request to one collector. FR-019 requires the opposite for a production image: refuse when development identity *is* enabled. A production image cannot start at all until this is reconciled | Leaving it alone means FR-019 and User Story 3 cannot be delivered, and the production Dockerfile builds an image that cannot run. Faking it in the entrypoint — unsetting the variable, or wrapping the binary — would hide a security-relevant decision in shell rather than expressing it in the program. The honest fix is a single reconciled check in `main.go`: refuse to start when *no* resolver is configured, and refuse to start when the development resolver is configured outside development. That keeps feature 001's guarantee intact and satisfies FR-019 with one condition rather than two contradictory ones |
+| **FR-019 required changing `cmd/vaultory-api/main.go`, contradicting the spec's "no application source changes" assumption** | The server *required* `VAULTORY_DEV_IDENTITY=enabled` and refused to start otherwise — deliberate in feature 001, so no deployment could silently resolve every request to one collector. FR-019 requires the opposite for a production image: refuse when development identity *is* enabled. A production image could not start at all until this was reconciled | Leaving it alone means FR-019 and User Story 3 cannot be delivered, and the production Dockerfile builds an image that cannot run. Faking it in the entrypoint — unsetting the variable, or wrapping the binary — would hide a security-relevant decision in shell rather than expressing it in the program |
+
+**Resolved (T027), by a build tag rather than a runtime flag.** `internal/identity/dev.go` carries
+`//go:build !production`; `dev_production.go` is its counterpart under `//go:build production` and
+returns an error from the same constructor. `main.go` now has one condition and two refusals: no
+resolver configured, or a development resolver asked for in a build that has none.
+
+An `APP_ENV=production` variable was considered and rejected. It leaves the development resolver —
+which mints a session for anyone who asks — compiled into the shipped binary, one misconfiguration
+away from being reachable. The build tag makes FR-019 true by construction, which is what
+Constitution IV's "security-sensitive operations MUST fail safely" is asking for.
+
+Verified rather than asserted: `strings` finds the development session cookie name in a default
+build and **not** in a `-tags production` build, and
+`tests/unit/dev_identity_production_test.go` (`//go:build production`) fails if the resolver is
+ever reintroduced. Feature 001's guarantee is untouched — the no-resolver refusal is unchanged.
 
 No other deviation. Everything else in this feature is configuration files and image definitions.

@@ -71,6 +71,11 @@ that most often catch people out:
 - **The OpenAPI contract is the source of truth** for the frontend/backend seam. Frontend types are
   generated from it; never hand-write a response shape.
 - **Schema changes ship as reversible migrations.** No exceptions.
+- **The development identity resolver must never reach a production build.** It mints a session for
+  anyone who asks. `internal/identity/dev.go` is `//go:build !production` and `backend/Dockerfile`
+  builds with `-tags production`, so the shipped binary does not contain it — a misconfigured
+  environment variable cannot turn authentication off. If you touch that package, run
+  `go test -tags production ./tests/unit/...`.
 - Work begins from a written specification, and tasks trace back to its requirements.
 
 ## Spec Kit
@@ -85,7 +90,8 @@ it inside whichever feature is current.
 Current features:
 
 - `specs/001-add-browse-collectibles/` — complete, 95/97 tasks. The two open tasks need a database.
-- `specs/002-docker-dev-environment/` — specified and planned, not yet built.
+- `specs/002-docker-dev-environment/` — built, 26/32 tasks. The six open tasks need Docker installed,
+  which it is not here. Two of them (image size, multi-arch) are partially verified without it.
 
 ## Running and testing
 
@@ -105,7 +111,8 @@ structural, not a convention — the integration harness truncates tables betwee
 Without Docker, and what runs with no database at all:
 
 ```bash
-cd backend  && go vet ./... && go build ./... && go test ./tests/unit/...   # 33 tests
+cd backend  && go vet ./... && go build ./... && go test ./tests/unit/...   # 34 tests
+cd backend  && go vet -tags integration ./... && go vet -tags production ./...   # type-check the tagged suites
 cd frontend && npm run lint && npm run typecheck && npm run test && npm run build   # 30 tests
 ```
 

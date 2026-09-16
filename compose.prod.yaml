@@ -1,0 +1,95 @@
+# Vaultory — the production images, for verifying them locally.
+#
+# READ THIS BEFORE TREATING IT AS A DEPLOYMENT.
+#
+# This file exists to build and exercise backend/Dockerfile and frontend/Dockerfile on a developer
+# machine. It is not a deployment artifact and deliberately does not try to be one: no secret
+# management, no TLS, no backups, no replication, and a database running in a container.
+#
+# It also cannot serve traffic yet, and that is the correct behaviour rather than a gap in the
+# file. Authentication is out of scope for feature 001, so the only collector resolver that exists
+# is the development one — and the production image does not contain it (FR-019). The backend here
+# therefore starts, finds no resolver configured, says so, and exits non-zero. That refusal is the
+# thing worth verifying: see the walkthrough in specs/002-docker-dev-environment/quickstart.md.
+#
+# Usage:
+#   docker compose -f compose.prod.yaml build
+#   docker compose -f compose.prod.yaml up            # backend exits 1, on purpose
+#   docker compose -f compose.prod.yaml down -v
+
+name: vaultory-prod
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-vaultory}
+      POSTGRES_USER: ${POSTGRES_USER:-vaultory}
+      # No default. A production-shaped stack that starts with a password baked into a committed
+      # file is exactly the habit this project should not teach, so Compose fails loudly instead.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD before starting the prod stack}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vaultory} -d ${POSTGRES_DB:-vaultory}"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  # Migrations stay a separate one-shot image rather than something the server runs at boot: a
+  # server that migrates on start is a server that migrates once per replica.
+  migrate:
+    image: migrate/migrate:v4.18.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend/migrations:/migrations:ro
+    command:
+      - -path=/migrations
+      - -database=postgres://${POSTGRES_USER:-vaultory}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-vaultory}?sslmode=disable
+      - up
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      VAULTORY_LISTEN_ADDR: 0.0.0.0:8080
+      VAULTORY_DATABASE_URL: postgres://${POSTGRES_USER:-vaultory}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-vaultory}?sslmode=disable
+      VAULTORY_IMAGE_STORE: filesystem
+      VAULTORY_IMAGE_STORE_PATH: /var/lib/vaultory/images
+      VAULTORY_SESSION_SECRET: ${VAULTORY_SESSION_SECRET:?set VAULTORY_SESSION_SECRET before starting the prod stack}
+      VAULTORY_IDEMPOTENCY_WINDOW: ${VAULTORY_IDEMPOTENCY_WINDOW:-24h}
+      # Note what is absent: VAULTORY_DEV_IDENTITY. Setting it here would not help — this image is
+      # built with -tags production and has no development resolver to enable. The server refuses
+      # to start either way, which is the point.
+    ports:
+      - "${VAULTORY_BACKEND_PORT:-8080}:8080"
+    volumes:
+      - imagestore:/var/lib/vaultory/images
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Build time, not runtime. Next compiles rewrites into the build manifest, so changing
+        # which backend this image proxies to means rebuilding the image.
+        VAULTORY_BACKEND_ORIGIN: http://backend:8080
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "${VAULTORY_FRONTEND_PORT:-3000}:3000"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  imagestore:

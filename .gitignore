@@ -21,6 +21,8 @@ backend/bin/
 # Node / Next.js
 node_modules/
 .next/
+# tsc's incremental cache. A build artifact — it changes on every typecheck.
+*.tsbuildinfo
 out/
 dist/
 build/

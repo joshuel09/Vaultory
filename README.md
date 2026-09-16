@@ -97,6 +97,23 @@ The second collector exists so that cross-collector privacy can actually be exer
 endpoint requires `VAULTORY_DEV_IDENTITY=enabled` and **must never be enabled outside local
 development**: it issues a session to anyone who asks.
 
+### Production images
+
+`backend/Dockerfile` and `frontend/Dockerfile` build the shipped images; `compose.prod.yaml` exists
+to verify them locally and is **not** a deployment artifact.
+
+```bash
+docker compose -f compose.prod.yaml build
+```
+
+The backend image is distroless — no shell, no package manager, non-root — and is built with
+`-tags production`, which leaves the development identity resolver out of the binary entirely.
+
+That has a consequence worth stating plainly: **the production stack cannot serve traffic yet.**
+Authentication is out of scope for feature 001, so the only resolver that exists is the development
+one, and the production image refuses to start without a resolver rather than starting without
+authentication. It is the correct behaviour, and it is also why this is not yet deployable.
+
 ## Testing
 
 With Docker, everything is two commands:
@@ -120,6 +137,10 @@ live in the schema, and a fake would only assert that the Go code believes in th
 ```bash
 cd backend  && go vet ./... && go build ./... && go test ./tests/unit/... ./internal/...
 cd frontend && npm run lint && npm run typecheck && npm run build && npm run test
+
+# The build-tagged suites are invisible to a plain `go vet`, so a signature change under
+# internal/ can break them without anything here failing. This type-checks them with no database:
+cd backend  && go vet -tags integration ./... && go test -tags production ./tests/unit/...
 
 export VAULTORY_TEST_DATABASE_URL="$VAULTORY_DATABASE_URL"
 cd backend && go test -tags=integration ./tests/integration/... ./tests/contract/...

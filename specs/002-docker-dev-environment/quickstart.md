@@ -142,9 +142,22 @@ docker compose -f compose.prod.yaml build
 docker image ls vaultory-backend vaultory-frontend --format '{{.Repository}}: {{.Size}}'
 ```
 
-Expect the backend well under 150 MB. **The frontend may not be** — a slim Node runtime is roughly
-120 MB before any application code (research Decision 5). If it exceeds the criterion, report that
-against SC-006 rather than reaching for an unsupported runtime.
+Mind the units when comparing these: `docker image ls` reports **uncompressed** size, while a
+registry manifest lists **compressed** layers. The two differ by roughly 2.5x for a Debian-based
+image, so they cannot be added together.
+
+Expect the backend well under 150 MB: the binary is 11 MB (amd64) / 10 MB (arm64) stripped and
+statically linked — measured — on a distroless/static base that is a couple of MB by its published
+size.
+
+**Expect the frontend to exceed 150 MB, and record it as an SC-006 miss.** `node:22-bookworm-slim`
+is ~80 MB of compressed layers per its registry manifest, which unpacks to roughly 200 MB as
+`docker image ls` reports it — already over the criterion before any application code. Adding the
+~68 MB of `.next/standalone` and `.next/static` measured on disk puts it near 270 MB.
+
+Nothing in this feature gets that under 150 MB. The honest options are a smaller runtime base or a
+different criterion, and both are decisions for a later feature rather than something to work
+around here.
 
 Then confirm the images contain no toolchain and do not run as root:
 
@@ -160,11 +173,29 @@ And the security check in FR-019:
 
 ```bash
 docker run --rm -e VAULTORY_DEV_IDENTITY=enabled vaultory-backend; echo "exit: $?"
+# Expect: "development identity is not available in a production build", exit 1
+
+docker run --rm vaultory-backend; echo "exit: $?"
+# Expect: "no collector resolver is configured", exit 1
 ```
 
-Expect a refusal to start, saying why. **See the plan's Complexity Tracking**: this requires
-reconciling a check in `cmd/vaultory-api/main.go` that currently does the opposite. Until that lands,
-this step is expected to fail, and it should fail loudly rather than be skipped.
+Two refusals, and both are correct. The production image is built with `-tags production`, so the
+development resolver is not in the binary at all — the first command cannot enable what is not
+there. The second is feature 001's original guarantee, unchanged.
+
+This also means **the production stack cannot serve traffic yet**, and that is the honest state of
+the project rather than a gap in these files: authentication is out of scope for feature 001, so
+the only resolver that exists is the development one. `compose.prod.yaml` says so at the top.
+
+The same property can be checked without Docker, which is how it was verified here:
+
+```bash
+cd backend
+go test -tags production -run TestDevResolverIsUnavailable ./tests/unit/... -v
+
+go build -tags production -o /tmp/prod ./cmd/vaultory-api && strings /tmp/prod | grep -c vaultory_dev_session   # 0
+go build              -o /tmp/dev  ./cmd/vaultory-api && strings /tmp/dev  | grep -c vaultory_dev_session   # 1
+```
 
 ## Walkthrough H — Failure modes
 

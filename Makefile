@@ -57,6 +57,13 @@ shell-db: ## Open psql against the development database
 	$(COMPOSE) --profile dev exec postgres \
 		psql -U $${POSTGRES_USER:-vaultory} -d $${POSTGRES_DB:-vaultory_dev}
 
+prod-build: ## Build the production images. Verification only — this is not a deployment.
+	docker compose -f compose.prod.yaml build
+	@docker image ls --format '{{.Repository}}:{{.Tag}}\t{{.Size}}' | grep '^vaultory-prod' || true
+
 check: ## Validate the compose files without starting anything
 	$(COMPOSE) --profile dev --profile test --profile e2e config --quiet
 	@echo "compose.yaml is valid"
+	@POSTGRES_PASSWORD=check VAULTORY_SESSION_SECRET=check \
+		docker compose -f compose.prod.yaml config --quiet
+	@echo "compose.prod.yaml is valid"

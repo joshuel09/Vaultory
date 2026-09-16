@@ -1,3 +1,8 @@
+//go:build !production
+
+// This file is excluded from a production build by the tag above. The counterpart,
+// dev_production.go, replaces it with a constructor that refuses. FR-019 is therefore satisfied by
+// what is compiled in, not by a runtime flag that a misconfiguration could get wrong.
 package identity
 
 import (
@@ -31,8 +36,10 @@ type DevResolver struct {
 	secret []byte
 }
 
-func NewDevResolver(secret string) *DevResolver {
-	return &DevResolver{secret: []byte(secret)}
+// NewDevResolver builds the development resolver. The error return exists for the production
+// build's counterpart, which always fails; here it is always nil.
+func NewDevResolver(secret string) (*DevResolver, error) {
+	return &DevResolver{secret: []byte(secret)}, nil
 }
 
 // Resolve reads the signed cookie. Note what it does not do: it never consults a header, a query

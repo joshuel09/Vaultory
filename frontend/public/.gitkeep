@@ -1,0 +1,5 @@
+Static assets served from the site root.
+
+Kept in git while empty on purpose: the production image copies this directory into the standalone
+runtime, and `output: 'standalone'` deliberately excludes it from the bundle. Without the directory
+the image build fails at the COPY.

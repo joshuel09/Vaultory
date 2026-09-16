@@ -56,16 +56,28 @@ func run() error {
 		return err
 	}
 
-	// Authentication is out of scope for this feature, so the only resolver is the
-	// development-only one. Refusing to start without it is deliberate: a server that silently
-	// resolved every request to one collector would look like it worked and would have no
-	// privacy at all.
+	// One condition, two refusals, and no third path.
+	//
+	// Authentication is out of scope for feature 001, so the development resolver is still the
+	// only one there is. Refusing to start without a resolver is deliberate: a server that
+	// silently resolved every request to one collector would look like it worked and would have
+	// no privacy at all.
+	//
+	// The second refusal is what makes a production image possible. In a production build
+	// (-tags production) the development resolver is not compiled in, so its constructor fails
+	// and a binary asked to use it stops here instead of starting without authentication
+	// (FR-019). The decision lives in the program rather than in an entrypoint script, because a
+	// security-relevant condition expressed in shell is a security-relevant condition nobody
+	// reviews.
 	if !cfg.DevIdentity {
 		return errors.New(
 			"no collector resolver is configured: set VAULTORY_DEV_IDENTITY=enabled for local " +
 				"development, or supply a real authentication resolver before deploying")
 	}
-	dev := identity.NewDevResolver(cfg.SessionSecret)
+	dev, err := identity.NewDevResolver(cfg.SessionSecret)
+	if err != nil {
+		return err
+	}
 	slog.Warn("development identity is enabled: sessions are minted without authentication, " +
 		"never run this outside local development")
 
