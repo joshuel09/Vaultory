@@ -97,6 +97,23 @@ The second collector exists so that cross-collector privacy can actually be exer
 endpoint requires `VAULTORY_DEV_IDENTITY=enabled` and **must never be enabled outside local
 development**: it issues a session to anyone who asks.
 
+### Production images
+
+`backend/Dockerfile` and `frontend/Dockerfile` build the shipped images; `compose.prod.yaml` exists
+to verify them locally and is **not** a deployment artifact.
+
+```bash
+docker compose -f compose.prod.yaml build
+```
+
+The backend image is distroless — no shell, no package manager, non-root — and is built with
+`-tags production`, which leaves the development identity resolver out of the binary entirely.
+
+That has a consequence worth stating plainly: **the production stack cannot serve traffic yet.**
+Authentication is out of scope for feature 001, so the only resolver that exists is the development
+one, and the production image refuses to start without a resolver rather than starting without
+authentication. It is the correct behaviour, and it is also why this is not yet deployable.
+
 ## Testing
 
 With Docker, everything is two commands:
