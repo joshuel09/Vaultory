@@ -142,14 +142,22 @@ docker compose -f compose.prod.yaml build
 docker image ls vaultory-backend vaultory-frontend --format '{{.Repository}}: {{.Size}}'
 ```
 
-Expect the backend well under 150 MB: distroless/static is about 2 MB and the stripped, statically
-linked binary measures 11 MB (amd64) / 10 MB (arm64).
+Mind the units when comparing these: `docker image ls` reports **uncompressed** size, while a
+registry manifest lists **compressed** layers. The two differ by roughly 2.5x for a Debian-based
+image, so they cannot be added together.
+
+Expect the backend well under 150 MB: the binary is 11 MB (amd64) / 10 MB (arm64) stripped and
+statically linked — measured — on a distroless/static base that is a couple of MB by its published
+size.
 
 **Expect the frontend to exceed 150 MB, and record it as an SC-006 miss.** `node:22-bookworm-slim`
-is ~80 MB of compressed layers before any application code, and `.next/standalone` plus
-`.next/static` adds ~68 MB. Nothing in this feature gets that under the criterion; the honest
-options are a smaller runtime base or a different criterion, and both are decisions for a later
-feature rather than something to work around here.
+is ~80 MB of compressed layers per its registry manifest, which unpacks to roughly 200 MB as
+`docker image ls` reports it — already over the criterion before any application code. Adding the
+~68 MB of `.next/standalone` and `.next/static` measured on disk puts it near 270 MB.
+
+Nothing in this feature gets that under 150 MB. The honest options are a smaller runtime base or a
+different criterion, and both are decisions for a later feature rather than something to work
+around here.
 
 Then confirm the images contain no toolchain and do not run as root:
 

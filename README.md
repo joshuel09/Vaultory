@@ -138,6 +138,10 @@ live in the schema, and a fake would only assert that the Go code believes in th
 cd backend  && go vet ./... && go build ./... && go test ./tests/unit/... ./internal/...
 cd frontend && npm run lint && npm run typecheck && npm run build && npm run test
 
+# The build-tagged suites are invisible to a plain `go vet`, so a signature change under
+# internal/ can break them without anything here failing. This type-checks them with no database:
+cd backend  && go vet -tags integration ./... && go test -tags production ./tests/unit/...
+
 export VAULTORY_TEST_DATABASE_URL="$VAULTORY_DATABASE_URL"
 cd backend && go test -tags=integration ./tests/integration/... ./tests/contract/...
 cd frontend && npm run test:e2e

@@ -85,7 +85,10 @@ func newHarness(t *testing.T) *harness {
 	svc := collection.NewService(postgres.NewStore(pool), images, time.Hour)
 	svc.SetClock(func() time.Time { return time.Date(2026, 9, 12, 12, 0, 0, 0, time.UTC) })
 
-	dev := identity.NewDevResolver(devSecret)
+	dev, err := identity.NewDevResolver(devSecret)
+	if err != nil {
+		t.Fatalf("dev resolver: %v", err)
+	}
 	srv := httptest.NewServer(httpapi.NewServer(svc, dev, dev).Routes())
 	t.Cleanup(srv.Close)
 	return &harness{server: srv, dev: dev}

@@ -112,6 +112,7 @@ Without Docker, and what runs with no database at all:
 
 ```bash
 cd backend  && go vet ./... && go build ./... && go test ./tests/unit/...   # 34 tests
+cd backend  && go vet -tags integration ./... && go vet -tags production ./...   # type-check the tagged suites
 cd frontend && npm run lint && npm run typecheck && npm run test && npm run build   # 30 tests
 ```
 

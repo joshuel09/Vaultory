@@ -222,6 +222,12 @@ services:
         set -e
         echo "── unit ─────────────────────────────────────────"
         go test ./tests/unit/... ./internal/...
+        echo "── production build ─────────────────────────────"
+        # Not a duplicate of the line above. Under -tags production the development identity
+        # resolver is not compiled in, and this asserts it: the resolver mints a session for
+        # anyone who asks, so "it is absent from the shipped binary" is a property worth a test
+        # rather than a comment (FR-019).
+        go test -tags production ./tests/unit/...
         echo "── integration and contract ─────────────────────"
         go test -tags=integration ./tests/integration/... ./tests/contract/...
 
