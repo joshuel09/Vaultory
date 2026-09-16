@@ -1,5 +1,8 @@
 # Working on Vaultory
 
+`AGENTS.md` is a symlink to this file, so agents that look for that name read the same rules.
+Editing either one edits both — which is the point, since they drifted when they were two copies.
+
 ## Task workflow — follow this for every piece of work
 
 **Never commit directly to `main`.** Every change goes through an issue, a branch, and a pull
