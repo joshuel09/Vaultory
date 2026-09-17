@@ -15,7 +15,11 @@
 # ------------------------------------------------------------------------------------------------
 # Build
 # ------------------------------------------------------------------------------------------------
-FROM golang:1.26-bookworm AS build
+# --platform=$BUILDPLATFORM pins the build stage to the host's architecture so the Go compiler runs
+# natively and cross-compiles via the TARGETOS/TARGETARCH args below. Without it, building for a
+# foreign architecture runs the whole toolchain under QEMU emulation — minutes instead of seconds,
+# for an identical result.
+FROM --platform=$BUILDPLATFORM golang:1.26-bookworm AS build
 
 WORKDIR /src
 

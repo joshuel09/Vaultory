@@ -137,46 +137,83 @@ Expect Playwright to run feature 001's 138 tests across three viewports and repo
 Covers User Story 3, FR-017, FR-018, FR-019, FR-020, SC-006.
 
 ```bash
-docker compose -f compose.prod.yaml build
-
-docker image ls vaultory-backend vaultory-frontend --format '{{.Repository}}: {{.Size}}'
+make prod-build
 ```
 
-Mind the units when comparing these: `docker image ls` reports **uncompressed** size, while a
-registry manifest lists **compressed** layers. The two differ by roughly 2.5x for a Debian-based
-image, so they cannot be added together.
+`make prod-build` rather than a bare `docker compose build`: `compose.prod.yaml` marks
+`POSTGRES_PASSWORD` and `VAULTORY_SESSION_SECRET` required with `${VAR:?}`, and Compose
+interpolates the whole file even for a build, so a bare build fails on variables the build does not
+use. The target supplies throwaway values; `up` still demands real ones.
 
-Expect the backend well under 150 MB: the binary is 11 MB (amd64) / 10 MB (arm64) stripped and
-statically linked — measured — on a distroless/static base that is a couple of MB by its published
-size.
+The images are named for the Compose project, which is `vaultory-prod`:
 
-**Expect the frontend to exceed 150 MB, and record it as an SC-006 miss.** `node:22-bookworm-slim`
-is ~80 MB of compressed layers per its registry manifest, which unpacks to roughly 200 MB as
-`docker image ls` reports it — already over the criterion before any application code. Adding the
-~68 MB of `.next/standalone` and `.next/static` measured on disk puts it near 270 MB.
+```bash
+docker image ls --format '{{.Repository}}: {{.Size}}' | grep '^vaultory-prod'
+```
 
-Nothing in this feature gets that under 150 MB. The honest options are a smaller runtime base or a
-different criterion, and both are decisions for a later feature rather than something to work
-around here.
+Measured on 2026-09-17, arm64, Docker 29.8.0:
+
+| Image | Size | SC-006 (150 MB) |
+|---|---|---|
+| `vaultory-prod-backend` | **20.5 MB** | passes, with 7x of headroom |
+| `vaultory-prod-frontend` | **458.6 MB** | **fails, by 308 MB** |
+
+The frontend layer breakdown says why, and says that nothing in this feature could have fixed it:
+
+| Layer | Size |
+|---|---|
+| Debian bookworm base | 108 MB |
+| Node 22 runtime | 151 MB |
+| npm and friends | 7.3 MB |
+| `.next/standalone` | 85.3 MB |
+| `.next/static` + `public/` | 1.0 MB |
+
+The application's own contribution is ~86 MB; the runtime underneath it is ~266 MB. Even an empty
+Next app on this base misses the criterion, so trimming the bundle cannot get there. The real
+options are a substantially smaller runtime base or a different criterion, and both are decisions
+for a later feature rather than something to reach for here.
+
+An earlier estimate in this file put the figure near 270 MB. That was too low — it was built from
+compressed registry layer sizes and on-disk `du` output, which are not what `docker image ls`
+reports. The measurement above supersedes it.
 
 Then confirm the images contain no toolchain and do not run as root:
 
 ```bash
-docker run --rm --entrypoint sh vaultory-backend -c 'echo reachable' 2>&1 | head -1
+docker run --rm --entrypoint sh vaultory-prod-backend -c 'echo reachable'
 # Expect a failure: distroless has no shell at all (FR-017)
 
-docker run --rm vaultory-frontend id -u
-# Expect a non-zero user id (FR-018)
+docker run --rm --entrypoint id vaultory-prod-frontend -u
+# Expect 1000, not 0 (FR-018)
 ```
 
 And the security check in FR-019:
 
-```bash
-docker run --rm -e VAULTORY_DEV_IDENTITY=enabled vaultory-backend; echo "exit: $?"
-# Expect: "development identity is not available in a production build", exit 1
+Both checks below point at an address nothing listens on. That is deliberate: it proves the
+identity check runs *before* the database connection, so the refusal is what you see rather than a
+connection error. `main.go` orders it that way for exactly this reason.
 
-docker run --rm vaultory-backend; echo "exit: $?"
-# Expect: "no collector resolver is configured", exit 1
+```bash
+BAD=postgres://nope:nope@10.255.255.1:5432/nope
+
+docker run --rm -e VAULTORY_DATABASE_URL=$BAD -e VAULTORY_SESSION_SECRET=x \
+  vaultory-prod-backend; echo "exit: $?"
+# Expect: "no collector resolver is configured: set VAULTORY_DEV_IDENTITY=enabled for local
+#          development, or supply a real authentication resolver before deploying", exit 1
+
+docker run --rm -e VAULTORY_DEV_IDENTITY=enabled -e VAULTORY_DATABASE_URL=$BAD \
+  -e VAULTORY_SESSION_SECRET=x vaultory-prod-backend; echo "exit: $?"
+# Expect: "development identity is not available in a production build: unset
+#          VAULTORY_DEV_IDENTITY, or build without -tags production", exit 1
+```
+
+Both observed on 2026-09-17. The strongest form of the check does not need a container at all —
+extract the shipped binary and look for the development session cookie name:
+
+```bash
+cid=$(docker create vaultory-prod-backend); docker cp $cid:/usr/local/bin/vaultory-api /tmp/b
+docker rm -f $cid
+strings /tmp/b | grep -c vaultory_dev_session    # 0, on both amd64 and arm64
 ```
 
 Two refusals, and both are correct. The production image is built with `-tags production`, so the

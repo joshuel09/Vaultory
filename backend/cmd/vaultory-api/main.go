@@ -42,21 +42,10 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := postgres.NewPool(ctx, cfg.DatabaseURL)
-	if err != nil {
-		return err
-	}
-	defer pool.Close()
-
-	if cfg.ImageStore != "filesystem" {
-		return fmt.Errorf("image store %q is not implemented", cfg.ImageStore)
-	}
-	images, err := imagestore.NewFilesystem(cfg.ImageStorePath)
-	if err != nil {
-		return err
-	}
-
-	// One condition, two refusals, and no third path.
+	// One condition, two refusals, and no third path — and deliberately before anything that
+	// touches the network. A security check that only runs after a database connection
+	// succeeds is a security check nobody sees fail: `docker run` on the production image
+	// would report a missing database URL and never mention authentication at all.
 	//
 	// Authentication is out of scope for feature 001, so the development resolver is still the
 	// only one there is. Refusing to start without a resolver is deliberate: a server that
@@ -80,6 +69,20 @@ func run() error {
 	}
 	slog.Warn("development identity is enabled: sessions are minted without authentication, " +
 		"never run this outside local development")
+
+	pool, err := postgres.NewPool(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	if cfg.ImageStore != "filesystem" {
+		return fmt.Errorf("image store %q is not implemented", cfg.ImageStore)
+	}
+	images, err := imagestore.NewFilesystem(cfg.ImageStorePath)
+	if err != nil {
+		return err
+	}
 
 	service := collection.NewService(postgres.NewStore(pool), images, cfg.IdempotencyWindow)
 	server := httpapi.NewServer(service, dev, dev)
