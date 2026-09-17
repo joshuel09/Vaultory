@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { addCollectible, signIn } from './support'
+import { addCollectible, gotoReady, signIn } from './support'
 
 test.describe('filtering the collection', () => {
   test.beforeEach(async ({ page }) => signIn(page))
@@ -10,7 +10,7 @@ test.describe('filtering the collection', () => {
     await addCollectible(page, `Owned ${stamp}`, 'owned')
     await addCollectible(page, `Preordered ${stamp}`, 'preordered')
 
-    await page.goto('/collection')
+    await gotoReady(page, '/collection')
     await page.getByText('Preordered', { exact: true }).first().click()
     await expect(page).toHaveURL(/status=preordered/)
     await expect(page.getByText(`Preordered ${stamp}`)).toBeVisible()
@@ -25,7 +25,7 @@ test.describe('filtering the collection', () => {
   // FR-040: a filter that matched nothing is not an empty vault, and must not say so.
   test('a filter matching nothing is distinct from an empty vault', async ({ page }) => {
     await addCollectible(page, `Only Owned ${Date.now()}`, 'owned')
-    await page.goto('/collection?status=sold')
+    await gotoReady(page, '/collection?status=sold')
 
     await expect(page.getByTestId('no-results')).toBeVisible()
     await expect(page.getByText(/nothing marked sold/i)).toBeVisible()
@@ -36,7 +36,7 @@ test.describe('filtering the collection', () => {
   // FR-039: the active filter is visible, and survives a reload because it lives in the URL.
   test('the active filter survives a reload', async ({ page }) => {
     await addCollectible(page, `Persisted ${Date.now()}`, 'wishlist')
-    await page.goto('/collection?status=wishlist')
+    await gotoReady(page, '/collection?status=wishlist')
     await page.reload()
     await expect(page).toHaveURL(/status=wishlist/)
     await expect(page.getByText(/\(active filter\)/i)).toBeAttached()

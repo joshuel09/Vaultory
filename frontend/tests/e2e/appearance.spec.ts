@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { addCollectible, signIn } from './support'
+import { addCollectible, gotoReady, signIn } from './support'
 
 /**
  * FR-046, SC-015: every screen and every interface state is legible in both appearances.
@@ -22,7 +22,7 @@ for (const scheme of ['dark', 'light'] as const) {
 
     test('the gallery renders with the expected ground', async ({ page }) => {
       await addCollectible(page, `Appearance ${scheme} ${Date.now()}`)
-      await page.goto('/collection')
+      await gotoReady(page, '/collection')
       await expect(page.getByTestId('collection-gallery')).toBeVisible()
 
       const background = await bodyBackground(page)
@@ -30,7 +30,7 @@ for (const scheme of ['dark', 'light'] as const) {
     })
 
     test('the add form and its validation state are legible', async ({ page }) => {
-      await page.goto('/collection/new')
+      await gotoReady(page, '/collection/new')
       await expect(page.getByLabel(/^name/i)).toBeVisible()
 
       // The validation state, in this appearance.
@@ -48,14 +48,20 @@ for (const scheme of ['dark', 'light'] as const) {
 
     test('the no-results state is legible', async ({ page }) => {
       await addCollectible(page, `Filtered ${scheme} ${Date.now()}`, 'owned')
-      await page.goto('/collection?status=sold')
+      await gotoReady(page, '/collection?status=sold')
       await expect(page.getByTestId('no-results')).toBeVisible()
     })
 
     test('the error state is legible', async ({ page }) => {
       // Force the collection request to fail so the error boundary renders.
-      await page.route('**/api/collectibles*', (route) => route.abort())
-      await page.goto('/collection')
+      //
+      // By dropping the session, not by intercepting the request. The first page of a collection
+      // is fetched by a Server Component, so it never travels through the browser and page.route
+      // cannot see it — aborting '**/api/collectibles*' here changed nothing and the page rendered
+      // normally. Without a session that server-side fetch gets a 401, which is what the route
+      // throws on, and the error boundary renders for real.
+      await page.context().clearCookies()
+      await gotoReady(page, '/collection')
       await expect(page.getByTestId('collection-error')).toBeVisible()
       await expect(page.getByRole('button', { name: /try again/i })).toBeVisible()
     })
