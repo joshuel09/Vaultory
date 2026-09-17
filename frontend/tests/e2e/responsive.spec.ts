@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { addCollectible, signIn } from './support'
+import { addCollectible, gotoReady, signIn } from './support'
 
 /**
  * FR-036, SC-010: legible and usable at desktop, tablet, and mobile widths, with no horizontal
@@ -23,7 +23,7 @@ test.describe('responsive layout', () => {
   for (const { name, width, height } of WIDTHS) {
     test(`the gallery holds at ${name} (${width}px)`, async ({ page }) => {
       await page.setViewportSize({ width, height })
-      await page.goto('/collection')
+      await gotoReady(page, '/collection')
       await expect(page.getByTestId('collection-gallery')).toBeVisible()
 
       const overflows = await page.evaluate(
@@ -41,7 +41,7 @@ test.describe('responsive layout', () => {
 
     test(`the add form holds at ${name} (${width}px)`, async ({ page }) => {
       await page.setViewportSize({ width, height })
-      await page.goto('/collection/new')
+      await gotoReady(page, '/collection/new')
       await expect(page.getByLabel(/^name/i)).toBeVisible()
       const overflows = await page.evaluate(
         () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
@@ -58,7 +58,7 @@ test.describe('keyboard operation', () => {
   test.beforeEach(async ({ page }) => signIn(page))
 
   test('the add form can be completed by keyboard alone', async ({ page }) => {
-    await page.goto('/collection/new')
+    await gotoReady(page, '/collection/new')
     // The name field takes focus on arrival, so a keyboard user starts where they need to be.
     await page.keyboard.type(`Keyboard ${Date.now()}`)
     await expect(page.getByLabel(/^name/i)).not.toHaveValue('')
@@ -77,7 +77,7 @@ test.describe('keyboard operation', () => {
   })
 
   test('every focused control shows a visible focus ring', async ({ page }) => {
-    await page.goto('/collection/new')
+    await gotoReady(page, '/collection/new')
     await page.keyboard.press('Tab')
     const outlineVisible = await page.evaluate(() => {
       const el = document.activeElement

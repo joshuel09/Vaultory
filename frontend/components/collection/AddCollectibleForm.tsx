@@ -7,6 +7,7 @@ import { Field, Input, Select, Textarea } from '@/components/ui/field'
 import { ImagePicker } from './ImagePicker'
 import { ApiError } from '@/lib/api/errors'
 import { addCollectible } from '@/lib/api/collectibles'
+import { randomUUID } from '@/lib/uuid'
 import { COLLECTION_STATUSES, STATUS_LABELS, type CollectibleImage } from '@/lib/api/types'
 
 /** The eleven optional text and date attributes, in the order a collector tends to know them. */
@@ -50,7 +51,7 @@ export function AddCollectibleForm() {
    * and returns the collectible already created, while a collector deliberately adding a second
    * identical copy starts a new form and so a new key. Regenerating per attempt would defeat it.
    */
-  const submissionKey = useRef<string>(crypto.randomUUID())
+  const submissionKey = useRef<string>(randomUUID())
 
   function set<K extends keyof FormValues>(key: K, value: FormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: value }))
@@ -98,7 +99,7 @@ export function AddCollectibleForm() {
 
       setSaved(created.name)
       // A fresh key: the next collectible is a new submission, not a retry of this one.
-      submissionKey.current = crypto.randomUUID()
+      submissionKey.current = randomUUID()
       setValues(EMPTY)
       setImage(null)
       router.refresh()

@@ -58,7 +58,12 @@ shell-db: ## Open psql against the development database
 		psql -U $${POSTGRES_USER:-vaultory} -d $${POSTGRES_DB:-vaultory_dev}
 
 prod-build: ## Build the production images. Verification only — this is not a deployment.
-	docker compose -f compose.prod.yaml build
+	@# Dummy values on purpose. compose.prod.yaml marks these required with ${VAR:?}, and Compose
+	@# interpolates the whole file even for `build`, so a build fails without them. Building needs
+	@# no secrets; only `up` does, and there the :? guard still bites.
+	POSTGRES_PASSWORD=build-only VAULTORY_SESSION_SECRET=build-only \
+		docker compose -f compose.prod.yaml build
+	@echo
 	@docker image ls --format '{{.Repository}}:{{.Tag}}\t{{.Size}}' | grep '^vaultory-prod' || true
 
 check: ## Validate the compose files without starting anything

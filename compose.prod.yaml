@@ -73,7 +73,10 @@ services:
       - "${VAULTORY_BACKEND_PORT:-8080}:8080"
     volumes:
       - imagestore:/var/lib/vaultory/images
-    restart: unless-stopped
+    # "no", not "unless-stopped". This service is expected to exit 1 until a real resolver exists,
+    # and a restart policy would turn that single honest refusal into an endless crash loop that
+    # buries its own error message.
+    restart: "no"
 
   frontend:
     build:
@@ -88,7 +91,7 @@ services:
         condition: service_started
     ports:
       - "${VAULTORY_FRONTEND_PORT:-3000}:3000"
-    restart: unless-stopped
+    restart: "no"
 
 volumes:
   pgdata:
