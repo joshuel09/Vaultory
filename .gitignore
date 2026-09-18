@@ -38,3 +38,8 @@ blob-report/
 
 # Local development image store
 backend/.imagestore/
+
+# Agent instruction files. Kept on disk and still read by Claude Code and other agents; simply not
+# published. AGENTS.md is a symlink to CLAUDE.md, so both are listed.
+CLAUDE.md
+AGENTS.md
