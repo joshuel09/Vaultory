@@ -229,7 +229,12 @@ services:
         # rather than a comment (FR-019).
         go test -tags production ./tests/unit/...
         echo "── integration and contract ─────────────────────"
-        go test -tags=integration ./tests/integration/... ./tests/contract/...
+        # -p 1 is load-bearing. Both packages share one test database, and `go test` builds and
+        # runs packages in parallel by default, so they reset and seed the same tables at the same
+        # time. That produced failures that looked like product bugs — one extra collectible
+        # appearing in a paginated count, two distinct collectibles from a single submission key —
+        # and every one of them passed when run alone.
+        go test -tags=integration -p 1 ./tests/integration/... ./tests/contract/...
 
   # -------------------------------------------------------------------------------------------
   # The browser suite, run against a stack that is already up.

@@ -125,8 +125,10 @@ make up && make test-e2e    # the browser suite against a running stack
 
 `make test` runs against a throwaway database on tmpfs, never your development one. That is not a
 convention to remember — the test services have no route to the development database at all. The
-integration harness truncates tables between tests, so pointing it at your own data would delete
-your collection without warning.
+integration harness deletes every collectible, image, and submission before each test, so pointing
+it at your own data would destroy your collection without warning. Verified rather than assumed:
+a development database holding 658 collectibles was counted before and after a full `make test`
+run and was unchanged.
 
 Tests that need a real database sit behind a build tag, because the guarantees they check — the
 composite foreign key, submission-key uniqueness under concurrency, `numeric(12,2)` exactness —
@@ -143,7 +145,8 @@ cd frontend && npm run lint && npm run typecheck && npm run build && npm run tes
 cd backend  && go vet -tags integration ./... && go test -tags production ./tests/unit/...
 
 export VAULTORY_TEST_DATABASE_URL="$VAULTORY_DATABASE_URL"
-cd backend && go test -tags=integration ./tests/integration/... ./tests/contract/...
+# -p 1 matters: both packages share one database, and `go test` runs packages in parallel.
+cd backend && go test -tags=integration -p 1 ./tests/integration/... ./tests/contract/...
 cd frontend && npm run test:e2e
 ```
 

@@ -72,15 +72,30 @@ func TestStatusFilter(t *testing.T) {
 // The filtered gallery query must use the status index, not a sequential scan. This is the
 // constitution's requirement that large collection views have an efficient strategy.
 func TestFilteredGalleryQueryUsesTheStatusIndex(t *testing.T) {
-	_, svc := freshStore(t)
+	// Only the pool is needed: this test seeds directly and inspects a query plan.
+	_, _ = freshStore(t)
 	ctx := context.Background()
 
-	for i := 0; i < 40; i++ {
-		if _, _, err := svc.Add(ctx, collectorA, draft(fmt.Sprintf("idx-%d", i), "Indexed")); err != nil {
-			t.Fatalf("seed: %v", err)
-		}
+	// Enough rows that the planner has a real decision to make.
+	//
+	// The previous version of this test seeded 40 and then asserted the index was used, while its
+	// own comment admitted a scan was reasonable at that size. It was: on 40 rows PostgreSQL reads
+	// the heap and sorts, because that is genuinely cheaper, and the test failed for being wrong
+	// rather than for the index being wrong. An index is only worth asserting at a size where not
+	// using it would cost something.
+	//
+	// Inserted directly rather than through the service: 3000 round trips would dominate the
+	// suite's runtime, and what is under test is the query plan, not the write path.
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO collectibles (collector_id, name, collection_status, created_at)
+		SELECT $1, 'Indexed ' || g, CASE g % 4
+		         WHEN 0 THEN 'owned' WHEN 1 THEN 'preordered'
+		         WHEN 2 THEN 'wishlist' ELSE 'sold' END,
+		       now() - make_interval(secs => g)
+		FROM generate_series(1, 3000) AS g`, collectorA); err != nil {
+		t.Fatalf("seed: %v", err)
 	}
-	// Planner statistics, or it may reasonably choose a scan on a tiny table.
+	// Statistics, or the planner is choosing from defaults rather than from this table.
 	if _, err := pool.Exec(ctx, `ANALYZE collectibles`); err != nil {
 		t.Fatalf("analyze: %v", err)
 	}
