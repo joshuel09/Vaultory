@@ -93,8 +93,12 @@ it inside whichever feature is current.
 Current features:
 
 - `specs/001-add-browse-collectibles/` — complete, 95/97 tasks. The two open tasks need a database.
-- `specs/002-docker-dev-environment/` — built, 26/32 tasks. The six open tasks need Docker installed,
-  which it is not here. Two of them (image size, multi-arch) are partially verified without it.
+- `specs/002-docker-dev-environment/` — built and verified against a real Docker daemon. SC-006 is
+  missed by the frontend image (458.6 MB against a 150 MB criterion) and that is recorded, not fixed.
+- `specs/003-landing-page/` — complete. A public `/` that needs no session.
+
+Next: authentication (#15). Decision recorded there — Better Auth issues, the Go service verifies
+the token itself on every request and remains the only thing that authorizes vault access.
 
 ## Running and testing
 
@@ -109,14 +113,16 @@ make down        # stop, keeping data.   make reset destroys it.
 ```
 
 `make test` uses a throwaway database with no route to the development one. That isolation is
-structural, not a convention — the integration harness truncates tables between tests.
+structural, not a convention — the integration harness deletes all collection data before each
+test. Run the suites by hand and you need `-p 1`: both packages share one database, and `go test`
+runs packages in parallel, which produces failures that look like product bugs.
 
 Without Docker, and what runs with no database at all:
 
 ```bash
 cd backend  && go vet ./... && go build ./... && go test ./tests/unit/...   # 34 tests
 cd backend  && go vet -tags integration ./... && go vet -tags production ./...   # type-check the tagged suites
-cd frontend && npm run lint && npm run typecheck && npm run test && npm run build   # 30 tests
+cd frontend && npm run lint && npm run typecheck && npm run test && npm run build   # 33 tests
 ```
 
 Full instructions in `README.md`.
