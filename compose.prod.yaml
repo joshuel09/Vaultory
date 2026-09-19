@@ -117,6 +117,9 @@ services:
     environment:
       BETTER_AUTH_SECRET: ${VAULTORY_SESSION_SECRET:?set VAULTORY_SESSION_SECRET before starting the prod stack}
       BETTER_AUTH_URL: ${VAULTORY_PUBLIC_URL:?set VAULTORY_PUBLIC_URL, the origin collectors reach Vaultory on}
+      # Defaults to the public URL. Set explicitly only when Vaultory is reached on more than one
+      # origin; a mismatch here rejects every sign-in with 403 INVALID_ORIGIN.
+      BETTER_AUTH_TRUSTED_ORIGINS: ${BETTER_AUTH_TRUSTED_ORIGINS:-${VAULTORY_PUBLIC_URL}}
       # The restricted role, never the backend's.
       BETTER_AUTH_DATABASE_URL: postgres://vaultory_auth:${VAULTORY_AUTH_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-vaultory}?sslmode=disable
     ports:

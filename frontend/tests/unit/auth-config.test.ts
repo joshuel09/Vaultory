@@ -36,6 +36,14 @@ describe('the authentication configuration', () => {
     expect(source).toMatch(/storage:\s*'database'/)
   })
 
+  // FR-027 is the per-account sign-in rule. The global ceiling is abuse protection and must stay
+  // well clear of it, or ordinary use behind a shared address trips the wrong limit first.
+  it('limits sign-in attempts per account, without throttling ordinary use', () => {
+    expect(source).toMatch(/'\/sign-in\/email':\s*\{[^}]*max:\s*10/s)
+    const globalMax = Number(/\n\s*max:\s*(\d+),/.exec(source)?.[1] ?? 0)
+    expect(globalMax).toBeGreaterThan(500)
+  })
+
   it('never hard-codes a secret', () => {
     expect(source).toMatch(/process\.env\.BETTER_AUTH_SECRET/)
     expect(source).not.toMatch(/secret:\s*['"][^'"]{8,}['"]/)

@@ -5,11 +5,37 @@ import { expect, type Page } from '@playwright/test'
  * and the Next.js frontend. See specs/001-add-browse-collectibles/quickstart.md.
  */
 
-/** Sign in as a seeded development collector. "second" selects the other one, for privacy checks. */
+/**
+ * Sign in by creating a real account.
+ *
+ * Feature 004 deleted the development sign-in this used to call, which is the point of that
+ * feature: there is no way into a vault except registering. Each call makes a fresh account, so
+ * tests cannot see one another's collectibles and "second" is genuinely a different collector
+ * rather than a fixture chosen by a query parameter.
+ */
 export async function signIn(page: Page, collector: 'primary' | 'second' = 'primary') {
-  const url = collector === 'second' ? '/api/dev/session?collector=second' : '/api/dev/session'
-  const response = await page.request.post(url)
-  expect(response.ok(), 'the development sign-in endpoint must be available').toBeTruthy()
+  const email = `e2e-${collector}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.test`
+  /*
+   * The Origin header is set by hand because page.request does not send one from about:blank, and
+   * Better Auth refuses a state-changing request without it — MISSING_OR_NULL_ORIGIN, which is a
+   * CSRF defence doing its job rather than a bug. A real browser always sends one; this helper
+   * runs before any navigation, so it has to say so itself.
+   */
+  const origin = process.env.VAULTORY_BASE_URL ?? 'http://localhost:3000'
+  const response = await page.request.post('/api/auth/sign-up/email', {
+    headers: { Origin: origin },
+    data: { email, password: 'a-long-enough-password', name: email.split('@')[0] },
+  })
+  if (!response.ok()) {
+    // The body is the only thing that distinguishes an origin rejection from a rate limit from a
+    // duplicate address, and guessing between them wastes more time than printing it.
+    const body = await response.text().catch(() => '<unreadable>')
+    throw new Error(
+      `registration failed with ${response.status()}: ${body.slice(0, 300)}\n` +
+        'A 403 is usually BETTER_AUTH_TRUSTED_ORIGINS; a 429 is the sign-up rate limit.',
+    )
+  }
+  return email
 }
 
 /**

@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { buttonClasses } from '@/components/ui/button'
+import { currentCollector } from '@/lib/session'
 import { VaultPreview } from '@/components/landing/VaultPreview'
 import { STATUS_LABELS, COLLECTION_STATUSES } from '@/lib/api/types'
 
@@ -35,16 +36,24 @@ const RECORDED = [
 // FR-024. Feature 004 replaced the temporary development sign-in this used to point at.
 const ENTER_VAULT = '/register'
 
-export default function Home() {
+export default async function Home() {
+  const collector = await currentCollector()
+
   return (
     <div className="min-h-dvh bg-surface">
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
         <span className="text-sm font-semibold tracking-tight text-ink">
           Vault<span className="text-accent">ory</span>
         </span>
-        <Link href="/sign-in" className={buttonClasses({ variant: 'ghost', size: 'sm' })}>
-          Sign in
-        </Link>
+        {collector ? (
+          <Link href="/collection" className={buttonClasses({ variant: 'ghost', size: 'sm' })}>
+            My vault
+          </Link>
+        ) : (
+          <Link href="/sign-in" className={buttonClasses({ variant: 'ghost', size: 'sm' })}>
+            Sign in
+          </Link>
+        )}
       </header>
 
       <main>
@@ -63,12 +72,17 @@ export default function Home() {
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Link href={ENTER_VAULT} className={buttonClasses({ size: 'lg' })}>
-              Create my vault
+            <Link
+              href={collector ? '/collection' : ENTER_VAULT}
+              className={buttonClasses({ size: 'lg' })}
+            >
+              {collector ? 'Open my vault' : 'Create my vault'}
             </Link>
-            <span className="text-xs text-ink-faint">
-              Free, private, and yours. No profiles, no feeds.
-            </span>
+            {!collector && (
+              <span className="text-xs text-ink-faint">
+                Free, private, and yours. No profiles, no feeds.
+              </span>
+            )}
           </div>
         </section>
 
@@ -147,8 +161,11 @@ export default function Home() {
               by the database itself — not by hiding a button.
             </p>
             <div className="mt-8">
-              <Link href={ENTER_VAULT} className={buttonClasses({ size: 'lg' })}>
-                Create my vault
+              <Link
+                href={collector ? '/collection' : ENTER_VAULT}
+                className={buttonClasses({ size: 'lg' })}
+              >
+                {collector ? 'Open my vault' : 'Create my vault'}
               </Link>
             </div>
           </div>

@@ -162,6 +162,12 @@ services:
       # drift apart — a mismatch here fails every signature check with no obvious cause.
       BETTER_AUTH_SECRET: ${VAULTORY_SESSION_SECRET:-dev-only-not-a-real-secret-change-me}
       BETTER_AUTH_URL: http://localhost:${VAULTORY_FRONTEND_PORT:-3000}
+      # Origins the app is legitimately reached on. localhost for a browser on the host, and the
+      # service name for the browser suite, which reaches it inside the Compose network.
+      BETTER_AUTH_TRUSTED_ORIGINS: http://localhost:${VAULTORY_FRONTEND_PORT:-3000},http://127.0.0.1:${VAULTORY_FRONTEND_PORT:-3000},http://frontend:3000
+      # The browser suite creates an account per test from one container address. The production
+      # default is 20 per fifteen minutes; development needs headroom for a full run.
+      BETTER_AUTH_SIGNUP_MAX: ${BETTER_AUTH_SIGNUP_MAX:-1000}
       # A restricted role, never the backend's. It can reach Better Auth's own tables and nothing
       # else, so a bug here cannot read a collection (data-model.md, "Database privileges").
       BETTER_AUTH_DATABASE_URL: postgres://vaultory_auth:${VAULTORY_AUTH_DB_PASSWORD:-vaultory_auth_dev_password}@postgres:5432/${POSTGRES_DB:-vaultory_dev}?sslmode=disable

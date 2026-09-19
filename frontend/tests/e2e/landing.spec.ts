@@ -32,12 +32,14 @@ test.describe('the landing page', () => {
     }
   })
 
-  // FR-006, SC-002
+  // FR-006, FR-024, SC-002. Feature 004 changed where this leads: a visitor with no account is
+  // offered registration, which is the one click. "Open my vault" is what a signed-in collector
+  // sees instead, and navigation.spec.ts covers that.
   test('reaches a vault in one click', async ({ page }) => {
     await gotoReady(page, '/')
-    await page.getByRole('link', { name: /open my vault/i }).first().click()
-    await page.waitForURL('**/collection')
-    expect(new URL(page.url()).pathname).toBe('/collection')
+    await page.getByRole('link', { name: /create my vault/i }).first().click()
+    await page.waitForURL('**/register')
+    expect(new URL(page.url()).pathname).toBe('/register')
   })
 
   // FR-010, SC-005: it renders, it does not fetch.

@@ -91,7 +91,7 @@ rather than trusts — is only meaningful if something adversarial exercises it.
 - [X] T027 [P] [US1] Lower-case the email before storing and comparing so uniqueness and sign-in are case-insensitive (FR-003)
 - [X] T028 [US1] Point the landing page's call to action at `/register` in `frontend/app/page.tsx`, replacing the temporary `ENTER_VAULT` constant (FR-024)
 - [X] T029 [P] [US1] Unit tests in `frontend/tests/unit/register-form.test.tsx`: short password, duplicate email, and mixed-case duplicate are each refused with a field-level message (FR-002, FR-003)
-- [ ] T030 [P] [US1] E2E test in `frontend/tests/e2e/register.spec.ts` following quickstart walkthrough A, (SC-001) including that exactly one `user` and one `collectors` row exist afterwards — the trigger, observed rather than assumed
+- [X] T030 [P] [US1] E2E test in `frontend/tests/e2e/register.spec.ts` following quickstart walkthrough A, (SC-001) including that exactly one `user` and one `collectors` row exist afterwards — the trigger, observed rather than assumed
 
 **Checkpoint**: A person can create an account and own a vault. This is the MVP.
 
@@ -104,13 +104,13 @@ rather than trusts — is only meaningful if something adversarial exercises it.
 **Independent Test**: Sign in, close the browser, reopen it, reach the collection without re-entering credentials.
 
 - [X] T031 [US2] Build the sign-in page at `frontend/app/(auth)/sign-in/page.tsx`, linking to registration and back (FR-007, FR-021)
-- [ ] T032 [US2] Give an unknown email and a wrong password the same refusal, with no timing difference worth measuring (FR-008, SC-006)
-- [ ] T033 [US2] Configure session lifetime in `frontend/lib/auth.ts`: `expiresIn` 30 days with `updateAge` so expiry is extended on use — the sliding half of FR-010; the cap is already enforced in Go by T012
-- [ ] T033a [P] [US2] Assert the session cookie's attributes against a real `Set-Cookie` header in `backend/tests/contract/session_cookie_attributes_test.go`: `HttpOnly` so page scripts cannot read it, `SameSite`, and `Secure` when served over HTTPS; and confirm the session appears in no URL, redirect, or history entry (FR-012). These are Better Auth's defaults, and a default is not a guarantee — this is the test that notices if one changes
-- [ ] T034 [P] [US2] Configure Better Auth's rate limiting for sign-in: 10 failures per account per 15 minutes, then 15 minutes of refusal that lifts by itself, with a message saying when to retry (FR-027, SC-012). Never a permanent lock — password reset is out of scope, so a locked-out collector would have no way back in
-- [ ] T035 [P] [US2] Show who is signed in, and a sign-out control, on every vault page (FR-025)
+- [X] T032 [US2] Give an unknown email and a wrong password the same refusal, with no timing difference worth measuring (FR-008, SC-006)
+- [X] T033 [US2] Configure session lifetime in `frontend/lib/auth.ts`: `expiresIn` 30 days with `updateAge` so expiry is extended on use — the sliding half of FR-010; the cap is already enforced in Go by T012
+- [X] T033a [P] [US2] Assert the session cookie's attributes against a real `Set-Cookie` header in `backend/tests/contract/session_cookie_attributes_test.go`: `HttpOnly` so page scripts cannot read it, `SameSite`, and `Secure` when served over HTTPS; and confirm the session appears in no URL, redirect, or history entry (FR-012). These are Better Auth's defaults, and a default is not a guarantee — this is the test that notices if one changes
+- [X] T034 [P] [US2] Configure Better Auth's rate limiting for sign-in: 10 failures per account per 15 minutes, then 15 minutes of refusal that lifts by itself, with a message saying when to retry (FR-027, SC-012). Never a permanent lock — password reset is out of scope, so a locked-out collector would have no way back in
+- [X] T035 [P] [US2] Show who is signed in, and a sign-out control, on every vault page (FR-025)
 - [ ] T036 [P] [US2] Contract test in `backend/tests/contract/signin_response_test.go` comparing status, body, and timing for an unknown email against a wrong password (SC-006). Not a walkthrough: eyeballing two responses is not evidence
-- [ ] T037 [P] [US2] E2E test in `frontend/tests/e2e/sign-in.spec.ts` following quickstart walkthrough B, including that a session survives a browser restart (FR-009, SC-002, SC-003)
+- [X] T037 [P] [US2] E2E test in `frontend/tests/e2e/sign-in.spec.ts` following quickstart walkthrough B, including that a session survives a browser restart (FR-009, SC-002, SC-003)
 
 **Checkpoint**: Registration and sign-in both work, independently.
 
@@ -122,13 +122,13 @@ rather than trusts — is only meaningful if something adversarial exercises it.
 
 **Independent Test**: Sign out and confirm the captured cookie no longer reaches any collection content; open a vault page signed out and confirm you arrive at sign-in.
 
-- [ ] T038 [US3] Implement sign-out, deleting the session row so the next request finds nothing (FR-011). Immediate revocation is why research Decision 1 chose a database lookup over a self-contained token
-- [ ] T039 [US3] Redirect a signed-out request for a vault page to `/sign-in?next=<path>` and return the collector there after signing in (FR-022, FR-023 — a remembered destination takes precedence, the collection is the fallback), replacing the error boundary's "your collection could not be loaded" for the 401 case
-- [ ] T039a [P] [US3] Contract test in `backend/tests/contract/api_not_redirected_test.go`: an unauthenticated request to each of the four API operations returns 401 with no collection content and **no `Location` header** (FR-022b, SC-015). The redirect is for page navigation; redirecting an API request would break every client that expects a status rather than a login page
+- [X] T038 [US3] Implement sign-out, deleting the session row so the next request finds nothing (FR-011). Immediate revocation is why research Decision 1 chose a database lookup over a self-contained token
+- [X] T039 [US3] Redirect a signed-out request for a vault page to `/sign-in?next=<path>` and return the collector there after signing in (FR-022, FR-023 — a remembered destination takes precedence, the collection is the fallback), replacing the error boundary's "your collection could not be loaded" for the 401 case
+- [X] T039a [P] [US3] Contract test in `backend/tests/contract/api_not_redirected_test.go`: an unauthenticated request to each of the four API operations returns 401 with no collection content and **no `Location` header** (FR-022b, SC-015). The redirect is for page navigation; redirecting an API request would break every client that expects a status rather than a login page
 - [X] T040 [US3] Write `frontend/lib/safe-redirect.ts` rejecting any `next` that is not a path within Vaultory — absolute URLs, protocol-relative `//host`, and anything with a scheme (FR-022a). A destination taken from a request and followed after sign-in is an open redirect
 - [X] T041 [P] [US3] Unit tests in `frontend/tests/unit/safe-redirect.test.ts` covering `https://example.com`, `//example.com`, `/\\example.com`, `javascript:`, and the legitimate `/collection`
-- [ ] T042 [P] [US3] Ensure no vault page is served from the browser's back-forward cache after sign-out (US3 scenario 3)
-- [ ] T043 [P] [US3] E2E test in `frontend/tests/e2e/sign-out.spec.ts` following quickstart walkthrough E, including the open-redirect cases (SC-010, SC-013)
+- [X] T042 [P] [US3] Ensure no vault page is served from the browser's back-forward cache after sign-out (US3 scenario 3)
+- [X] T043 [P] [US3] E2E test in `frontend/tests/e2e/sign-out.spec.ts` following quickstart walkthrough E, including the open-redirect cases (SC-010, SC-013)
 
 **Checkpoint**: All three user stories work independently.
 

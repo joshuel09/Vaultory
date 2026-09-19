@@ -61,11 +61,13 @@ test.describe('browsing the collection', () => {
 
   // User Story 2, scenario 3, and FR-041 — for a collector whose vault really is empty.
   test('an empty vault explains itself and offers a way to start', async ({ page }) => {
+    // A brand-new account, so the vault is genuinely empty rather than incidentally so. The
+    // previous version only asserted if the empty state happened to be showing, which meant it
+    // could pass having checked nothing at all.
     await signIn(page, 'second')
     await gotoReady(page, '/collection')
     const empty = page.getByTestId('empty-collection')
-    if (await empty.isVisible()) {
-      await expect(empty.getByRole('link', { name: /add a collectible/i })).toBeVisible()
-    }
+    await expect(empty).toBeVisible()
+    await expect(empty.getByRole('link', { name: /add a collectible/i })).toBeVisible()
   })
 })

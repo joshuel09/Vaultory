@@ -83,7 +83,14 @@ test.describe('accessibility', () => {
       await route.continue()
     })
     await gotoReady(page, '/collection')
-    // Either the loading status or the loaded gallery; the point is that neither is silent.
-    await expect(page.locator('[role=status], [data-testid=collection-gallery]').first()).toBeAttached()
+    // The loading status, the loaded gallery, or the empty state — the point is that the page
+    // never leaves a screen reader with nothing. The empty state belongs in that list now:
+    // feature 004 gives every account its own vault, so a fresh one genuinely has no collectibles,
+    // where this test used to inherit whatever the shared seeded collector happened to hold.
+    await expect(
+      page
+        .locator('[role=status], [data-testid=collection-gallery], [data-testid=empty-collection]')
+        .first(),
+    ).toBeAttached()
   })
 })
