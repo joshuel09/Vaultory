@@ -116,9 +116,6 @@ services:
       VAULTORY_IMAGE_STORE: filesystem
       VAULTORY_IMAGE_STORE_PATH: /var/lib/vaultory/images
       VAULTORY_SESSION_SECRET: ${VAULTORY_SESSION_SECRET:-dev-only-not-a-real-secret-change-me}
-      # Mints a session for anyone who asks, with no authentication. Development only —
-      # authentication is out of scope for feature 001.
-      VAULTORY_DEV_IDENTITY: ${VAULTORY_DEV_IDENTITY:-enabled}
       VAULTORY_IDEMPOTENCY_WINDOW: ${VAULTORY_IDEMPOTENCY_WINDOW:-24h}
     ports:
       - "${VAULTORY_BACKEND_PORT:-8080}:8080"
@@ -259,12 +256,6 @@ services:
         set -e
         echo "── unit ─────────────────────────────────────────"
         go test ./tests/unit/... ./internal/...
-        echo "── production build ─────────────────────────────"
-        # Not a duplicate of the line above. Under -tags production the development identity
-        # resolver is not compiled in, and this asserts it: the resolver mints a session for
-        # anyone who asks, so "it is absent from the shipped binary" is a property worth a test
-        # rather than a comment (FR-019).
-        go test -tags production ./tests/unit/...
         echo "── integration and contract ─────────────────────"
         # -p 1 is load-bearing. Both packages share one test database, and `go test` builds and
         # runs packages in parallel by default, so they reset and seed the same tables at the same

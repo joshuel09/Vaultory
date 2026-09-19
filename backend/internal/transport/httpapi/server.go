@@ -13,11 +13,10 @@ import (
 type Server struct {
 	service  *collection.Service
 	resolver identity.Resolver
-	dev      *identity.DevResolver // nil outside development
 }
 
-func NewServer(service *collection.Service, resolver identity.Resolver, dev *identity.DevResolver) *Server {
-	return &Server{service: service, resolver: resolver, dev: dev}
+func NewServer(service *collection.Service, resolver identity.Resolver) *Server {
+	return &Server{service: service, resolver: resolver}
 }
 
 // Routes returns the handler for the whole API.
@@ -30,18 +29,6 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("GET /api/collectibles", s.requireCollector(s.handleListCollectibles))
 	mux.Handle("POST /api/images", s.requireCollector(s.handleUploadImage))
 	mux.Handle("GET /api/images/{imageId}/rendition", s.requireCollector(s.handleGetRendition))
-
-	// Development sign-in. Present only when VAULTORY_DEV_IDENTITY=enabled, and deliberately
-	// absent from the contract: it is local scaffolding, not part of the API. It mints a session
-	// for anyone who asks, which is exactly why it must never ship.
-	if s.dev != nil {
-		mux.HandleFunc("POST /api/dev/session", s.handleDevSession)
-		// GET as well, so signing in is something you can do by visiting a URL. A GET that
-		// mutates state is normally indefensible; here there is no privilege to escalate,
-		// because this route exists only when development identity is enabled and it already
-		// hands a session to anyone who asks. Without it the only way in is a devtools console.
-		mux.HandleFunc("GET /api/dev/session", s.handleDevSession)
-	}
 
 	return requestLogger(mux)
 }
@@ -65,21 +52,6 @@ func (s *Server) requireCollector(h collectorHandler) http.Handler {
 		ctx := identity.WithCollector(r.Context(), id)
 		h(w, r.WithContext(ctx), id)
 	})
-}
-
-func (s *Server) handleDevSession(w http.ResponseWriter, r *http.Request) {
-	// "second" selects the other seeded collector, so the privacy walkthroughs can be run from a
-	// browser or curl rather than only from the integration suite.
-	collector := identity.CollectorFor(r.URL.Query().Get("collector"))
-	s.dev.IssueSession(w, collector)
-
-	// A GET is someone signing in from the address bar, so send them where they were going. A
-	// POST is the test suite or curl, which wants the identifier rather than a redirect.
-	if r.Method == http.MethodGet {
-		http.Redirect(w, r, "/collection", http.StatusSeeOther)
-		return
-	}
-	WriteJSON(w, http.StatusOK, map[string]string{"collectorId": collector.String()})
 }
 
 // requestLogger records the shape of each request. It deliberately logs no request body, no query

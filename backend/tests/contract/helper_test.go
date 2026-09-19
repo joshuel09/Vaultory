@@ -9,9 +9,13 @@ package contract
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -33,7 +37,7 @@ var (
 	collectorB = uuid.MustParse("22222222-2222-4222-8222-222222222222")
 )
 
-const devSecret = "contract-test-secret"
+const devSecret = "contract-test-secret-0123456789abcdef"
 
 func TestMain(m *testing.M) {
 	url := os.Getenv("VAULTORY_TEST_DATABASE_URL")
@@ -53,8 +57,11 @@ func TestMain(m *testing.M) {
 }
 
 type harness struct {
-	server *httptest.Server
-	dev    *identity.DevResolver
+	server     *httptest.Server
+	collectorA uuid.UUID
+	collectorB uuid.UUID
+	userA      string
+	userB      string
 }
 
 func newHarness(t *testing.T) *harness {
@@ -70,13 +77,8 @@ func newHarness(t *testing.T) *harness {
 			t.Fatalf("reset: %v", err)
 		}
 	}
-	for _, id := range []uuid.UUID{collectorA, collectorB} {
-		if _, err := pool.Exec(ctx,
-			`INSERT INTO collectors (id, display_name) VALUES ($1, 'Contract Collector')
-			 ON CONFLICT (id) DO NOTHING`, id); err != nil {
-			t.Fatalf("seed collector: %v", err)
-		}
-	}
+	userA, collectorA := newAccount(t)
+	userB, collectorB := newAccount(t)
 
 	images, err := imagestore.NewFilesystem(t.TempDir())
 	if err != nil {
@@ -85,35 +87,61 @@ func newHarness(t *testing.T) *harness {
 	svc := collection.NewService(postgres.NewStore(pool), images, time.Hour)
 	svc.SetClock(func() time.Time { return time.Date(2026, 9, 12, 12, 0, 0, 0, time.UTC) })
 
-	dev, err := identity.NewDevResolver(devSecret)
-	if err != nil {
-		t.Fatalf("dev resolver: %v", err)
-	}
-	srv := httptest.NewServer(httpapi.NewServer(svc, dev, dev).Routes())
+	resolver := identity.NewSessionResolver(pool, devSecret)
+	srv := httptest.NewServer(httpapi.NewServer(svc, resolver).Routes())
 	t.Cleanup(srv.Close)
-	return &harness{server: srv, dev: dev}
+	return &harness{
+		server: srv, collectorA: collectorA, collectorB: collectorB,
+		userA: userA, userB: userB,
+	}
 }
 
-// sessionFor returns a request cookie for the given collector, obtained the way a browser would:
-// from the dev sign-in endpoint. Nothing here forges an identity by hand.
+// newAccount creates an account and returns it with the collector the trigger made for it.
+func newAccount(t *testing.T) (string, uuid.UUID) {
+	t.Helper()
+	ctx := context.Background()
+	userID := "contract-" + uuid.NewString()
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO "user" ("id", "name", "email", "emailVerified", "updatedAt")
+		 VALUES ($1, 'Contract Collector', $2, false, now())`,
+		userID, userID+"@example.test"); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	var id uuid.UUID
+	if err := pool.QueryRow(ctx, `SELECT id FROM collectors WHERE user_id = $1`, userID).Scan(&id); err != nil {
+		t.Fatalf("trigger did not create a collector: %v", err)
+	}
+	return userID, id
+}
+
+// signCookie reproduces Better Auth's cookie format: the token, a dot, and the HMAC over it in
+// standard base64, URL-encoded. Verified against a library-generated fixture in the unit suite.
+func signCookie(token, secret string) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(token))
+	sig := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+	return url.QueryEscape(token + "." + sig)
+}
+
+// sessionFor returns a cookie for one of the harness's collectors.
+//
+// The session row is inserted and the cookie signed here, because the development sign-in endpoint
+// it used to call no longer exists — that is the feature. Nothing forges an identity: the cookie
+// is exactly what Better Auth would issue, and the server verifies it the same way either way.
 func (h *harness) sessionFor(t *testing.T, collector string) *http.Cookie {
 	t.Helper()
-	url := h.server.URL + "/api/dev/session"
-	if collector != "" {
-		url += "?collector=" + collector
+	user := h.userA
+	if collector == "second" {
+		user = h.userB
 	}
-	resp, err := http.Post(url, "application/json", nil)
-	if err != nil {
-		t.Fatalf("dev session: %v", err)
+	token := "tok-" + uuid.NewString()
+	if _, err := pool.Exec(context.Background(),
+		`INSERT INTO "session" ("id", "token", "userId", "expiresAt", "updatedAt")
+		 VALUES ($1, $2, $3, now() + interval '30 days', now())`,
+		uuid.NewString(), token, user); err != nil {
+		t.Fatalf("create session: %v", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	for _, c := range resp.Cookies() {
-		if c.Name == identity.SessionCookieName {
-			return c
-		}
-	}
-	t.Fatal("dev sign-in returned no session cookie")
-	return nil
+	return &http.Cookie{Name: "better-auth.session_token", Value: signCookie(token, devSecret)}
 }
 
 func (h *harness) do(t *testing.T, req *http.Request, cookie *http.Cookie) *http.Response {

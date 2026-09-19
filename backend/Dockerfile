@@ -2,10 +2,10 @@
 #
 # Two properties this file exists to guarantee, both of them checkable in the finished image:
 #
-#   1. It is built with `-tags production`, so the development identity resolver — which mints a
-#      session for anyone who asks — is not compiled into the binary at all. A misconfigured
-#      environment variable cannot turn authentication off in this image, because there is nothing
-#      to turn on (FR-019).
+#   1. Identity comes from verifying a Better Auth session against the database. There is no
+#      development resolver in any build any more — the file was deleted in feature 004, so the
+#      `production` build tag that used to exclude it guards nothing and is gone with it. A
+#      binary that cannot verify a session refuses to start (FR-019, FR-019a).
 #   2. The runtime stage is distroless: no shell, no package manager, no compiler, and a non-root
 #      user (FR-017, FR-018). There is nothing in it to exec into.
 #
@@ -35,7 +35,7 @@ COPY . .
 ARG TARGETOS
 ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -tags production -trimpath -ldflags="-s -w" -o /out/vaultory-api ./cmd/vaultory-api
+    go build -trimpath -ldflags="-s -w" -o /out/vaultory-api ./cmd/vaultory-api
 
 # The image store root, created here so it carries the right ownership into the runtime stage.
 # Distroless has no shell, so there is no mkdir at runtime and no chown on a mounted volume: when
