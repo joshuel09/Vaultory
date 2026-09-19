@@ -191,10 +191,10 @@ content; visit a vault page with no session and confirm the page invites sign-in
 - **FR-018**: The system MUST NOT require any development-only identity mechanism in order to run,
   and the documented way to use Vaultory MUST be registration and sign-in.
 - **FR-019**: A production build MUST be able to start and serve traffic once authentication is
-  configured, and MUST refuse to start when it cannot verify a session — which, once the
-  development resolver is gone, means having no usable session secret. The earlier wording
-  ("no way to establish identity") described a condition that stops existing the moment a real
-  resolver is always present, and a refusal that cannot fire is not a protection.
+  configured, and MUST refuse to start when no session secret is configured at all. The earlier
+  wording ("no way to establish identity") described a condition that stops existing the moment a
+  real resolver is always present, and a refusal that cannot fire is not a protection. Secret
+  *strength* is FR-019a's concern, so that each condition has exactly one rule.
 - **FR-019a**: The system MUST refuse to start with a session secret shorter than 32 characters.
   The secret is the sole input to the signature the backend verifies, so a weak one makes every
   session forgeable — and unlike a wrong password, nothing about the running system would look
@@ -211,12 +211,12 @@ content; visit a vault page with no session and confirm the page invites sign-in
   in. This MUST be visibly distinct from the state shown when the collection genuinely cannot be
   reached — the current message blames the service for what is simply a missing session, and
   offers a retry that cannot succeed.
-- **FR-022b**: This redirect MUST apply to page navigation only. A request to the API without a
-  valid session MUST still be refused with 401 and no content, per FR-014. Redirecting an API
-  request would break every client that expects a status rather than a login page.
 - **FR-022a**: The remembered path MUST be rejected unless it is a path within Vaultory itself. A
   destination taken from a request and followed after sign-in is an open redirect, which turns the
   sign-in page into a credible way to send a collector somewhere hostile.
+- **FR-022b**: This redirect MUST apply to page navigation only. A request to the API without a
+  valid session MUST still be refused with 401 and no content, per FR-014. Redirecting an API
+  request would break every client that expects a status rather than a login page.
 - **FR-023**: After signing in or registering, a collector MUST arrive at their collection, unless
   they were sent to sign in from a specific page, in which case FR-022 takes precedence and they
   MUST arrive there instead. The two rules would otherwise disagree about where a collector lands.
