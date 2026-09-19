@@ -52,12 +52,35 @@ services:
       - up
     restart: "no"
 
+  # The Better Auth role's password. Required, never defaulted: the migration creates the role
+  # without one, and a LOGIN role with no password cannot authenticate.
+  auth-role:
+    image: postgres:17-alpine
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    command:
+      - psql
+      - -h
+      - postgres
+      - -U
+      - ${POSTGRES_USER:-vaultory}
+      - -d
+      - ${POSTGRES_DB:-vaultory}
+      - -c
+      - ALTER ROLE vaultory_auth PASSWORD '${VAULTORY_AUTH_DB_PASSWORD:?set VAULTORY_AUTH_DB_PASSWORD before starting the prod stack}';
+    restart: "no"
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      auth-role:
         condition: service_completed_successfully
     environment:
       VAULTORY_LISTEN_ADDR: 0.0.0.0:8080
@@ -89,6 +112,13 @@ services:
     depends_on:
       backend:
         condition: service_started
+      auth-role:
+        condition: service_completed_successfully
+    environment:
+      BETTER_AUTH_SECRET: ${VAULTORY_SESSION_SECRET:?set VAULTORY_SESSION_SECRET before starting the prod stack}
+      BETTER_AUTH_URL: ${VAULTORY_PUBLIC_URL:?set VAULTORY_PUBLIC_URL, the origin collectors reach Vaultory on}
+      # The restricted role, never the backend's.
+      BETTER_AUTH_DATABASE_URL: postgres://vaultory_auth:${VAULTORY_AUTH_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-vaultory}?sslmode=disable
     ports:
       - "${VAULTORY_FRONTEND_PORT:-3000}:3000"
     restart: "no"

@@ -73,7 +73,7 @@ migrate -path backend/migrations -database "$VAULTORY_DATABASE_URL" up
 
 # Shell 1
 cd backend
-export VAULTORY_SESSION_SECRET=dev-only VAULTORY_DEV_IDENTITY=enabled
+export VAULTORY_SESSION_SECRET=dev-only-not-a-real-secret-change-me
 go run ./cmd/vaultory-api
 
 # Shell 2
@@ -82,6 +82,25 @@ cd frontend && npm install && npm run dev
 
 Full instructions, including every walkthrough that demonstrates the feature, are in
 [specs/001-add-browse-collectibles/quickstart.md](specs/001-add-browse-collectibles/quickstart.md).
+
+### Configuration this needs
+
+| Variable | Used by | Notes |
+|---|---|---|
+| `VAULTORY_SESSION_SECRET` | backend, frontend | The same value feeds both. **At least 32 characters** — the service refuses to start below that, because this is the only input to the signature it verifies. Required explicitly in production |
+| `VAULTORY_AUTH_DB_PASSWORD` | frontend, provisioning | Password for the restricted `vaultory_auth` role. Required explicitly in production |
+| `VAULTORY_PUBLIC_URL` | frontend | The origin collectors reach Vaultory on. Production only |
+
+The frontend holds a database connection of its own, because the authentication library owns the
+account and session tables. It connects as `vaultory_auth`, a role with privileges on those tables
+and **no access to any collection table** — so a bug in the frontend cannot read a collection, and
+that is enforced by PostgreSQL rather than by convention.
+
+That role is created by a migration **without a password**, and given one at startup from
+`VAULTORY_AUTH_DB_PASSWORD`. A credential inside a tracked migration is exactly what the
+constitution forbids, and this repository is public. A `LOGIN` role with no password cannot
+authenticate, so a missed provisioning step stops the frontend connecting rather than leaving an
+open account.
 
 ### Becoming a collector
 
