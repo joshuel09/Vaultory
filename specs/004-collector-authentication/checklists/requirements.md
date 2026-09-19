@@ -48,3 +48,14 @@ be inspected rather than asserted about — the same standard feature 002 was he
 password reset is out of scope. There is no trusted channel to reset through until addresses are
 verified. This is stated in Assumptions rather than hidden, and is the first thing a follow-up
 feature should address.
+
+**Re-validated after clarification (2026-09-19).** Four questions were asked and integrated. Two
+items were already passing but are materially stronger now: "Requirements are testable and
+unambiguous" (FR-027 carried no number and could not have been accepted; FR-010 said "no more than
+30 days" without saying whether use renewed it) and "Success criteria are measurable" (SC-003 and
+SC-007 referred to conditions the spec never defined). No item regressed.
+
+One clarification produced a requirement nobody asked for: FR-022a. Remembering where a signed-out
+visitor was headed means taking a destination from the request and following it after sign-in,
+which is an open redirect unless it is constrained to Vaultory's own paths. SC-013 is its
+measurable form.

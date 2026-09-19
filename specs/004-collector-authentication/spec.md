@@ -24,6 +24,15 @@ reach the service can mint a session for a seeded collector and read that vault.
 image refuses to start at all, correctly, because it has no way to identify anybody — which makes
 Vaultory undeployable rather than merely incomplete.
 
+## Clarifications
+
+### Session 2026-09-19
+
+- Q: FR-027 requires limiting sign-in attempts but names no number. What should the limit be? → A: 10 failed attempts per account per 15 minutes, then a 15-minute lockout that lifts on its own; a successful sign-in resets the counter; the account is never permanently locked.
+- Q: Is the 30-day session expiry absolute from sign-in, or does it renew with use? → A: Sliding. Each authenticated request extends expiry to 30 days from that moment, subject to a hard cap of 90 days from sign-in, after which the collector must sign in again.
+- Q: What happens to the two seeded development collectors and the collectibles they own? → A: A reversible migration deletes them. They are fixtures rather than people, so nothing real is orphaned; the down migration re-seeds them.
+- Q: When a signed-out visitor opens a vault page, does the URL change? → A: Yes — redirect to the sign-in page carrying the originally requested path, and return them there after signing in.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Create an account and start a vault (Priority: P1)
@@ -71,6 +80,10 @@ reachable without re-entering credentials.
    lifetime, **Then** they are still signed in.
 4. **Given** a session that has expired, **When** the collector returns, **Then** they are asked to
    sign in and no collection content is shown.
+5. **Given** a collector who visits at least once a month, **When** 30 days pass since sign-in,
+   **Then** they are still signed in.
+6. **Given** a session issued 90 days ago and used continuously, **When** the collector returns,
+   **Then** they are asked to sign in again.
 
 ---
 
@@ -91,10 +104,14 @@ content; visit a vault page with no session and confirm the page invites sign-in
 
 1. **Given** a signed-in collector, **When** they sign out, **Then** their session no longer grants
    access to any collection content.
-2. **Given** a visitor with no session, **When** they open a vault page, **Then** they see a
-   "sign in to see your vault" state, not "your collection could not be loaded".
+2. **Given** a visitor with no session, **When** they open a vault page, **Then** they arrive at
+   the sign-in page rather than an error claiming the collection could not be reached.
 3. **Given** a signed-out collector, **When** they press the browser's back button to a vault page,
    **Then** no collection content is served from that page.
+4. **Given** a signed-out visitor who opened a deep link such as the add-collectible page,
+   **When** they sign in, **Then** they arrive at the page they originally asked for.
+5. **Given** a sign-in link carrying a destination outside Vaultory, **When** the collector signs
+   in, **Then** they are not sent there.
 
 ---
 
@@ -102,6 +119,8 @@ content; visit a vault page with no session and confirm the page invites sign-in
 
 - A request arrives carrying a session that is valid in form but was issued for a collector who no
   longer exists.
+- A sign-in link carries a destination pointing at another site, or at a path crafted to look
+  internal.
 - A request asserts an identity directly — a header, a body field, or a query parameter naming a
   collector — while carrying no valid session, or while carrying a session for someone else.
 - A session is tampered with: its payload edited, its signature replaced, or one collector's
@@ -109,8 +128,8 @@ content; visit a vault page with no session and confirm the page invites sign-in
 - Registration and sign-in are attempted repeatedly and rapidly with different passwords.
 - Two registrations for the same email arrive simultaneously.
 - A collector signs in on one device and signs out on another.
-- The existing seeded development collectors from feature 001 already own collectibles when
-  authentication arrives.
+- A development database holds collectibles owned by the seeded fixtures when the migration runs.
+- The migration is rolled back after accounts already exist.
 
 ## Requirements *(mandatory)*
 
@@ -138,7 +157,10 @@ content; visit a vault page with no session and confirm the page invites sign-in
   so that sign-in cannot be used to discover who has an account.
 - **FR-009**: The system MUST keep a collector signed in across browser restarts until their
   session expires.
-- **FR-010**: A session MUST expire no more than 30 days after it was issued.
+- **FR-010**: A session MUST expire 30 days after it was last used, and MUST expire no more than
+  90 days after it was issued regardless of use. The sliding window keeps an active collector from
+  being signed out for no reason they would recognise; the cap is what stops a session living
+  indefinitely on a device its owner no longer controls.
 - **FR-011**: The system MUST allow a signed-in collector to sign out, after which that session
   MUST NOT grant access to any collection content.
 - **FR-012**: The system MUST carry the session in a way that a page's own scripts cannot read, and
@@ -155,8 +177,12 @@ content; visit a vault page with no session and confirm the page invites sign-in
   session identifies, preserving the privacy guarantees already specified in feature 001.
 - **FR-016**: A collector MUST correspond to exactly one account, and an account to exactly one
   collector.
-- **FR-017**: Collectibles, images, and submissions belonging to collectors that already exist MUST
-  remain attached to those collectors once authentication is introduced, with nothing orphaned.
+- **FR-017**: Collectibles, images, and submissions belonging to a collector with an account MUST
+  remain attached to that collector once authentication is introduced, with nothing orphaned.
+- **FR-017a**: The two seeded development collectors from feature 001, and everything they own,
+  MUST be removed by a reversible migration. They are fixtures rather than people: every row they
+  own was produced by test runs. Removing them is what makes FR-017 trivially true, and leaves no
+  vault reachable without an account.
 
 **Replacing the development stand-in**
 
@@ -171,8 +197,14 @@ content; visit a vault page with no session and confirm the page invites sign-in
 
 - **FR-021**: The system MUST present a registration page and a sign-in page, each linking to the
   other.
-- **FR-022**: A request for a vault page without a valid session MUST result in an invitation to
-  sign in, distinct from the state shown when the collection genuinely cannot be reached.
+- **FR-022**: A request for a vault page without a valid session MUST send the visitor to the
+  sign-in page, carrying the path they asked for, and MUST return them to that path once they sign
+  in. This MUST be visibly distinct from the state shown when the collection genuinely cannot be
+  reached — the current message blames the service for what is simply a missing session, and
+  offers a retry that cannot succeed.
+- **FR-022a**: The remembered path MUST be rejected unless it is a path within Vaultory itself. A
+  destination taken from a request and followed after sign-in is an open redirect, which turns the
+  sign-in page into a credible way to send a collector somewhere hostile.
 - **FR-023**: After signing in or registering, a collector MUST arrive at their collection.
 - **FR-024**: The landing page's primary call to action MUST lead to registration.
 - **FR-025**: A signed-in collector MUST be able to see which account they are signed in as, and
@@ -183,8 +215,11 @@ content; visit a vault page with no session and confirm the page invites sign-in
 
 **Not being negligent**
 
-- **FR-027**: The system MUST limit how rapidly sign-in attempts can be made against a single
-  account, and MUST say when it has done so.
+- **FR-027**: The system MUST refuse further sign-in attempts for an account after 10 failed
+  attempts within 15 minutes, for 15 minutes, and MUST say so when it refuses. A successful
+  sign-in MUST reset the count, the refusal MUST lift without intervention, and an account MUST
+  NOT become permanently locked — password reset is out of scope, so a collector locked out
+  indefinitely would have no way back in.
 - **FR-028**: The system MUST record that authentication events happened — registration, sign-in,
   sign-in failure, sign-out — without recording credentials.
 
@@ -206,23 +241,30 @@ content; visit a vault page with no session and confirm the page invites sign-in
 - **SC-001**: A visitor can go from the landing page to their own empty vault in under 2 minutes,
   with no prior knowledge of Vaultory.
 - **SC-002**: A returning collector reaches their collection in under 30 seconds.
-- **SC-003**: A collector who closes the browser and returns within the session lifetime is not
-  asked to sign in again.
+- **SC-003**: A collector who closes the browser and returns within 30 days of their last visit is
+  not asked to sign in again; one who returns after 30 days of not visiting, or more than 90 days
+  after signing in, is.
 - **SC-004**: No request carrying an absent, expired, tampered, or another collector's session
   returns any collection content, in 100% of attempts.
 - **SC-005**: An identity asserted by any means other than a verified session is ignored, in 100%
   of attempts.
 - **SC-006**: A wrong password and an unregistered email produce responses indistinguishable to the
   person attempting them.
-- **SC-007**: Every collectible that existed before this feature is still owned by the same
-  collector afterwards, and none is orphaned.
+- **SC-007**: After the migration, every collectible in the database is owned by a collector that
+  has an account, and no collector exists without one. The seeded fixtures and their collectibles
+  are gone, and the down migration restores them.
 - **SC-008**: A shipped production build contains no mechanism that issues a session without
   verifying credentials, demonstrated by inspecting the build rather than by assertion.
 - **SC-009**: A production build starts and serves traffic when authentication is configured.
-- **SC-010**: A visitor reaching a vault page without a session is invited to sign in, and is never
-  shown a message attributing the refusal to a problem reaching the service.
+- **SC-010**: A visitor reaching a vault page without a session arrives at the sign-in page, is
+  never shown a message attributing the refusal to a problem reaching the service, and after
+  signing in lands on the page they originally requested.
+- **SC-013**: No destination outside Vaultory is ever followed after sign-in, in 100% of attempts.
 - **SC-011**: Registration and sign-in are completable using a keyboard alone, and every failure is
   announced to assistive technology.
+- **SC-012**: The 11th failed sign-in for one account within 15 minutes is refused with a message
+  saying when to try again, and the same account signs in successfully once 15 minutes have
+  passed.
 
 ## Out of Scope
 
@@ -239,12 +281,13 @@ Rate limiting beyond FR-027 — reputation scoring, CAPTCHA, IP-based blocking �
 - Email addresses are not verified in this feature. An unverified address is accepted, which is why
   password reset is out of scope — there is no trusted channel to reset through yet. This is a
   deliberate, temporary limitation and the first thing a follow-up feature should address.
-- The two seeded development collectors from feature 001 are fixtures, not real users. They may be
-  left without accounts, or removed, provided FR-017 holds for any collector that owns data.
+- The two seeded development collectors from feature 001 are fixtures, not real users, and are
+  removed by migration (FR-017a). Anyone holding a development database loses the collectibles in
+  it — which is the intended outcome, since those rows came from test runs rather than from use.
 - Sessions are stored server-side so that sign-out can end one immediately, rather than waiting for
   a self-contained token to expire.
-- A 30-day session lifetime is a reasonable default for a personal collection tool; it is not
-  derived from a stated requirement.
+- The 30-day idle window and 90-day cap are reasonable defaults for a personal collection tool;
+  they are not derived from a stated requirement. See Clarifications.
 - The existing `collectors` table and every foreign key built on it remain as they are. This
   feature adds to the schema; it does not reshape what feature 001 established.
 - **The architecture is already decided and is deliberately not restated here.** Issue #15 records
