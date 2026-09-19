@@ -95,6 +95,12 @@ that authorizes access to a vault. If the frontend could read `collectibles` dir
 backend's credentials, a bug there would bypass every check Go performs, and the plan's claim that
 a frontend bug cannot expose another collector's collection would simply be untrue.
 
+The role is created in the migration with `LOGIN` and **no password**, and its password is set
+afterwards from an environment variable. A credential inside a tracked migration is what Principle
+IV forbids in as many words, and this repository is public. The order also fails in the safe
+direction: a `LOGIN` role with no password cannot authenticate, so a skipped provisioning step
+stops the frontend connecting rather than leaving an unsecured account.
+
 The one thing the role must cause in a Vaultory table — a collector appearing when an account is
 created — happens through the trigger below, which is `SECURITY DEFINER`. The privilege belongs to
 the trigger, not to whoever fired it. The function sets an explicit `search_path`, because a

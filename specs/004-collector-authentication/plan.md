@@ -61,6 +61,11 @@ nothing else. No `SELECT` on `collectibles`, `collectible_images`, `collectible_
 created — happens inside a `SECURITY DEFINER` trigger, so the privilege belongs to the trigger
 rather than to the role that fired it.
 
+The role is created without a password and provisioned from an environment variable, because a
+credential in a tracked migration is what Principle IV forbids and this repository is public. A
+`LOGIN` role with no password cannot authenticate, so forgetting to provision it stops the frontend
+connecting rather than leaving an open account.
+
 The restriction is enforced by PostgreSQL grants, not by convention, and a test asserts the role
 is actually refused. Without it this feature would hand the presentation layer the keys to every
 vault while the plan claimed the opposite.
