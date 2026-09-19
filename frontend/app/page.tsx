@@ -7,8 +7,8 @@ import { STATUS_LABELS, COLLECTION_STATUSES } from '@/lib/api/types'
  * Vaultory's landing page (feature 003).
  *
  * Public, sessionless, and static: it renders and decides nothing, and makes no request to /api/*
- * (FR-010). Until authentication exists (#15) the call to action points at the development
- * sign-in; that target is temporary and named as such below.
+ * (FR-010). The call to action leads to registration; a returning collector signs in from the
+ * header.
  */
 
 export const metadata = {
@@ -32,9 +32,8 @@ const RECORDED = [
   ['Notes', 'box condition, provenance'],
 ] as const
 
-// Temporary: replaced by /register once feature 004 lands (#15). Development sign-in is the only
-// way into a vault while authentication is out of scope.
-const ENTER_VAULT = '/api/dev/session'
+// FR-024. Feature 004 replaced the temporary development sign-in this used to point at.
+const ENTER_VAULT = '/register'
 
 export default function Home() {
   return (
@@ -43,8 +42,8 @@ export default function Home() {
         <span className="text-sm font-semibold tracking-tight text-ink">
           Vault<span className="text-accent">ory</span>
         </span>
-        <Link href={ENTER_VAULT} className={buttonClasses({ variant: 'ghost', size: 'sm' })}>
-          Open my vault
+        <Link href="/sign-in" className={buttonClasses({ variant: 'ghost', size: 'sm' })}>
+          Sign in
         </Link>
       </header>
 
@@ -65,10 +64,10 @@ export default function Home() {
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link href={ENTER_VAULT} className={buttonClasses({ size: 'lg' })}>
-              Open my vault
+              Create my vault
             </Link>
             <span className="text-xs text-ink-faint">
-              No account needed yet — sign-in arrives with the next release.
+              Free, private, and yours. No profiles, no feeds.
             </span>
           </div>
         </section>
@@ -149,7 +148,7 @@ export default function Home() {
             </p>
             <div className="mt-8">
               <Link href={ENTER_VAULT} className={buttonClasses({ size: 'lg' })}>
-                Open my vault
+                Create my vault
               </Link>
             </div>
           </div>
@@ -159,7 +158,7 @@ export default function Home() {
       <footer className="border-t border-edge">
         <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
           <p className="text-xs text-ink-faint">
-            Vaultory — a private vault for collectors. Authentication arrives in the next release.
+            Vaultory — a private vault for collectors.
           </p>
         </div>
       </footer>
