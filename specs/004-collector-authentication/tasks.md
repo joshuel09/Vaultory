@@ -28,8 +28,8 @@ rather than trusts — is only meaningful if something adversarial exercises it.
 
 - [ ] T001 Upgrade `vitest` and `@vitest/*` to ^3 in `frontend/package.json`, then confirm all 33 existing tests still pass with `npm run test` — research Decision 9. Done first and alone: `better-auth` cannot be installed while `vitest@2` pins vite 5, and a failure here must be attributable to the upgrade rather than to authentication
 - [ ] T002 Install `better-auth` in `frontend/package.json` with `npm install better-auth`, verifying it resolves without `--legacy-peer-deps`
-- [ ] T003 [P] Add `BETTER_AUTH_SECRET` and `BETTER_AUTH_URL` to the `frontend` service in `compose.yaml`, sourcing the secret from the same variable the backend reads so the two cannot disagree — contracts/README.md, "Shared secret"
-- [ ] T004 [P] Document the two new variables in `README.md`, including that `VAULTORY_DEV_IDENTITY` is being removed
+- [ ] T003 [P] Add `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, and `BETTER_AUTH_DATABASE_URL` to the `frontend` service in `compose.yaml` and `compose.prod.yaml`. The secret comes from the same variable the backend reads so the two cannot disagree (contracts/README.md). The database URL uses the **restricted role** created in T007a — never the one the backend uses
+- [ ] T004 [P] Document the three new variables in `README.md`, including that `VAULTORY_DEV_IDENTITY` is being removed, and state plainly that the frontend now holds a database connection and why it is restricted
 
 ---
 
@@ -44,7 +44,9 @@ rather than trusts — is only meaningful if something adversarial exercises it.
 - [ ] T005 Generate the Better Auth schema with `npx @better-auth/cli generate` and transcribe it by hand into `backend/migrations/000007_create_auth_tables.up.sql` — `user`, `session`, `account`, `verification`, `rateLimit` per data-model.md. Better Auth must never run migrations against this database: one tool only, research Decision 4
 - [ ] T006 Write `backend/migrations/000007_create_auth_tables.down.sql` dropping the five tables in reverse dependency order
 - [ ] T007 Write `backend/migrations/000008_link_collectors_to_accounts.up.sql` in this order, which matters: delete the two seeded fixtures from migration 000005 and everything they own (FR-017a), add `collectors.user_id text`, backfill nothing because none can exist, then apply `UNIQUE NOT NULL REFERENCES "user"(id) ON DELETE CASCADE`. `NOT NULL` is only possible once no accountless collector remains
+- [ ] T007a Create a dedicated PostgreSQL role for Better Auth in `backend/migrations/000008_link_collectors_to_accounts.up.sql`, with privileges on `user`, `session`, `account`, `verification` and `rateLimit` **only**. Explicitly no `SELECT` on `collectors`, `collectibles`, `collectible_images`, or `collectible_submissions`. This is what keeps the plan's claim true — that a frontend bug cannot expose another collector's vault — once Next.js holds a database connection. Revoke in the down migration
 - [ ] T008 Add the `AFTER INSERT ON "user"` trigger to `000008_link_collectors_to_accounts.up.sql`, inserting a `collectors` row with a fresh uuid — research Decision 3. This is the only way a collector comes into existence
+- [ ] T008a Make the trigger function `SECURITY DEFINER` and owned by the migration role, so it can insert into `collectors` while the Better Auth role that fires it cannot. The privilege belongs to the trigger, not to the caller. Set an explicit `search_path` on the function — a `SECURITY DEFINER` function without one is a privilege-escalation vector
 - [ ] T009 Write `backend/migrations/000008_link_collectors_to_accounts.down.sql` dropping the trigger and column and re-seeding the two fixtures, so the migration is reversible as Principle IV requires
 - [ ] T010 Apply both migrations against the test database and confirm they run clean up, down, and up again
 
@@ -63,6 +65,7 @@ rather than trusts — is only meaningful if something adversarial exercises it.
 
 - [ ] T019 [P] Integration test in `backend/tests/integration/session_verification_test.go`: absent, expired, past-cap, tampered-signature, unsigned-token, and unknown-token sessions are each refused (FR-014, SC-004)
 - [ ] T020 [P] Contract test in `backend/tests/contract/asserted_identity_test.go`: a collector id supplied in a header, a query parameter, and a body field is ignored, with and without a valid session for someone else (FR-013, SC-005). This is the test that would catch the mistake the whole architecture exists to prevent
+- [ ] T020a [P] Integration test in `backend/tests/integration/auth_role_privileges_test.go`: connecting as the Better Auth role, a `SELECT` against `collectors`, `collectibles`, `collectible_images` and `collectible_submissions` is **refused by PostgreSQL**, while its own five tables are readable and registration still creates a collector through the trigger. Grants asserted against the database, not assumed from the migration text
 - [ ] T021 [P] Integration test in `backend/tests/integration/session_cap_test.go`: a session aged past 90 days with a healthy `expiresAt` is refused — the case Better Auth alone would let through
 
 **Checkpoint**: Go verifies sessions correctly and provably, with no frontend involved. User story work can begin.
@@ -75,7 +78,7 @@ rather than trusts — is only meaningful if something adversarial exercises it.
 
 **Independent Test**: Register a new account, confirm the vault is empty and accepts a collectible, with no development endpoint available anywhere.
 
-- [ ] T022 [US1] Create the Better Auth server instance in `frontend/lib/auth.ts`: email and password enabled, PostgreSQL pointed at the same database, `emailAndPassword.minPasswordLength` 12 (FR-004), no social providers
+- [ ] T022 [US1] Create the Better Auth server instance in `frontend/lib/auth.ts`: email and password enabled, PostgreSQL reached through `BETTER_AUTH_DATABASE_URL` using the restricted role from T007a, `emailAndPassword.minPasswordLength` 12 (FR-004), no social providers
 - [ ] T023 [US1] Mount Better Auth's routes at `frontend/app/api/auth/[...all]/route.ts`
 - [ ] T024 [P] [US1] Create the client helpers in `frontend/lib/auth-client.ts`
 - [ ] T025 [US1] Build the registration page at `frontend/app/(auth)/register/page.tsx`, reusing `Field`, `Input` and `Button` so it looks like the rest of Vaultory and inherits both appearances
@@ -146,7 +149,7 @@ Phase 1 Setup  ──>  Phase 2 Foundational  ──┬──>  Phase 3 US1 ─�
 ```
 
 - **T001 blocks T002**, which blocks every frontend task. Nothing installs until vitest moves.
-- **T005–T010 block T011–T021**: there is nothing to query until the tables exist.
+- **T005–T010 (including T007a, T008a) block T011–T021**: there is nothing to query until the tables exist.
 - **T011–T021 block all three user stories**, and are deliberately testable without any UI — insert
   a session row and make a request.
 - **US1 and US2 both depend on T022** (the Better Auth instance). US3 depends on US2 in practice:
@@ -156,7 +159,7 @@ Phase 1 Setup  ──>  Phase 2 Foundational  ──┬──>  Phase 3 US1 ─�
 ## Parallel Opportunities
 
 - **Setup**: T003 and T004 together, after T002.
-- **Foundational**: T013, T019, T020 and T021 are separate test files and run together once T012
+- **Foundational**: T013, T019, T020, T020a and T021 are separate test files and run together once T012
   lands. T005–T010 are strictly sequential — migrations are ordered by nature.
 - **US1**: T024, T027 and T029 alongside the page work.
 - **US2**: T034, T035, T036 and T037 together.

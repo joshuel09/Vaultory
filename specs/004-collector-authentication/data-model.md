@@ -64,6 +64,28 @@ image, and submission references.
 account, one collector, enforced by the database. The cascade means deleting an account removes the
 collector, and the existing cascades remove their collectibles — so no vault outlives its owner.
 
+## Database privileges
+
+Adopting Better Auth means the Next.js process holds a PostgreSQL connection. It connects as a
+dedicated role, not as the one the backend uses.
+
+| Role | May touch |
+|---|---|
+| backend (existing) | everything |
+| `vaultory_auth` (new) | `user`, `session`, `account`, `verification`, `rateLimit` — and nothing else |
+
+No `SELECT` on `collectors`, `collectibles`, `collectible_images`, or `collectible_submissions`.
+
+This is load-bearing rather than tidiness. Go's whole job in this feature is to be the only thing
+that authorizes access to a vault. If the frontend could read `collectibles` directly with the
+backend's credentials, a bug there would bypass every check Go performs, and the plan's claim that
+a frontend bug cannot expose another collector's collection would simply be untrue.
+
+The one thing the role must cause in a Vaultory table — a collector appearing when an account is
+created — happens through the trigger below, which is `SECURITY DEFINER`. The privilege belongs to
+the trigger, not to whoever fired it. The function sets an explicit `search_path`, because a
+`SECURITY DEFINER` function without one can be redirected to attacker-controlled objects.
+
 ## The trigger
 
 `AFTER INSERT ON "user"` inserts a `collectors` row with a fresh uuid and `user_id = NEW.id`.

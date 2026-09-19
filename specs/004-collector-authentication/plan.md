@@ -50,6 +50,21 @@ design where something issues sessions. What this design preserves is that a *bu
 — the far likelier failure — cannot cause one collector to see another's vault, because Go never
 takes its word for an identity.
 
+**That claim only holds if the frontend's database access is restricted, so it is.** Adopting
+Better Auth means the Next.js process holds a PostgreSQL connection. Given the same credentials
+Go uses, a frontend bug could read `collectibles` directly and every authorization check in Go
+would be irrelevant — the sentence above would be false.
+
+Better Auth therefore connects as a dedicated role with privileges on its own five tables and
+nothing else. No `SELECT` on `collectibles`, `collectible_images`, `collectible_submissions`, or
+`collectors`. The one thing it must do to a Vaultory table — create a collector when an account is
+created — happens inside a `SECURITY DEFINER` trigger, so the privilege belongs to the trigger
+rather than to the role that fired it.
+
+The restriction is enforced by PostgreSQL grants, not by convention, and a test asserts the role
+is actually refused. Without it this feature would hand the presentation layer the keys to every
+vault while the plan claimed the opposite.
+
 ### Rate limiting is enforced in Next.js
 
 FR-027 is enforced by Better Auth, because Go never sees a sign-in attempt and cannot count
@@ -128,6 +143,7 @@ it look like it works.
 | **Go reads tables it does not own** (`session`, `user`) | FR-013 requires independent verification and FR-011 requires sign-out to take effect immediately. Both are satisfied by one query | A self-contained JWT needs no shared tables, but stays valid until expiry, so sign-out could not be immediate. Adding revocation reintroduces the read with more parts |
 | **Better Auth's camelCase columns need quoting in Go's queries** | Renaming them via Better Auth's `fields` options must be maintained against the library forever, and a mismatch fails at runtime rather than at migration time | Renaming looks tidier and hides a seam that is better left visible. The ugliness is confined to one resolver query |
 | **A database trigger creates the collector row** | Registration happens in Next.js; having it write to `collectors` would put persistence of a backend-owned table in the presentation layer | A Better Auth `databaseHooks` callback is frontend code writing a backend table, and is not atomic with the insert that triggers it |
+| **Next.js connects to PostgreSQL directly** | Better Auth owns the account and session tables and must read and write them. There is no way to adopt it without giving the Next.js process a database connection | Proxying Better Auth's queries through Go would mean Go implementing an interface it does not own, tracking it across upgrades, for no gain — Go would still not be the one deciding. **This access is restricted to a dedicated role** (see below), which is what keeps the constraint meaningful rather than nominal |
 
 No other deviation.
 
