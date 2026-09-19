@@ -42,39 +42,26 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// One condition, two refusals, and no third path — and deliberately before anything that
-	// touches the network. A security check that only runs after a database connection
-	// succeeds is a security check nobody sees fail: `docker run` on the production image
-	// would report a missing database URL and never mention authentication at all.
-	//
-	// Authentication is out of scope for feature 001, so the development resolver is still the
-	// only one there is. Refusing to start without a resolver is deliberate: a server that
-	// silently resolved every request to one collector would look like it worked and would have
-	// no privacy at all.
-	//
-	// The second refusal is what makes a production image possible. In a production build
-	// (-tags production) the development resolver is not compiled in, so its constructor fails
-	// and a binary asked to use it stops here instead of starting without authentication
-	// (FR-019). The decision lives in the program rather than in an entrypoint script, because a
-	// security-relevant condition expressed in shell is a security-relevant condition nobody
-	// reviews.
-	if !cfg.DevIdentity {
-		return errors.New(
-			"no collector resolver is configured: set VAULTORY_DEV_IDENTITY=enabled for local " +
-				"development, or supply a real authentication resolver before deploying")
-	}
-	dev, err := identity.NewDevResolver(cfg.SessionSecret)
-	if err != nil {
-		return err
-	}
-	slog.Warn("development identity is enabled: sessions are minted without authentication, " +
-		"never run this outside local development")
-
 	pool, err := postgres.NewPool(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
 	defer pool.Close()
+
+	// Identity is established by verifying a Better Auth session: the cookie's signature is
+	// recomputed with the shared secret, and the session row is confirmed live in PostgreSQL.
+	// Neither step trusts the presentation layer, which is what FR-013 requires and what the
+	// constitution means by "client-provided user IDs MUST NOT be accepted without verification".
+	//
+	// There is no longer a development resolver to refuse. config.Load has already refused to
+	// start without a session secret of usable length (FR-019, FR-019a), which is the condition
+	// that can actually occur now — the old "no resolver configured" check guarded one that
+	// cannot.
+	//
+	// This sits after the pool because verification is a database lookup. The fail-fast property
+	// the old ordering protected is unaffected: an unusable secret is rejected by config.Load,
+	// before anything touches the network.
+	resolver := identity.NewSessionResolver(pool, cfg.SessionSecret)
 
 	if cfg.ImageStore != "filesystem" {
 		return fmt.Errorf("image store %q is not implemented", cfg.ImageStore)
@@ -85,7 +72,7 @@ func run() error {
 	}
 
 	service := collection.NewService(postgres.NewStore(pool), images, cfg.IdempotencyWindow)
-	server := httpapi.NewServer(service, dev, dev)
+	server := httpapi.NewServer(service, resolver)
 
 	srv := &http.Server{
 		Addr:              cfg.ListenAddr,

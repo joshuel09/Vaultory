@@ -73,7 +73,7 @@ migrate -path backend/migrations -database "$VAULTORY_DATABASE_URL" up
 
 # Shell 1
 cd backend
-export VAULTORY_SESSION_SECRET=dev-only VAULTORY_DEV_IDENTITY=enabled
+export VAULTORY_SESSION_SECRET=dev-only-not-a-real-secret-change-me
 go run ./cmd/vaultory-api
 
 # Shell 2
@@ -83,19 +83,36 @@ cd frontend && npm install && npm run dev
 Full instructions, including every walkthrough that demonstrates the feature, are in
 [specs/001-add-browse-collectibles/quickstart.md](specs/001-add-browse-collectibles/quickstart.md).
 
+### Configuration this needs
+
+| Variable | Used by | Notes |
+|---|---|---|
+| `VAULTORY_SESSION_SECRET` | backend, frontend | The same value feeds both. **At least 32 characters** — the service refuses to start below that, because this is the only input to the signature it verifies. Required explicitly in production |
+| `VAULTORY_AUTH_DB_PASSWORD` | frontend, provisioning | Password for the restricted `vaultory_auth` role. Required explicitly in production |
+| `VAULTORY_PUBLIC_URL` | frontend | The origin collectors reach Vaultory on. Production only |
+
+The frontend holds a database connection of its own, because the authentication library owns the
+account and session tables. It connects as `vaultory_auth`, a role with privileges on those tables
+and **no access to any collection table** — so a bug in the frontend cannot read a collection, and
+that is enforced by PostgreSQL rather than by convention.
+
+That role is created by a migration **without a password**, and given one at startup from
+`VAULTORY_AUTH_DB_PASSWORD`. A credential inside a tracked migration is exactly what the
+constitution forbids, and this repository is public. A `LOGIN` role with no password cannot
+authenticate, so a missed provisioning step stops the frontend connecting rather than leaving an
+open account.
+
 ### Becoming a collector
 
-Authentication is not implemented yet — it is explicitly out of scope for the first feature. In its
-place, a development-only sign-in mints a session for one of two seeded collectors:
+Register an account. That is all — there is no development back door any more.
 
-```bash
-curl -c /tmp/vaultory.jar -X POST http://localhost:3000/api/dev/session
-curl -c /tmp/other.jar    -X POST 'http://localhost:3000/api/dev/session?collector=second'
-```
+Open <http://localhost:3000>, follow the call to action, and give an email address and a password
+of at least 12 characters. You land in your own empty vault, and nothing in it is visible to anyone
+else.
 
-The second collector exists so that cross-collector privacy can actually be exercised. This
-endpoint requires `VAULTORY_DEV_IDENTITY=enabled` and **must never be enabled outside local
-development**: it issues a session to anyone who asks.
+For cross-collector checks, register a second account in a private window. Two collectors are what
+make the privacy rules exercisable: another collector's collectible answers **404, never 403**,
+because a 403 would confirm it exists.
 
 ### Production images
 
@@ -106,13 +123,10 @@ to verify them locally and is **not** a deployment artifact.
 docker compose -f compose.prod.yaml build
 ```
 
-The backend image is distroless — no shell, no package manager, non-root — and is built with
-`-tags production`, which leaves the development identity resolver out of the binary entirely.
-
-That has a consequence worth stating plainly: **the production stack cannot serve traffic yet.**
-Authentication is out of scope for feature 001, so the only resolver that exists is the development
-one, and the production image refuses to start without a resolver rather than starting without
-authentication. It is the correct behaviour, and it is also why this is not yet deployable.
+The backend image is distroless — no shell, no package manager, non-root. It contains no mechanism
+that issues a session without verifying a credential, because no such mechanism exists in any build
+any more: the development resolver was deleted in feature 004, and the `production` build tag that
+used to exclude it went with it. A binary that cannot verify a session refuses to start.
 
 ## Testing
 
@@ -142,7 +156,7 @@ cd frontend && npm run lint && npm run typecheck && npm run build && npm run tes
 
 # The build-tagged suites are invisible to a plain `go vet`, so a signature change under
 # internal/ can break them without anything here failing. This type-checks them with no database:
-cd backend  && go vet -tags integration ./... && go test -tags production ./tests/unit/...
+cd backend  && go vet -tags integration ./...   # type-check the integration and contract suites
 
 export VAULTORY_TEST_DATABASE_URL="$VAULTORY_DATABASE_URL"
 # -p 1 matters: both packages share one database, and `go test` runs packages in parallel.

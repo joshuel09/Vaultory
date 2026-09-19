@@ -22,7 +22,20 @@ const nextConfig: NextConfig = {
    */
   output: 'standalone',
   async rewrites() {
-    return [{ source: '/api/:path*', destination: `${backendOrigin}/api/:path*` }]
+    return [
+      {
+        /*
+         * Everything under /api goes to the Go service — except /api/auth, which is Better Auth's
+         * own handler in this application.
+         *
+         * Without the exclusion the rewrite wins and registration reaches Go, which answers 404
+         * because it has never served those routes. The negative lookahead is doing real work
+         * here; it is not defensive decoration.
+         */
+        source: '/api/:path((?!auth$|auth/).*)',
+        destination: `${backendOrigin}/api/:path`,
+      },
+    ]
   },
   experimental: {
     // A 10 MB upload over a slow connection needs time, not a larger cap: Next streams a rewritten

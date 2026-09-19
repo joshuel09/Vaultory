@@ -66,6 +66,34 @@ services:
     restart: "no"
 
   # -------------------------------------------------------------------------------------------
+  # Give the Better Auth role its password.
+  #
+  # The migration creates the role with LOGIN and no password on purpose: a credential inside a
+  # tracked migration is what the constitution forbids, and this repository is public. A LOGIN role
+  # without a password cannot authenticate at all, so skipping this step fails closed — the
+  # frontend simply cannot connect.
+  # -------------------------------------------------------------------------------------------
+  auth-role:
+    profiles: [dev]
+    image: *postgres-image
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-vaultory_dev_password}
+    command:
+      - psql
+      - -h
+      - postgres
+      - -U
+      - ${POSTGRES_USER:-vaultory}
+      - -d
+      - ${POSTGRES_DB:-vaultory_dev}
+      - -c
+      - ALTER ROLE vaultory_auth PASSWORD '${VAULTORY_AUTH_DB_PASSWORD:-vaultory_auth_dev_password}';
+    restart: "no"
+
+  # -------------------------------------------------------------------------------------------
   # The Go service.
   # -------------------------------------------------------------------------------------------
   backend:
@@ -76,6 +104,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      auth-role:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
     environment:
@@ -85,10 +115,7 @@ services:
       VAULTORY_DATABASE_URL: postgres://${POSTGRES_USER:-vaultory}:${POSTGRES_PASSWORD:-vaultory_dev_password}@postgres:5432/${POSTGRES_DB:-vaultory_dev}?sslmode=disable
       VAULTORY_IMAGE_STORE: filesystem
       VAULTORY_IMAGE_STORE_PATH: /var/lib/vaultory/images
-      VAULTORY_SESSION_SECRET: ${VAULTORY_SESSION_SECRET:-dev-only-not-a-real-secret}
-      # Mints a session for anyone who asks, with no authentication. Development only —
-      # authentication is out of scope for feature 001.
-      VAULTORY_DEV_IDENTITY: ${VAULTORY_DEV_IDENTITY:-enabled}
+      VAULTORY_SESSION_SECRET: ${VAULTORY_SESSION_SECRET:-dev-only-not-a-real-secret-change-me}
       VAULTORY_IDEMPOTENCY_WINDOW: ${VAULTORY_IDEMPOTENCY_WINDOW:-24h}
     ports:
       - "${VAULTORY_BACKEND_PORT:-8080}:8080"
@@ -131,6 +158,19 @@ services:
       # Inside the Compose network the backend is reachable by service name.
       VAULTORY_BACKEND_ORIGIN: http://backend:8080
       NEXT_TELEMETRY_DISABLED: "1"
+      # The same value the backend verifies with. One variable feeds both services so they cannot
+      # drift apart — a mismatch here fails every signature check with no obvious cause.
+      BETTER_AUTH_SECRET: ${VAULTORY_SESSION_SECRET:-dev-only-not-a-real-secret-change-me}
+      BETTER_AUTH_URL: http://localhost:${VAULTORY_FRONTEND_PORT:-3000}
+      # Origins the app is legitimately reached on. localhost for a browser on the host, and the
+      # service name for the browser suite, which reaches it inside the Compose network.
+      BETTER_AUTH_TRUSTED_ORIGINS: http://localhost:${VAULTORY_FRONTEND_PORT:-3000},http://127.0.0.1:${VAULTORY_FRONTEND_PORT:-3000},http://frontend:3000
+      # The browser suite creates an account per test from one container address. The production
+      # default is 20 per fifteen minutes; development needs headroom for a full run.
+      BETTER_AUTH_SIGNUP_MAX: ${BETTER_AUTH_SIGNUP_MAX:-1000}
+      # A restricted role, never the backend's. It can reach Better Auth's own tables and nothing
+      # else, so a bug here cannot read a collection (data-model.md, "Database privileges").
+      BETTER_AUTH_DATABASE_URL: postgres://vaultory_auth:${VAULTORY_AUTH_DB_PASSWORD:-vaultory_auth_dev_password}@postgres:5432/${POSTGRES_DB:-vaultory_dev}?sslmode=disable
       # Some filesystems do not deliver inotify events into containers; this is the documented
       # fallback for Next's dev server.
       WATCHPACK_POLLING: "${WATCHPACK_POLLING:-false}"
@@ -222,12 +262,6 @@ services:
         set -e
         echo "── unit ─────────────────────────────────────────"
         go test ./tests/unit/... ./internal/...
-        echo "── production build ─────────────────────────────"
-        # Not a duplicate of the line above. Under -tags production the development identity
-        # resolver is not compiled in, and this asserts it: the resolver mints a session for
-        # anyone who asks, so "it is absent from the shipped binary" is a property worth a test
-        # rather than a comment (FR-019).
-        go test -tags production ./tests/unit/...
         echo "── integration and contract ─────────────────────"
         # -p 1 is load-bearing. Both packages share one test database, and `go test` builds and
         # runs packages in parallel by default, so they reset and seed the same tables at the same

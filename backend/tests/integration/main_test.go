@@ -28,11 +28,15 @@ import (
 
 var pool *pgxpool.Pool
 
-// The two seeded development collectors. Cross-collector isolation cannot be demonstrated with
-// one, which is why migration 000005 seeds two.
+// Two collectors, because cross-collector isolation cannot be demonstrated with one.
+//
+// No longer fixed identifiers: feature 004 removed the seeded fixtures, and a collector now comes
+// into existence only when an account does — created by the trigger, with an id the database
+// chooses. freshStore assigns these per test, which also means the tests exercise the real
+// registration path rather than a hand-inserted row.
 var (
-	collectorA = uuid.MustParse("11111111-1111-4111-8111-111111111111")
-	collectorB = uuid.MustParse("22222222-2222-4222-8222-222222222222")
+	collectorA uuid.UUID
+	collectorB uuid.UUID
 )
 
 func TestMain(m *testing.M) {
@@ -90,19 +94,18 @@ func freshStore(t *testing.T) (*postgres.Store, *collection.Service) {
 		`UPDATE collectibles SET image_id = NULL`,
 		`DELETE FROM collectible_images`,
 		`DELETE FROM collectibles`,
+		`DELETE FROM "session"`,
+		`DELETE FROM "account"`,
+		`DELETE FROM "user"`,
 	} {
 		if _, err := pool.Exec(ctx, stmt); err != nil {
 			t.Fatalf("reset database (%s): %v", stmt, err)
 		}
 	}
-	// Both seeded collectors must exist; every ownership test needs a second party.
-	for _, id := range []uuid.UUID{collectorA, collectorB} {
-		if _, err := pool.Exec(ctx,
-			`INSERT INTO collectors (id, display_name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING`,
-			id, "Test Collector"); err != nil {
-			t.Fatalf("seed collector: %v", err)
-		}
-	}
+	// Two accounts, and therefore two collectors — created by the trigger rather than inserted,
+	// so the path under test is the one registration actually uses.
+	collectorA = newCollector(t, "a")
+	collectorB = newCollector(t, "b")
 
 	store := postgres.NewStore(pool)
 	images, err := imagestore.NewFilesystem(t.TempDir())
@@ -113,4 +116,27 @@ func freshStore(t *testing.T) (*postgres.Store, *collection.Service) {
 	// A fixed clock, so the future-date rule is about the rule and not about when the suite ran.
 	svc.SetClock(func() time.Time { return time.Date(2026, 9, 12, 12, 0, 0, 0, time.UTC) })
 	return store, svc
+}
+
+// newCollector creates an account and returns the collector the trigger made for it.
+//
+// Each test gets fresh identifiers. Nothing here inserts into collectors directly: the trigger is
+// the only way a collector comes into existence, and a helper that bypassed it would be testing a
+// path the product does not use.
+func newCollector(t *testing.T, suffix string) uuid.UUID {
+	t.Helper()
+	ctx := context.Background()
+	userID := "test-user-" + suffix + "-" + uuid.NewString()
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO "user" ("id", "name", "email", "emailVerified", "updatedAt")
+		 VALUES ($1, $2, $3, false, now())`,
+		userID, "Test "+suffix, userID+"@example.test"); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	var id uuid.UUID
+	if err := pool.QueryRow(ctx,
+		`SELECT id FROM collectors WHERE user_id = $1`, userID).Scan(&id); err != nil {
+		t.Fatalf("the trigger did not create a collector for %s: %v", userID, err)
+	}
+	return id
 }

@@ -11,12 +11,14 @@ import (
 	"time"
 )
 
+// MinSessionSecretLength is the shortest session secret the service will start with (FR-019a).
+const MinSessionSecretLength = 32
+
 type Config struct {
 	DatabaseURL       string
 	ListenAddr        string
 	ImageStore        string
 	ImageStorePath    string
-	DevIdentity       bool
 	SessionSecret     string
 	IdempotencyWindow time.Duration
 }
@@ -37,8 +39,18 @@ func Load() (Config, error) {
 	if cfg.DatabaseURL == "" {
 		problems = append(problems, "VAULTORY_DATABASE_URL is required")
 	}
-	if cfg.SessionSecret == "" {
+	// FR-019 and FR-019a. This secret is the only input to the signature the session resolver
+	// verifies, so a weak one makes every session forgeable — and unlike a wrong password,
+	// nothing about the running system would look wrong. Refusing to start is the whole
+	// protection, so it is enforced here rather than left to documentation.
+	switch {
+	case cfg.SessionSecret == "":
 		problems = append(problems, "VAULTORY_SESSION_SECRET is required")
+	case len(cfg.SessionSecret) < MinSessionSecretLength:
+		problems = append(problems, fmt.Sprintf(
+			"VAULTORY_SESSION_SECRET must be at least %d characters (got %d): it is the only "+
+				"input to the session signature, so a short one is forgeable",
+			MinSessionSecretLength, len(cfg.SessionSecret)))
 	}
 
 	switch cfg.ImageStore {
@@ -49,10 +61,6 @@ func Load() (Config, error) {
 	default:
 		problems = append(problems, fmt.Sprintf("VAULTORY_IMAGE_STORE %q is not supported; only \"filesystem\" is implemented", cfg.ImageStore))
 	}
-
-	// Development-only collector resolution. Opt-in by exact value, so a stray or misspelled
-	// setting cannot silently disable authentication (research.md Decision 1).
-	cfg.DevIdentity = os.Getenv("VAULTORY_DEV_IDENTITY") == "enabled"
 
 	window := envOr("VAULTORY_IDEMPOTENCY_WINDOW", "24h")
 	d, err := time.ParseDuration(window)
