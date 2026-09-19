@@ -13,11 +13,13 @@
     "generate:api": "openapi-typescript ../specs/001-add-browse-collectibles/contracts/openapi.yaml -o lib/types/api.ts"
   },
   "dependencies": {
+    "@types/pg": "^8.23.1",
     "better-auth": "^1.7.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.469.0",
     "next": "^15.5.0",
+    "pg": "^8.23.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "tailwind-merge": "^2.6.0"
