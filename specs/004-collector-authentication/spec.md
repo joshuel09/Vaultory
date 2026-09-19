@@ -33,6 +33,7 @@ Vaultory undeployable rather than merely incomplete.
 - Q: What happens to the two seeded development collectors and the collectibles they own? → A: A reversible migration deletes them. They are fixtures rather than people, so nothing real is orphaned; the down migration re-seeds them.
 - Q: When a signed-out visitor opens a vault page, does the URL change? → A: Yes — redirect to the sign-in page carrying the originally requested path, and return them there after signing in.
 - Q: FR-022 returns a collector to the page they asked for; FR-023 sends them to their collection. Which wins? → A: FR-022. A remembered destination takes precedence; the collection is the fallback when there is none. (Raised by cross-artifact analysis, not by a clarification question.)
+- Q: What does "refuse to start if it has no way to establish identity" mean once a resolver always exists? → A: Refuse when there is no usable session secret, and refuse any secret shorter than 32 characters. (Raised by cross-artifact analysis: the original clause guarded a condition that could no longer occur.)
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -190,7 +191,14 @@ content; visit a vault page with no session and confirm the page invites sign-in
 - **FR-018**: The system MUST NOT require any development-only identity mechanism in order to run,
   and the documented way to use Vaultory MUST be registration and sign-in.
 - **FR-019**: A production build MUST be able to start and serve traffic once authentication is
-  configured, and MUST still refuse to start if it has no way to establish identity.
+  configured, and MUST refuse to start when it cannot verify a session — which, once the
+  development resolver is gone, means having no usable session secret. The earlier wording
+  ("no way to establish identity") described a condition that stops existing the moment a real
+  resolver is always present, and a refusal that cannot fire is not a protection.
+- **FR-019a**: The system MUST refuse to start with a session secret shorter than 32 characters.
+  The secret is the sole input to the signature the backend verifies, so a weak one makes every
+  session forgeable — and unlike a wrong password, nothing about the running system would look
+  wrong.
 - **FR-020**: A production build MUST NOT contain any mechanism that issues a session without
   verifying credentials.
 
@@ -198,11 +206,14 @@ content; visit a vault page with no session and confirm the page invites sign-in
 
 - **FR-021**: The system MUST present a registration page and a sign-in page, each linking to the
   other.
-- **FR-022**: A request for a vault page without a valid session MUST send the visitor to the
+- **FR-022**: A request for a vault **page** without a valid session MUST send the visitor to the
   sign-in page, carrying the path they asked for, and MUST return them to that path once they sign
   in. This MUST be visibly distinct from the state shown when the collection genuinely cannot be
   reached — the current message blames the service for what is simply a missing session, and
   offers a retry that cannot succeed.
+- **FR-022b**: This redirect MUST apply to page navigation only. A request to the API without a
+  valid session MUST still be refused with 401 and no content, per FR-014. Redirecting an API
+  request would break every client that expects a status rather than a login page.
 - **FR-022a**: The remembered path MUST be rejected unless it is a path within Vaultory itself. A
   destination taken from a request and followed after sign-in is an open redirect, which turns the
   sign-in page into a credible way to send a collector somewhere hostile.
@@ -265,6 +276,10 @@ content; visit a vault page with no session and confirm the page invites sign-in
   never shown a message attributing the refusal to a problem reaching the service, and after
   signing in lands on the page they originally requested.
 - **SC-013**: No destination outside Vaultory is ever followed after sign-in, in 100% of attempts.
+- **SC-014**: The service refuses to start with a session secret shorter than 32 characters, and
+  starts with a valid one.
+- **SC-015**: An unauthenticated request to the API receives 401 with no collection content, never
+  a redirect.
 - **SC-011**: Registration and sign-in are completable using a keyboard alone, and every failure is
   announced to assistive technology.
 - **SC-012**: The 11th failed sign-in for one account within 15 minutes is refused with a message

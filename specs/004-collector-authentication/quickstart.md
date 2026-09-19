@@ -148,6 +148,22 @@ docker compose --profile dev exec -T postgres psql -U vaultory -d vaultory_dev -
 # Expect 0 and 0 — no accountless collector, no orphaned collectible
 ```
 
+Then see the restriction for yourself, connecting as the role the frontend uses rather than the
+backend's:
+
+```bash
+docker compose --profile dev exec -T postgres \
+  psql -U vaultory_auth -d vaultory_dev -c 'select count(*) from collectibles;'
+# Expect: ERROR: permission denied for table collectibles
+
+docker compose --profile dev exec -T postgres \
+  psql -U vaultory_auth -d vaultory_dev -c 'select count(*) from "session";'
+# Expect: a number — its own tables are readable
+```
+
+That refusal is what keeps the plan's claim honest once Next.js holds a database connection: a bug
+in the frontend cannot read a collection, because PostgreSQL will not let it.
+
 Then roll the migration back and confirm the seeded fixtures return, because Principle IV requires
 migrations to be reversible and a down migration nobody has run is a guess.
 
