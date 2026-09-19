@@ -3,6 +3,20 @@
 Four tables arrive from Better Auth, one existing table gains a column, and one trigger keeps them
 in step. Nothing that feature 001 established changes shape.
 
+## A word that means two things
+
+The specification's **Account** entity — "what a person signs in as… an email address, a password
+verifier" — is Better Auth's **`user`** table.
+
+Better Auth also has a table called **`account`**, and it is something else: the link between a
+user and one authentication method, holding the credential itself. With email and password there
+is exactly one, with `providerId = 'credential'`.
+
+Spec *Account* = `user`. Better Auth `account` = the credential row. They are not the same thing,
+and the collision is the library's rather than ours — so it is written down here rather than
+resolved by renaming, because renaming Better Auth's tables must then be maintained against the
+library forever.
+
 ## New tables (Better Auth 1.7.5)
 
 Field names below are Better Auth's own, taken from `@better-auth/core/dist/db/get-tables.mjs`.

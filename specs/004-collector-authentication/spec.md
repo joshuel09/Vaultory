@@ -32,6 +32,7 @@ Vaultory undeployable rather than merely incomplete.
 - Q: Is the 30-day session expiry absolute from sign-in, or does it renew with use? → A: Sliding. Each authenticated request extends expiry to 30 days from that moment, subject to a hard cap of 90 days from sign-in, after which the collector must sign in again.
 - Q: What happens to the two seeded development collectors and the collectibles they own? → A: A reversible migration deletes them. They are fixtures rather than people, so nothing real is orphaned; the down migration re-seeds them.
 - Q: When a signed-out visitor opens a vault page, does the URL change? → A: Yes — redirect to the sign-in page carrying the originally requested path, and return them there after signing in.
+- Q: FR-022 returns a collector to the page they asked for; FR-023 sends them to their collection. Which wins? → A: FR-022. A remembered destination takes precedence; the collection is the fallback when there is none. (Raised by cross-artifact analysis, not by a clarification question.)
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -205,7 +206,9 @@ content; visit a vault page with no session and confirm the page invites sign-in
 - **FR-022a**: The remembered path MUST be rejected unless it is a path within Vaultory itself. A
   destination taken from a request and followed after sign-in is an open redirect, which turns the
   sign-in page into a credible way to send a collector somewhere hostile.
-- **FR-023**: After signing in or registering, a collector MUST arrive at their collection.
+- **FR-023**: After signing in or registering, a collector MUST arrive at their collection, unless
+  they were sent to sign in from a specific page, in which case FR-022 takes precedence and they
+  MUST arrive there instead. The two rules would otherwise disagree about where a collector lands.
 - **FR-024**: The landing page's primary call to action MUST lead to registration.
 - **FR-025**: A signed-in collector MUST be able to see which account they are signed in as, and
   reach sign-out from any vault page.
@@ -226,7 +229,9 @@ content; visit a vault page with no session and confirm the page invites sign-in
 ### Key Entities
 
 - **Account**: What a person signs in as. Holds an email address, a password verifier, and the
-  times it was created and last updated. Exactly one account per collector.
+  times it was created and last updated. Exactly one account per collector. (The chosen library
+  happens to use the word "account" for something narrower — see `data-model.md`. In this
+  specification, Account means what a person signs in as.)
 - **Collector**: The owner of a vault, already established in feature 001 and referenced by every
   collectible, image, and submission. This feature attaches an account to it and changes nothing
   else about it.
