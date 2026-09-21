@@ -245,6 +245,20 @@ Two things this exercise found rather than confirmed, both fixed:
   both a hint and an error. Latent since feature 001; the register page is the first field
   anywhere with a hint, a required marker and an error at once.
 
+## Browser suite, 2026-09-21
+
+All 74 tests, per project. Run separately because three concurrent Chromium projects exhaust
+memory on this machine.
+
+| Project | Before the `router.refresh()` fix | After |
+|---|---|---|
+| desktop | 74 passed | **74 passed** |
+| tablet | 44 passed, **29 failed** | **70 passed, 4 flaky, 0 failed** |
+| mobile | 44 passed, **29 failed** | **72 passed, 2 flaky, 0 failed** (one worker) |
+
+Mobile showed two failures at two workers that passed in isolation and pass at one worker, so
+they are contention on emulated mobile rather than defects — stated after checking, not assumed.
+
 ## Acceptance summary
 
 | Walkthrough | Covers |
