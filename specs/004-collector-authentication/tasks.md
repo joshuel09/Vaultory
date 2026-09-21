@@ -136,9 +136,9 @@ rather than trusts — is only meaningful if something adversarial exercises it.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T044 Confirm the production image starts and serves traffic (FR-019, SC-009). It has refused since feature 002, correctly, for want of a resolver — quickstart walkthrough G
-- [ ] T045 Inspect the shipped binary for any trace of the development resolver (FR-020, SC-008), the way feature 002 did. A passing test proves a file was deleted; the artifact proves what ships
-- [ ] T046 [P] Verify `frontend/lib/types/api.ts` is byte-identical to before this feature — the OpenAPI contract does not change, and contracts/README.md says so rather than assuming it
+- [X] T044 Confirm the production image starts and serves traffic (FR-019, SC-009). It has refused since feature 002, correctly, for want of a resolver — quickstart walkthrough G
+- [X] T045 Inspect the shipped binary for any trace of the development resolver (FR-020, SC-008), the way feature 002 did. A passing test proves a file was deleted; the artifact proves what ships
+- [X] T046 [P] Verify `frontend/lib/types/api.ts` is byte-identical to before this feature — the OpenAPI contract does not change, and contracts/README.md says so rather than assuming it
 - [ ] T047 [P] Log registration, sign-in, sign-in failure, and sign-out without credentials (FR-006, FR-028)
 - [ ] T048 [P] Confirm both auth pages are keyboard-operable and announce failures to assistive technology (SC-011)
 - [X] T049 [P] Remove the development sign-in from `README.md` and `specs/001-add-browse-collectibles/quickstart.md`, which still instruct people to use it (FR-018)

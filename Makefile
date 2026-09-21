@@ -61,7 +61,10 @@ prod-build: ## Build the production images. Verification only — this is not a 
 	@# Dummy values on purpose. compose.prod.yaml marks these required with ${VAR:?}, and Compose
 	@# interpolates the whole file even for `build`, so a build fails without them. Building needs
 	@# no secrets; only `up` does, and there the :? guard still bites.
-	POSTGRES_PASSWORD=build-only VAULTORY_SESSION_SECRET=build-only \
+	POSTGRES_PASSWORD=build-only \
+	VAULTORY_SESSION_SECRET=build-only-secret-at-least-32-chars \
+	VAULTORY_AUTH_DB_PASSWORD=build-only \
+	VAULTORY_PUBLIC_URL=http://build-only.invalid \
 		docker compose -f compose.prod.yaml build
 	@echo
 	@docker image ls --format '{{.Repository}}:{{.Tag}}\t{{.Size}}' | grep '^vaultory-prod' || true
@@ -69,6 +72,9 @@ prod-build: ## Build the production images. Verification only — this is not a 
 check: ## Validate the compose files without starting anything
 	$(COMPOSE) --profile dev --profile test --profile e2e config --quiet
 	@echo "compose.yaml is valid"
-	@POSTGRES_PASSWORD=check VAULTORY_SESSION_SECRET=check \
+	@POSTGRES_PASSWORD=check \
+	VAULTORY_SESSION_SECRET=check-only-secret-at-least-32-characters \
+	VAULTORY_AUTH_DB_PASSWORD=check \
+	VAULTORY_PUBLIC_URL=http://check.invalid \
 		docker compose -f compose.prod.yaml config --quiet
 	@echo "compose.prod.yaml is valid"
