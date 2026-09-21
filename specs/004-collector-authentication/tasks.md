@@ -142,7 +142,7 @@ rather than trusts — is only meaningful if something adversarial exercises it.
 - [X] T047 [P] Log registration, sign-in, sign-in failure, and sign-out without credentials (FR-006, FR-028)
 - [X] T048 [P] Confirm both auth pages are keyboard-operable and announce failures to assistive technology (SC-011)
 - [X] T049 [P] Remove the development sign-in from `README.md` and `specs/001-add-browse-collectibles/quickstart.md`, which still instruct people to use it (FR-018)
-- [ ] T050 Walk quickstart walkthroughs A–I and record the result of each, including walkthrough F's check that no collector is accountless and no collectible orphaned (SC-007), marking anything not observed as unverified rather than assumed
+- [X] T050 Walk quickstart walkthroughs A–I and record the result of each, including walkthrough F's check that no collector is accountless and no collectible orphaned (SC-007), marking anything not observed as unverified rather than assumed
 - [ ] T051 Run the full suite — `make test` and `make test-e2e` — and record the outcome per browser project. Desktop passes today; tablet and mobile sit at roughly 17/44 from a defect predating this feature, so a fair comparison needs the before-figure stated
 
 ---
