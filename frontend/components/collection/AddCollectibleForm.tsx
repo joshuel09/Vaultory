@@ -1,6 +1,5 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Field, Input, Select, Textarea } from '@/components/ui/field'
@@ -36,7 +35,6 @@ type FormValues = typeof EMPTY
  * one set of rules (Constitution Principle III, FR-020).
  */
 export function AddCollectibleForm() {
-  const router = useRouter()
   const [values, setValues] = useState<FormValues>(EMPTY)
   const [image, setImage] = useState<CollectibleImage | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
@@ -102,7 +100,16 @@ export function AddCollectibleForm() {
       submissionKey.current = randomUUID()
       setValues(EMPTY)
       setImage(null)
-      router.refresh()
+      // Deliberately no router.refresh() here.
+      //
+      // It refreshed the route the collector is still on — this form — which is static, so it
+      // changed nothing. The collection page is force-dynamic and re-renders on navigation
+      // regardless, so the data is fresh when they get there either way.
+      //
+      // It was not harmless: the refresh is a navigation to /collection/new, and leaving the page
+      // while it was in flight aborted the next one. That surfaced as "navigation interrupted by
+      // another navigation", attributed to whichever page was being opened rather than to the add
+      // that had not finished settling.
     } catch (err) {
       if (err instanceof ApiError) {
         // Everything the collector typed stays exactly where it is (FR-022). Losing a filled-in

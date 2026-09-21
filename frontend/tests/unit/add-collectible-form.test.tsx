@@ -80,7 +80,13 @@ describe('AddCollectibleForm', () => {
 
     expect(await screen.findByTestId('add-success')).toBeInTheDocument()
     expect(screen.getByText(/was added to your vault/i)).toBeInTheDocument()
-    expect(refresh).toHaveBeenCalled()
+
+    // Deliberately no assertion that router.refresh() was called.
+    //
+    // It used to be, and it was asserting an implementation detail that turned out to be both
+    // redundant and harmful: the refresh re-rendered this static form, while the collection page
+    // is force-dynamic and re-fetches on navigation anyway. Its only real effect was a navigation
+    // that could abort the next one. What matters is the confirmation above.
   })
 
   // FR-020: every field error the server reported, shown against its own field.
