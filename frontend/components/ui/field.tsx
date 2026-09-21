@@ -20,7 +20,17 @@ export function Field({ label, hint, error, required, children }: FieldProps) {
   const id = useId()
   const errorId = `${id}-error`
   const hintId = `${id}-hint`
-  const describedBy = [error ? errorId : null, hint ? hintId : null].filter(Boolean).join(' ') || undefined
+  /*
+   * Only reference what is actually rendered.
+   *
+   * The hint is hidden while an error is showing, so listing its id here too pointed
+   * aria-describedby at an element that does not exist — which a screen reader cannot announce,
+   * and which is worse than having no description at all. Latent since feature 001: the register
+   * page is the first field to carry a hint, a required marker and an error at the same time.
+   */
+  const showHint = Boolean(hint) && !error
+  const describedBy =
+    [error ? errorId : null, showHint ? hintId : null].filter(Boolean).join(' ') || undefined
 
   return (
     <div className="space-y-1.5">
@@ -34,7 +44,7 @@ export function Field({ label, hint, error, required, children }: FieldProps) {
         {required && <span className="sr-only"> (required)</span>}
       </label>
       {children({ id, describedBy, invalid: Boolean(error) })}
-      {hint && !error && (
+      {showHint && (
         <p id={hintId} className="text-xs text-ink-faint">
           {hint}
         </p>

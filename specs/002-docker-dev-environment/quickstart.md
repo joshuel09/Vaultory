@@ -34,10 +34,14 @@ make up          # or: docker compose --profile dev up --build
 Expect, in order: PostgreSQL starts and passes its health check; the `migrate` service applies all
 migrations and exits successfully; the backend starts only after that; the frontend starts.
 
-Then open <http://localhost:3000> and sign in as the seeded development collector:
+Then open <http://localhost:3000> and create an account. Feature 004 removed the seeded
+development collectors and the sign-in that minted sessions for them; registration is the only way
+into a vault now.
 
 ```bash
-curl -c /tmp/vaultory.jar -X POST http://localhost:3000/api/dev/session
+curl -s -c /tmp/vaultory.jar -X POST http://localhost:3000/api/auth/sign-up/email \
+  -H 'Content-Type: application/json' -H 'Origin: http://localhost:3000' \
+  -d '{"email":"you@example.test","password":"a-long-enough-password","name":"you"}'
 ```
 
 **The core proof**: no toolchain was installed on the host, and Vaultory is running.
@@ -187,52 +191,27 @@ docker run --rm --entrypoint id vaultory-prod-frontend -u
 # Expect 1000, not 0 (FR-018)
 ```
 
-And the security check in FR-019:
+And the security check in FR-019 — **superseded by feature 004, and kept here only so the change
+is legible.**
 
-Both checks below point at an address nothing listens on. That is deliberate: it proves the
-identity check runs *before* the database connection, so the refusal is what you see rather than a
-connection error. `main.go` orders it that way for exactly this reason.
-
-```bash
-BAD=postgres://nope:nope@10.255.255.1:5432/nope
-
-docker run --rm -e VAULTORY_DATABASE_URL=$BAD -e VAULTORY_SESSION_SECRET=x \
-  vaultory-prod-backend; echo "exit: $?"
-# Expect: "no collector resolver is configured: set VAULTORY_DEV_IDENTITY=enabled for local
-#          development, or supply a real authentication resolver before deploying", exit 1
-
-docker run --rm -e VAULTORY_DEV_IDENTITY=enabled -e VAULTORY_DATABASE_URL=$BAD \
-  -e VAULTORY_SESSION_SECRET=x vaultory-prod-backend; echo "exit: $?"
-# Expect: "development identity is not available in a production build: unset
-#          VAULTORY_DEV_IDENTITY, or build without -tags production", exit 1
-```
-
-Both observed on 2026-09-17. The strongest form of the check does not need a container at all —
-extract the shipped binary and look for the development session cookie name:
+When this was written, the production image excluded a development resolver with a `production`
+build tag, and the two refusals below were the check. Feature 004 deleted that resolver outright,
+so there is nothing left to exclude and the tag went with it. Running these commands now will not
+reproduce what they describe:
 
 ```bash
-cid=$(docker create vaultory-prod-backend); docker cp $cid:/usr/local/bin/vaultory-api /tmp/b
-docker rm -f $cid
-strings /tmp/b | grep -c vaultory_dev_session    # 0, on both amd64 and arm64
+# HISTORICAL — this is no longer how it works.
+docker run --rm -e VAULTORY_DEV_IDENTITY=enabled ... vaultory-prod-backend
+# was: "development identity is not available in a production build"
 ```
 
-Two refusals, and both are correct. The production image is built with `-tags production`, so the
-development resolver is not in the binary at all — the first command cannot enable what is not
-there. The second is feature 001's original guarantee, unchanged.
+The equivalent check today is in
+[`specs/004-collector-authentication/quickstart.md`](../004-collector-authentication/quickstart.md)
+walkthrough G: the service refuses to start without a session secret of usable length, and the
+shipped binary is searched for any trace of the resolver, with a control string proving the search
+itself works.
 
-This also means **the production stack cannot serve traffic yet**, and that is the honest state of
-the project rather than a gap in these files: authentication is out of scope for feature 001, so
-the only resolver that exists is the development one. `compose.prod.yaml` says so at the top.
-
-The same property can be checked without Docker, which is how it was verified here:
-
-```bash
-cd backend
-go test -tags production -run TestDevResolverIsUnavailable ./tests/unit/... -v
-
-go build -tags production -o /tmp/prod ./cmd/vaultory-api && strings /tmp/prod | grep -c vaultory_dev_session   # 0
-go build              -o /tmp/dev  ./cmd/vaultory-api && strings /tmp/dev  | grep -c vaultory_dev_session   # 1
-```
+---
 
 ## Walkthrough H — Failure modes
 

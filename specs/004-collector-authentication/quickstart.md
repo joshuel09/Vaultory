@@ -220,6 +220,45 @@ Run this when upgrading Better Auth, not on a schedule.
 
 ---
 
+## Results, 2026-09-21
+
+Walked on a real stack, against the merged feature. Recorded rather than assumed.
+
+| Walkthrough | Result |
+|---|---|
+| A — register and get a vault | **pass** — registration 200, trigger created one collector |
+| B — sign out, sign in, stay signed in | **pass** — a captured cookie is refused by Go immediately after sign-out |
+| C — the boundary | **pass** — automated as T019/T020/T020b; seven asserted identities ignored, ten session shapes refused |
+| D — session expiry, both halves | **pass** — automated as T021; 91 days old with a healthy `expiresAt` is refused |
+| E — signed-out navigation | **pass** — automated in `navigation.spec.ts` and `safe-redirect.test.ts` |
+| F — no fixtures left behind | **pass** — up/down/up clean, fixtures restored by the down migration |
+| G — production actually starts | **pass** — see the table above; first successful start since feature 002 |
+| H — rate limiting | **partial** — the sign-in rule is configured and asserted in `auth-config.test.ts`; the eleventh failed attempt was not walked by hand |
+| I — schema drift | **pass** — the schema was regenerated during T005 and transcribed column-by-column |
+
+Two things this exercise found rather than confirmed, both fixed:
+
+- `make prod-build` could not build. Feature 004 added two required variables and the target still
+  supplied only feature 002's two. The second time that target has broken this way, so `make
+  check` now covers the full set.
+- `Field` pointed `aria-describedby` at an element that was not rendered whenever a field carried
+  both a hint and an error. Latent since feature 001; the register page is the first field
+  anywhere with a hint, a required marker and an error at once.
+
+## Browser suite, 2026-09-21
+
+All 74 tests, per project. Run separately because three concurrent Chromium projects exhaust
+memory on this machine.
+
+| Project | Before the `router.refresh()` fix | After |
+|---|---|---|
+| desktop | 74 passed | **74 passed** |
+| tablet | 44 passed, **29 failed** | **70 passed, 4 flaky, 0 failed** |
+| mobile | 44 passed, **29 failed** | **72 passed, 2 flaky, 0 failed** (one worker) |
+
+Mobile showed two failures at two workers that passed in isolation and pass at one worker, so
+they are contention on emulated mobile rather than defects — stated after checking, not assumed.
+
 ## Acceptance summary
 
 | Walkthrough | Covers |

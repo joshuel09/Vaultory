@@ -17,10 +17,8 @@ up: ## Start the stack (database, migrations, backend, frontend)
 	@echo
 	@echo "  Vaultory is starting on http://localhost:$${VAULTORY_FRONTEND_PORT:-3000}"
 	@echo
-	@echo "  Authentication is out of scope for feature 001, so sign in as the seeded"
-	@echo "  development collector before the collection view will show anything:"
-	@echo
-	@echo "    curl -c /tmp/vaultory.jar -X POST http://localhost:$${VAULTORY_FRONTEND_PORT:-3000}/api/dev/session"
+	@echo "  Create an account to get a vault. There is no development sign-in any more:"
+	@echo "  feature 004 replaced it, and /api/dev/session now returns 404."
 	@echo
 	@echo "  Follow the logs with:  make logs"
 
@@ -61,7 +59,10 @@ prod-build: ## Build the production images. Verification only — this is not a 
 	@# Dummy values on purpose. compose.prod.yaml marks these required with ${VAR:?}, and Compose
 	@# interpolates the whole file even for `build`, so a build fails without them. Building needs
 	@# no secrets; only `up` does, and there the :? guard still bites.
-	POSTGRES_PASSWORD=build-only VAULTORY_SESSION_SECRET=build-only \
+	POSTGRES_PASSWORD=build-only \
+	VAULTORY_SESSION_SECRET=build-only-secret-at-least-32-chars \
+	VAULTORY_AUTH_DB_PASSWORD=build-only \
+	VAULTORY_PUBLIC_URL=http://build-only.invalid \
 		docker compose -f compose.prod.yaml build
 	@echo
 	@docker image ls --format '{{.Repository}}:{{.Tag}}\t{{.Size}}' | grep '^vaultory-prod' || true
@@ -69,6 +70,9 @@ prod-build: ## Build the production images. Verification only — this is not a 
 check: ## Validate the compose files without starting anything
 	$(COMPOSE) --profile dev --profile test --profile e2e config --quiet
 	@echo "compose.yaml is valid"
-	@POSTGRES_PASSWORD=check VAULTORY_SESSION_SECRET=check \
+	@POSTGRES_PASSWORD=check \
+	VAULTORY_SESSION_SECRET=check-only-secret-at-least-32-characters \
+	VAULTORY_AUTH_DB_PASSWORD=check \
+	VAULTORY_PUBLIC_URL=http://check.invalid \
 		docker compose -f compose.prod.yaml config --quiet
 	@echo "compose.prod.yaml is valid"

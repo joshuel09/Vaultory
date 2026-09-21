@@ -55,8 +55,11 @@ become that collector; the session cookie it sets is what every request below re
 `curl`:
 
 ```bash
-# Adjust to the development sign-in path exposed by the backend
-curl -s -c /tmp/vaultory.jar -X POST http://localhost:3000/api/dev/session
+# Feature 004 replaced the development sign-in with real registration. The Origin header is
+# required: Better Auth refuses a state-changing request without one, and curl sends none.
+curl -s -c /tmp/vaultory.jar -X POST http://localhost:3000/api/auth/sign-up/email \
+  -H 'Content-Type: application/json' -H 'Origin: http://localhost:3000' \
+  -d '{"email":"you@example.test","password":"a-long-enough-password","name":"you"}'
 ```
 
 All `curl` examples go through the frontend's origin (port 3000), not the backend directly — that is
@@ -183,7 +186,9 @@ Covers FR-015, FR-026, FR-027, FR-029; SC-005, SC-012. **The most important walk
 curl -s http://localhost:3000/api/collectibles -w '\n%{http_code}\n'
 
 # 2. A second collector's session must not see the first collector's image
-curl -s -c /tmp/other.jar -X POST http://localhost:3000/api/dev/session?collector=second
+curl -s -c /tmp/other.jar -X POST http://localhost:3000/api/auth/sign-up/email \
+  -H 'Content-Type: application/json' -H 'Origin: http://localhost:3000' \
+  -d '{"email":"other@example.test","password":"a-long-enough-password","name":"other"}'
 curl -s -b /tmp/other.jar "http://localhost:3000/api/images/$IMAGE_ID/rendition" -w '\n%{http_code}\n'
 
 # 3. The owner can

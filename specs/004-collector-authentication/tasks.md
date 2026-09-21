@@ -109,7 +109,7 @@ rather than trusts — is only meaningful if something adversarial exercises it.
 - [X] T033a [P] [US2] Assert the session cookie's attributes against a real `Set-Cookie` header in `backend/tests/contract/session_cookie_attributes_test.go`: `HttpOnly` so page scripts cannot read it, `SameSite`, and `Secure` when served over HTTPS; and confirm the session appears in no URL, redirect, or history entry (FR-012). These are Better Auth's defaults, and a default is not a guarantee — this is the test that notices if one changes
 - [X] T034 [P] [US2] Configure Better Auth's rate limiting for sign-in: 10 failures per account per 15 minutes, then 15 minutes of refusal that lifts by itself, with a message saying when to retry (FR-027, SC-012). Never a permanent lock — password reset is out of scope, so a locked-out collector would have no way back in
 - [X] T035 [P] [US2] Show who is signed in, and a sign-out control, on every vault page (FR-025)
-- [ ] T036 [P] [US2] Contract test in `backend/tests/contract/signin_response_test.go` comparing status, body, and timing for an unknown email against a wrong password (SC-006). Not a walkthrough: eyeballing two responses is not evidence
+- [X] T036 [P] [US2] Contract test in `backend/tests/contract/signin_response_test.go` comparing status, body, and timing for an unknown email against a wrong password (SC-006). Not a walkthrough: eyeballing two responses is not evidence
 - [X] T037 [P] [US2] E2E test in `frontend/tests/e2e/sign-in.spec.ts` following quickstart walkthrough B, including that a session survives a browser restart (FR-009, SC-002, SC-003)
 
 **Checkpoint**: Registration and sign-in both work, independently.
@@ -136,14 +136,14 @@ rather than trusts — is only meaningful if something adversarial exercises it.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T044 Confirm the production image starts and serves traffic (FR-019, SC-009). It has refused since feature 002, correctly, for want of a resolver — quickstart walkthrough G
-- [ ] T045 Inspect the shipped binary for any trace of the development resolver (FR-020, SC-008), the way feature 002 did. A passing test proves a file was deleted; the artifact proves what ships
-- [ ] T046 [P] Verify `frontend/lib/types/api.ts` is byte-identical to before this feature — the OpenAPI contract does not change, and contracts/README.md says so rather than assuming it
-- [ ] T047 [P] Log registration, sign-in, sign-in failure, and sign-out without credentials (FR-006, FR-028)
-- [ ] T048 [P] Confirm both auth pages are keyboard-operable and announce failures to assistive technology (SC-011)
+- [X] T044 Confirm the production image starts and serves traffic (FR-019, SC-009). It has refused since feature 002, correctly, for want of a resolver — quickstart walkthrough G
+- [X] T045 Inspect the shipped binary for any trace of the development resolver (FR-020, SC-008), the way feature 002 did. A passing test proves a file was deleted; the artifact proves what ships
+- [X] T046 [P] Verify `frontend/lib/types/api.ts` is byte-identical to before this feature — the OpenAPI contract does not change, and contracts/README.md says so rather than assuming it
+- [X] T047 [P] Log registration, sign-in, sign-in failure, and sign-out without credentials (FR-006, FR-028)
+- [X] T048 [P] Confirm both auth pages are keyboard-operable and announce failures to assistive technology (SC-011)
 - [X] T049 [P] Remove the development sign-in from `README.md` and `specs/001-add-browse-collectibles/quickstart.md`, which still instruct people to use it (FR-018)
-- [ ] T050 Walk quickstart walkthroughs A–I and record the result of each, including walkthrough F's check that no collector is accountless and no collectible orphaned (SC-007), marking anything not observed as unverified rather than assumed
-- [ ] T051 Run the full suite — `make test` and `make test-e2e` — and record the outcome per browser project. Desktop passes today; tablet and mobile sit at roughly 17/44 from a defect predating this feature, so a fair comparison needs the before-figure stated
+- [X] T050 Walk quickstart walkthroughs A–I and record the result of each, including walkthrough F's check that no collector is accountless and no collectible orphaned (SC-007), marking anything not observed as unverified rather than assumed
+- [X] T051 Run the full suite — `make test` and `make test-e2e` — and record the outcome per browser project. Desktop passes today; tablet and mobile sit at roughly 17/44 from a defect predating this feature, so a fair comparison needs the before-figure stated
 
 ---
 
