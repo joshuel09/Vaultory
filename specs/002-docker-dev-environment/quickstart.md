@@ -34,10 +34,14 @@ make up          # or: docker compose --profile dev up --build
 Expect, in order: PostgreSQL starts and passes its health check; the `migrate` service applies all
 migrations and exits successfully; the backend starts only after that; the frontend starts.
 
-Then open <http://localhost:3000> and sign in as the seeded development collector:
+Then open <http://localhost:3000> and create an account. Feature 004 removed the seeded
+development collectors and the sign-in that minted sessions for them; registration is the only way
+into a vault now.
 
 ```bash
-curl -c /tmp/vaultory.jar -X POST http://localhost:3000/api/dev/session
+curl -s -c /tmp/vaultory.jar -X POST http://localhost:3000/api/auth/sign-up/email \
+  -H 'Content-Type: application/json' -H 'Origin: http://localhost:3000' \
+  -d '{"email":"you@example.test","password":"a-long-enough-password","name":"you"}'
 ```
 
 **The core proof**: no toolchain was installed on the host, and Vaultory is running.

@@ -17,10 +17,8 @@ up: ## Start the stack (database, migrations, backend, frontend)
 	@echo
 	@echo "  Vaultory is starting on http://localhost:$${VAULTORY_FRONTEND_PORT:-3000}"
 	@echo
-	@echo "  Authentication is out of scope for feature 001, so sign in as the seeded"
-	@echo "  development collector before the collection view will show anything:"
-	@echo
-	@echo "    curl -c /tmp/vaultory.jar -X POST http://localhost:$${VAULTORY_FRONTEND_PORT:-3000}/api/dev/session"
+	@echo "  Create an account to get a vault. There is no development sign-in any more:"
+	@echo "  feature 004 replaced it, and /api/dev/session now returns 404."
 	@echo
 	@echo "  Follow the logs with:  make logs"
 
