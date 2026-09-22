@@ -25,6 +25,14 @@ can register using anyone else's — so shipping reset alone would mean mailing 
 stranger's collection to an address they never claimed. Verification comes first; reset depends on
 it.
 
+## Clarifications
+
+### Session 2026-09-22
+
+- Q: FR-020 requires limiting recovery messages but names no number. What should the limit be? → A: 3 per address per hour, with verification and reset counted separately so exhausting one cannot block the other. The refusal lifts on its own and never becomes permanent.
+- Q: Does completing a password reset mark an unverified address as verified? → A: Yes. Following a link sent to that address proves control of the inbox, which is what verification tests — and the reset link is the shorter-lived, higher-bar of the two.
+- Q: What happens after a verification link is followed, often on a device with no session? → A: Confirm the address is verified, then send them onward — to their vault if they already have a session, to sign-in if not. Verification never grants access by itself.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Prove the address is mine (Priority: P1)
@@ -42,13 +50,16 @@ moves from unverified to verified — and that an unfollowed link leaves it unve
 
 1. **Given** a collector who has just registered, **When** they open their vault, **Then** they
    are told the address is unverified and offered a way to send the message again.
-2. **Given** a verification link, **When** the collector follows it, **Then** the account is marked
-   verified and they are told so.
-3. **Given** a verification link that has already been used, **When** it is followed again,
+2. **Given** a verification link, **When** the collector follows it while signed in, **Then** the
+   account is marked verified, they are told so, and they reach their collection.
+3. **Given** a verification link opened in a browser with no session — a phone, or a different
+   machine — **When** it is followed, **Then** the account is marked verified and they are offered
+   sign-in rather than being signed in.
+4. **Given** a verification link that has already been used, **When** it is followed again,
    **Then** it is refused and the account's state does not change.
-4. **Given** a verification link older than its lifetime, **When** it is followed, **Then** it is
+5. **Given** a verification link older than its lifetime, **When** it is followed, **Then** it is
    refused and a fresh one can be requested.
-5. **Given** an unverified collector, **When** they ask for the message again, **Then** a new link
+6. **Given** an unverified collector, **When** they ask for the message again, **Then** a new link
    is sent and any previous one stops working.
 
 ---
@@ -77,6 +88,8 @@ password, and sign in with it — and confirm the old password no longer works.
    and a fresh one can be requested.
 6. **Given** a new password that does not meet the minimum, **When** it is submitted, **Then** it
    is refused with a message saying what is required, and the link remains usable.
+7. **Given** a collector whose address was never verified, **When** they complete a reset, **Then**
+   the address is marked verified and they are no longer told it is unverified.
 
 ---
 
@@ -118,6 +131,11 @@ can no longer reach the collection.
 - **FR-001**: The system MUST send a verification message when an account is created.
 - **FR-002**: The system MUST mark an account verified when a valid, unused, unexpired verification
   link is followed, and MUST tell the collector it has done so.
+- **FR-002a**: Following a verification link MUST NOT by itself establish a session. A collector
+  who already has one is sent to their collection; one who does not is offered sign-in. Proving
+  control of an inbox is not proving knowledge of a password, and the link lives for 24 hours —
+  long enough that treating it as a way in would make a forwarded or archived message a way into a
+  vault.
 - **FR-003**: A verification link MUST expire no more than 24 hours after it is issued.
 - **FR-004**: A verification link MUST be usable once. A second use MUST be refused.
 - **FR-005**: The system MUST show an unverified collector that their address is unverified, and
@@ -140,6 +158,10 @@ can no longer reach the collection.
 - **FR-013**: A new password MUST meet the same minimum the system requires at registration, and a
   refusal MUST say what is required without consuming the link.
 - **FR-014**: Completing a reset MUST sign the collector in to their own collection.
+- **FR-014a**: Completing a reset MUST mark the address verified if it was not already. Following a
+  link sent to that address proves control of the inbox, which is precisely what verification
+  tests; asking them to prove it again afterwards would be asking for something they have just
+  demonstrated.
 
 ### Tokens are credentials
 
@@ -158,8 +180,11 @@ can no longer reach the collection.
 
 ### Not being negligent
 
-- **FR-020**: The system MUST limit how often verification and reset messages can be requested for
-  one address, and MUST say when it has refused.
+- **FR-020**: The system MUST refuse a fourth verification message, and separately a fourth reset
+  message, for the same address within an hour, and MUST say so when it refuses. The two are
+  counted separately: somebody who has exhausted verification resends must still be able to request
+  a reset, which is the moment they are most likely to need one. The refusal MUST lift without
+  intervention and MUST NOT become permanent.
 - **FR-021**: The system MUST record that recovery events happened — requested, sent, completed,
   refused — without recording tokens or passwords.
 
@@ -199,6 +224,10 @@ can no longer reach the collection.
 - **SC-005**: After a reset, a session established before it returns no collection content, in 100%
   of attempts.
 - **SC-006**: After a reset, the old password is refused in 100% of attempts.
+- **SC-012**: A collector whose address was unverified is verified after completing a reset, and
+  is not asked to verify again.
+- **SC-013**: Following a verification link in a browser with no session verifies the address and
+  returns no collection content.
 - **SC-007**: No token appears in any log or error message, verified by inspecting output rather
   than by assertion.
 - **SC-008**: A developer can read every message a local Vaultory sends, with no third-party
@@ -206,6 +235,9 @@ can no longer reach the collection.
 - **SC-009**: The stored form of a token cannot be used in place of the token.
 - **SC-010**: Recovery and verification are completable by keyboard alone, and every failure is
   announced to assistive technology.
+- **SC-011**: The fourth verification request for one address within an hour is refused with a
+  message saying when to retry, while a reset request for the same address in the same hour still
+  succeeds.
 
 ## Out of Scope
 
@@ -222,8 +254,10 @@ collector is told, and can still add and browse collectibles.
   Blocking a vault behind an email round trip would punish the collector for a risk that is ours to
   manage, and the address is only load-bearing when it is used to recover an account.
 - A reset requested for an unverified address still sends, because refusing would leave the
-  collector with no route at all and no way to earn one. The shorter reset lifetime is what limits
-  the exposure.
+  collector with no route at all and no way to earn one — they cannot sign in to trigger a resend
+  either, so the account would be permanently unreachable, which is the hole this feature exists to
+  close. The shorter reset lifetime is what limits the exposure, and FR-014a means one round trip
+  settles both.
 - 24 hours for verification and 1 hour for reset are conventional defaults, chosen because a reset
   link is worth more to an attacker than a verification link. They are not derived from a stated
   requirement.

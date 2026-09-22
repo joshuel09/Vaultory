@@ -54,3 +54,19 @@ it can be argued with.
 **Two lifetimes are conventional rather than derived**: 24 hours for verification, 1 hour for
 reset. The asymmetry is the point — a reset link is worth more to an attacker than a verification
 link, so it lives for less time.
+
+**Re-validated after clarification (2026-09-22).** Three questions asked and integrated; 16/16
+still passing, no regressions. Two items are materially stronger: "requirements are testable and
+unambiguous" (FR-020 carried no number and could not have been accepted) and "all acceptance
+scenarios are defined" (nothing said what happens after a verification link is followed, which is
+the most common real case — an email opened on a phone with no session).
+
+One clarification produced a requirement nobody asked for. FR-002a: following a verification link
+must not by itself establish a session. Proving control of an inbox is not proving knowledge of a
+password, and a 24-hour link treated as a way in would turn a forwarded or archived message into
+access to a vault. SC-013 is its measurable form.
+
+One answer removed a trap rather than choosing a preference. Refusing resets for unverified
+addresses sounds stricter and is worse: such a collector cannot reset and cannot sign in to
+trigger a resend, so the account becomes permanently unreachable — exactly the hole this feature
+was opened to close.
