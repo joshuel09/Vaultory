@@ -70,3 +70,19 @@ One answer removed a trap rather than choosing a preference. Refusing resets for
 addresses sounds stricter and is worse: such a collector cannot reset and cannot sign in to
 trigger a resend, so the account becomes permanently unreachable — exactly the hole this feature
 was opened to close.
+
+**Re-validated after cross-artifact analysis (2026-09-23).** 16/16 still passing, no regressions.
+Five findings resolved, two of which were requirements that could not hold as written — and both
+were invisible without reading the library's source:
+
+- **FR-014** promised the collector reaches their collection after a reset. Better Auth signs
+  nobody in: no `setSessionCookie`, no `createSession`, no option. The headline journey would have
+  ended on a sign-in form, immediately after they proved their identity. T021a implements it.
+- **FR-012** promised a new reset invalidates the previous link. `forget-password` inserts a row
+  and deletes nothing, so three working reset links could exist at once. T022a implements it —
+  **not** narrowed, unlike the verification equivalent, because a stale reset link is a way into a
+  vault where a stale verification link does nothing.
+
+T021a deliberately adds a route to a session, which is the thing this feature is most likely to get
+wrong. It is legitimate only because it produces an ordinary session the Go service verifies on the
+next request. T034a exists to hold that line rather than trust it.

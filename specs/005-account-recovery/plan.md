@@ -104,6 +104,30 @@ silently sends nowhere looks identical to one that works until somebody checks t
 **The spec is amended rather than left aspirational.** A requirement that cannot hold is worse than
 one never written, because it reads as a guarantee to everyone after you.
 
+### FR-012 was reconsidered separately, and is implemented rather than narrowed
+
+The narrowing above covers verification tokens only. Cross-artifact analysis found that FR-012 — a
+new reset request invalidates the previous link — also does not hold by default: `forget-password`
+inserts a row and deletes nothing, so with FR-020's limit of three per hour, three working reset
+links can exist at once.
+
+It is **not** narrowed, because the two cases are not alike. A replayed verification link sets a
+boolean that is already true; a stale reset link is a way into a vault. It is also cheap to fix:
+`verification.value` holds the account id, so prior rows are findable and deletable even though
+identifiers are hashed. T022a does it.
+
+### FR-014 is implemented, and adds a session route on purpose
+
+The same analysis found that completing a reset does not sign the collector in — Better Auth's
+`password.mjs` has no `setSessionCookie` and no `createSession`, and no option adds one. Left
+alone, the feature's headline journey ends with the collector signed out, looking at a sign-in form
+immediately after proving their identity.
+
+T021a signs them in with the password they have just chosen. That is a legitimate route precisely
+because it produces an ordinary session the Go service verifies on the next request — it is not a
+session minted by some other means, which FR-025 forbids. T034a exists to hold that line, since
+this is the feature where it is most likely to slip.
+
 No other deviation.
 
 ## Post-Design Constitution Re-check

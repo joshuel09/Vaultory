@@ -41,9 +41,9 @@ the repository root.
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
 - [ ] T005 Write `frontend/lib/mail.ts` exposing exactly `send({ to, subject, text })`, backed by nodemailer. One interface so the transport is swappable and no call site learns which one is in use (contracts/README.md)
-- [ ] T006 Wire `lib/mail.ts` to Mailpit in development and to SMTP credentials in production, from the variables added in T003
+- [ ] T006 Wire `lib/mail.ts` to Mailpit in development (FR-023) and to SMTP credentials in production (FR-022), from the variables added in T003
 - [ ] T007 [P] Unit test in `frontend/tests/unit/mail.test.ts`: `send` passes recipient, subject and body through, and surfaces a transport failure rather than swallowing it. A send that fails silently is indistinguishable from one that worked until somebody checks their inbox
-- [ ] T008 Verify by hand that a message sent from the running stack appears at <http://localhost:8025> before building any flow on top of it
+- [ ] T008 Verify by hand that a message sent from the running stack appears at <http://localhost:8025>, and that Mailpit publishes no outbound path (FR-023, SC-008), before building any flow on top of it
 
 **Checkpoint**: mail works and is inspectable. User story work can begin.
 
@@ -55,13 +55,13 @@ the repository root.
 
 **Independent Test**: Register, follow the link from Mailpit, and confirm the account moves from unverified to verified — and that an unfollowed link leaves it unverified.
 
-- [ ] T009 [US1] Enable verification in `frontend/lib/auth.ts`: `emailVerification.sendOnSignUp`, a `sendVerificationEmail` that calls `lib/mail.ts`, and `expiresIn` of 24 hours. The default is 1 hour; FR-003 allows a day, which is what somebody who registers at night and reads their mail next morning needs (research Decision 5)
+- [ ] T009 [US1] Enable verification in `frontend/lib/auth.ts`: `emailVerification.sendOnSignUp` (FR-001), a `sendVerificationEmail` that calls `lib/mail.ts`, and `expiresIn` of 24 hours. The default is 1 hour; FR-003 allows a day, which is what somebody who registers at night and reads their mail next morning needs (research Decision 5)
 - [ ] T010 [US1] Leave `autoSignInAfterVerification` unset, and assert that in `frontend/tests/unit/auth-config.test.ts` (FR-002a). It is opt-in, so this is a test guarding an absence — the convenience of signing someone in is exactly the edit a later contributor would make, and it would turn a 24-hour email into a way into a vault
 - [ ] T011 [US1] Build `frontend/app/(auth)/verify-email/page.tsx`: confirm the address is verified, then send the collector to their collection if they have a session and to sign-in if they do not (FR-002, FR-002a)
 - [ ] T012 [P] [US1] Show an unverified collector that their address is unverified, with a resend control, in `frontend/components/collection/VaultHeader.tsx` (FR-005). It informs; it must not block — an unverified collector still has their vault
-- [ ] T013 [US1] Implement resend, and invalidate nothing — verification tokens are stateless, so a previous link stays valid until it expires. Say so in the code rather than implying otherwise (FR-006 as narrowed; research Decision 3)
+- [ ] T013 [US1] Implement resend. A previous verification link stays valid until it expires, because verification tokens are stateless JWTs and there is nothing stored to invalidate — record that in a comment so the next reader knows it was decided rather than missed (FR-006 as narrowed; research Decision 3). Note the contrast with reset links, which T022a *does* invalidate, because those grant access
 - [ ] T014 [P] [US1] Compose the verification message in `frontend/lib/messages.ts`: what it is for, who it is for, how long the link lasts, and what to do if they did not ask for it (FR-024)
-- [ ] T015 [P] [US1] E2E test in `frontend/tests/e2e/verify-email.spec.ts` following quickstart walkthroughs A and B, reading the link from Mailpit's API. **Walkthrough B is the one that matters**: following the link with no session must verify the address and grant nothing
+- [ ] T015 [P] [US1] E2E test in `frontend/tests/e2e/verify-email.spec.ts` following quickstart walkthroughs A and B (SC-002, SC-013), reading the link from Mailpit's API. **Walkthrough B is the one that matters**: following the link with no session must verify the address and grant nothing
 
 **Checkpoint**: an address can be proven. Reset now has a channel it can trust.
 
@@ -76,13 +76,17 @@ the repository root.
 - [ ] T016 [US2] Enable reset in `frontend/lib/auth.ts`: `emailAndPassword.sendResetPassword` calling `lib/mail.ts`, and `resetPasswordTokenExpiresIn` left at its 1-hour default, which is already FR-010
 - [ ] T017 [US2] Set `verification.storeIdentifier: 'hashed'` in `frontend/lib/auth.ts` (FR-015). **This is the single most consequential line in the feature.** By default Better Auth stores the token itself, so a copy of the `verification` table would be a set of working reset links to every account with an outstanding reset — and nothing about the running system would look wrong
 - [ ] T018 [P] [US2] Assert both of the above in `frontend/tests/unit/auth-config.test.ts`: storage is hashed and not plain, and the reset lifetime is an hour. A configuration that nothing checks is one a later edit can weaken unnoticed — the same reasoning that pinned the password hasher in feature 004
-- [ ] T019 [US2] Build `frontend/app/(auth)/forgot-password/page.tsx`: ask for an address, and answer identically whether or not it has an account (FR-007, FR-008)
+- [ ] T019 [US2] Build `frontend/app/(auth)/forgot-password/page.tsx`: ask for an address, send a link only when it has an account (FR-009), and answer identically either way (FR-007, FR-008)
 - [ ] T020 [US2] Build `frontend/app/(auth)/reset-password/page.tsx`: accept the token, require a password meeting the same minimum as registration, and refuse without consuming the link (FR-013)
 - [ ] T021 [P] [US2] Link "forgotten your password" from `frontend/app/(auth)/sign-in/page.tsx`
-- [ ] T022 [US2] Mark the address verified when a reset completes, if it was not already (FR-014a). Following a link sent to that address proves control of the inbox, which is what verification tests
+- [ ] T021a [US2] Sign the collector in once a reset completes (FR-014). Better Auth does **not** do this: `password.mjs` contains no `setSessionCookie` and no `createSession`, and no option changes it — the endpoint returns `{status:true}` and leaves them staring at a sign-in form immediately after proving their identity. Sign in with the password they just chose, which they demonstrably know because they typed it. This must run **after** `revokeSessionsOnPasswordReset` (T026), or the new session is deleted along with the old ones
+- [ ] T021b [P] [US2] Assert in `frontend/tests/e2e/reset-password.spec.ts` that the collector lands in their collection after a reset rather than on a sign-in form, and that the session they arrive with is accepted by **Go on :8080** (FR-014, FR-025). The second half is the point: signing in after a reset is legitimate only because it produces an ordinary session the backend verifies, and a shortcut that skipped that would look identical from the browser
+- [ ] T022 [US2] Mark the address verified when a reset completes, if it was not already (FR-014a, SC-012). Following a link sent to that address proves control of the inbox, which is what verification tests
+- [ ] T022a [US2] Invalidate any outstanding reset link when a new one is requested (FR-012). Better Auth does not: `forget-password` calls `createVerificationValue`, which inserts a row and deletes nothing, so with the FR-020 limit of three per hour **three working reset links can exist at once**, each for an hour. Delete prior `reset-password:` rows for that account first — `verification.value` holds the account id, so they are findable even though identifiers are hashed
+- [ ] T022b [P] [US2] Test in `frontend/tests/e2e/reset-password.spec.ts` that requesting a second reset makes the first link stop working (FR-012). Research Decision 3 narrowed single-use for *verification* tokens, where a replay does nothing; this is the other case, where a stale link is a way into a vault
 - [ ] T023 [P] [US2] Compose the reset message in `frontend/lib/messages.ts`, stating the one-hour lifetime and what to do if they did not request it (FR-024)
-- [ ] T024 [P] [US2] E2E test in `frontend/tests/e2e/reset-password.spec.ts` following quickstart walkthrough C, including the four refusals: short password, second use, expired, altered
-- [ ] T025 [P] [US2] Integration test in `frontend/tests/e2e/reset-token-storage.spec.ts` following walkthrough F: request a reset, read `verification.identifier` from the database, confirm it is **not** the token from the link, and confirm the stored value **does not work** as a token. Asserting the configuration is not the same as proving the property
+- [ ] T024 [P] [US2] E2E test in `frontend/tests/e2e/reset-password.spec.ts` following quickstart walkthrough C, including the four refusals: short password, second use (FR-011), expired, altered. Also that the whole journey completes in a couple of minutes (SC-001)
+- [ ] T025 [P] [US2] Integration test in `frontend/tests/e2e/reset-token-storage.spec.ts` following walkthrough F: request a reset, read `verification.identifier` from the database, confirm it is **not** the token from the link, and confirm the stored value **does not work** as a token (SC-009). Asserting the configuration is not the same as proving the property
 
 **Checkpoint**: a forgotten password is recoverable. The hole feature 004 shipped with is closed.
 
@@ -96,7 +100,7 @@ the repository root.
 
 - [ ] T026 [US3] Set `emailAndPassword.revokeSessionsOnPasswordReset: true` in `frontend/lib/auth.ts` (FR-018). It is **off by default**: left alone, a reset changes the password and leaves every session working, which changes the key without changing the lock
 - [ ] T027 [P] [US3] Assert it in `frontend/tests/unit/auth-config.test.ts`. Another test guarding a default that would silently undo a requirement
-- [ ] T028 [US3] E2E test in `frontend/tests/e2e/reset-evicts.spec.ts` following walkthrough D: two browser contexts, reset from one, and the other's captured cookie is refused **by Go on :8080**. Checking it against the backend directly is what proves the eviction is real rather than a cleared cookie
+- [ ] T028 [US3] E2E test in `frontend/tests/e2e/reset-evicts.spec.ts` following walkthrough D: two browser contexts, reset from one, and the other's captured cookie is refused **by Go on :8080** (SC-005). Checking it against the backend directly is what proves the eviction is real rather than a cleared cookie
 - [ ] T029 [P] [US3] Confirm the old password is refused after a reset (FR-019, SC-006)
 
 **Checkpoint**: all three user stories work independently.
@@ -110,6 +114,7 @@ the repository root.
 - [ ] T032 Test in `frontend/tests/e2e/recovery-refusals.spec.ts` that expired, spent, altered and foreign tokens are refused **indistinguishably** — one test comparing status, body and timing across all four, rather than four tests each checking one (FR-017, SC-004)
 - [ ] T033 [P] Test that a reset request for an address with an account and one without are indistinguishable in status, body and timing (FR-008, SC-003)
 - [ ] T034 [P] Record recovery events — requested, sent, completed, refused — in `frontend/app/api/auth/[...all]/route.ts`, without tokens (FR-021). The existing handler already logs action and status without reading the body; confirm the recovery paths are covered
+- [ ] T034a Test that recovery introduces no new route to a session (FR-025, FR-026). After registering, verifying, requesting a reset and completing one, every session that exists must be a row the Go resolver accepts, and a request carrying an asserted identity instead of a session must still be refused. This feature adds two ways to become authenticated, which is when feature 004's guarantee is most likely to be undone by accident — and T021a deliberately adds one of them
 - [ ] T035 Verify no token reaches a log, following walkthrough G: grep the running stack's output for token-shaped strings and full links after exercising every flow (FR-016, SC-007). Inspect the output rather than assert the intention
 - [ ] T036 [P] Confirm recovery pages are keyboard-operable and announce failures to assistive technology, extending `frontend/tests/e2e/auth-accessibility.spec.ts` (SC-010)
 - [ ] T037 [P] Verify `frontend/lib/types/api.ts` is byte-identical — the OpenAPI contract does not change, and contracts/README.md says so rather than assuming it
@@ -133,6 +138,8 @@ Phase 1 Setup ──> Phase 2 Mail ──┬──> Phase 3 US1 ──> Phase 4 
 - **US2 depends on US1 in substance, not just sequence.** A reset link may only be sent to an
   address somebody has proven they control; that is why these are one feature.
 - **US3 depends on US2**: there is no reset to evict sessions from until reset exists.
+- **T021a depends on T026.** Signing in after a reset must happen after session revocation, or the
+  new session is revoked with the old ones. Ordered across phases deliberately.
 - T017 and T026 are one line each and are the two most consequential lines in the feature.
 
 ## Parallel Opportunities
@@ -140,9 +147,9 @@ Phase 1 Setup ──> Phase 2 Mail ──┬──> Phase 3 US1 ──> Phase 4 
 - **Setup**: T003 and T004 together, after T002.
 - **Foundational**: T007 alongside T005–T006.
 - **US1**: T012 and T014 alongside the page work; T015 after.
-- **US2**: T018, T021, T023 together; T024 and T025 after the pages exist.
+- **US2**: T018, T021, T023 together; T021b, T022b, T024 and T025 after the pages exist.
 - **US3**: T027 and T029 together.
-- **Polish**: T031, T033, T034, T036 and T037 together.
+- **Polish**: T031, T033, T034, T034a, T036 and T037 together.
 
 ## Implementation Strategy
 
