@@ -27,10 +27,10 @@ the repository root.
 
 ## Phase 1: Setup
 
-- [ ] T001 Add a `mailpit` service to `compose.yaml` on the dev profile: `axllent/mailpit`, SMTP on 1025 and the web interface on `${MAILPIT_PORT:-8025}`, in-memory storage. It holds messages and has no outbound path, so a message cannot escape by misconfiguration — that is what makes it safe to point a real send at locally (research Decision 6)
-- [ ] T002 Install `nodemailer` and `@types/nodemailer` in `frontend/package.json`. Remember feature 004's lesson: the container mounts `node_modules` as a named volume that shadows the image, so a new dependency needs an install inside the running container or a fresh volume
-- [ ] T003 [P] Add `MAIL_HOST`, `MAIL_PORT`, `MAIL_FROM` to the `frontend` service in `compose.yaml` and `compose.prod.yaml`. Production additionally needs `MAIL_USER` and `MAIL_PASSWORD`, both required with `${VAR:?}` — and check the full set is supplied to `make prod-build` and `make check`, which have now broken twice for exactly this reason
-- [ ] T004 [P] Document the new variables and Mailpit in `README.md`, including that development mail never leaves the machine
+- [X] T001 Add a `mailpit` service to `compose.yaml` on the dev profile: `axllent/mailpit`, SMTP on 1025 and the web interface on `${MAILPIT_PORT:-8025}`, in-memory storage. It holds messages and has no outbound path, so a message cannot escape by misconfiguration — that is what makes it safe to point a real send at locally (research Decision 6)
+- [X] T002 Install `nodemailer` and `@types/nodemailer` in `frontend/package.json`. Remember feature 004's lesson: the container mounts `node_modules` as a named volume that shadows the image, so a new dependency needs an install inside the running container or a fresh volume
+- [X] T003 [P] Add `MAIL_HOST`, `MAIL_PORT`, `MAIL_FROM` to the `frontend` service in `compose.yaml` and `compose.prod.yaml`. Production additionally needs `MAIL_USER` and `MAIL_PASSWORD`, both required with `${VAR:?}` — and check the full set is supplied to `make prod-build` and `make check`, which have now broken twice for exactly this reason
+- [X] T004 [P] Document the new variables and Mailpit in `README.md`, including that development mail never leaves the machine
 
 ---
 
@@ -40,10 +40,10 @@ the repository root.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T005 Write `frontend/lib/mail.ts` exposing exactly `send({ to, subject, text })`, backed by nodemailer. One interface so the transport is swappable and no call site learns which one is in use (contracts/README.md)
-- [ ] T006 Wire `lib/mail.ts` to Mailpit in development (FR-023) and to SMTP credentials in production (FR-022), from the variables added in T003
-- [ ] T007 [P] Unit test in `frontend/tests/unit/mail.test.ts`: `send` passes recipient, subject and body through, and surfaces a transport failure rather than swallowing it. A send that fails silently is indistinguishable from one that worked until somebody checks their inbox
-- [ ] T008 Verify by hand that a message sent from the running stack appears at <http://localhost:8025>, and that Mailpit publishes no outbound path (FR-023, SC-008), before building any flow on top of it
+- [X] T005 Write `frontend/lib/mail.ts` exposing exactly `send({ to, subject, text })`, backed by nodemailer. One interface so the transport is swappable and no call site learns which one is in use (contracts/README.md)
+- [X] T006 Wire `lib/mail.ts` to Mailpit in development (FR-023) and to SMTP credentials in production (FR-022), from the variables added in T003
+- [X] T007 [P] Unit test in `frontend/tests/unit/mail.test.ts`: `send` passes recipient, subject and body through, and surfaces a transport failure rather than swallowing it. A send that fails silently is indistinguishable from one that worked until somebody checks their inbox
+- [X] T008 Verify by hand that a message sent from the running stack appears at <http://localhost:8025>, and that Mailpit publishes no outbound path (FR-023, SC-008), before building any flow on top of it
 
 **Checkpoint**: mail works and is inspectable. User story work can begin.
 

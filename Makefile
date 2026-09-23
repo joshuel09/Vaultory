@@ -63,6 +63,8 @@ prod-build: ## Build the production images. Verification only — this is not a 
 	VAULTORY_SESSION_SECRET=build-only-secret-at-least-32-chars \
 	VAULTORY_AUTH_DB_PASSWORD=build-only \
 	VAULTORY_PUBLIC_URL=http://build-only.invalid \
+	MAIL_HOST=build-only.invalid MAIL_FROM=build-only@invalid \
+	MAIL_USER=build-only MAIL_PASSWORD=build-only \
 		docker compose -f compose.prod.yaml build
 	@echo
 	@docker image ls --format '{{.Repository}}:{{.Tag}}\t{{.Size}}' | grep '^vaultory-prod' || true
@@ -74,5 +76,7 @@ check: ## Validate the compose files without starting anything
 	VAULTORY_SESSION_SECRET=check-only-secret-at-least-32-characters \
 	VAULTORY_AUTH_DB_PASSWORD=check \
 	VAULTORY_PUBLIC_URL=http://check.invalid \
+	MAIL_HOST=check.invalid MAIL_FROM=check@invalid \
+	MAIL_USER=check MAIL_PASSWORD=check \
 		docker compose -f compose.prod.yaml config --quiet
 	@echo "compose.prod.yaml is valid"
