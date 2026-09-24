@@ -52,19 +52,18 @@ for (const scheme of ['dark', 'light'] as const) {
       await expect(page.getByTestId('no-results')).toBeVisible()
     })
 
-    test('the error state is legible', async ({ page }) => {
-      // Force the collection request to fail so the error boundary renders.
-      //
-      // By dropping the session, not by intercepting the request. The first page of a collection
-      // is fetched by a Server Component, so it never travels through the browser and page.route
-      // cannot see it — aborting '**/api/collectibles*' here changed nothing and the page rendered
-      // normally. Without a session that server-side fetch gets a 401, which is what the route
-      // throws on, and the error boundary renders for real.
-      await page.context().clearCookies()
-      await gotoReady(page, '/collection')
-      await expect(page.getByTestId('collection-error')).toBeVisible()
-      await expect(page.getByRole('button', { name: /try again/i })).toBeVisible()
-    })
+    /*
+     * The error-state appearance test was removed here, not lost.
+     *
+     * It provoked the error boundary by dropping the session — which no longer reaches it, because
+     * a missing session is now a redirect to sign-in rather than an error. That is the improvement
+     * feature 005 made, and the trick it depended on is gone with it.
+     *
+     * What the test actually asserted was that the component renders, never that any colour was
+     * legible. tests/unit/collection-error.test.tsx now asserts the property that makes it legible
+     * in both appearances: that it uses design tokens and hard-codes no colour. That is a stronger
+     * claim, and one that cannot pass by accident.
+     */
   })
 }
 

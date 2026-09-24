@@ -1,5 +1,7 @@
 import { betterAuth } from 'better-auth'
 import { Pool } from 'pg'
+import { send } from '@/lib/mail'
+import { verificationMessage } from '@/lib/messages'
 
 /**
  * Better Auth owns registration, sign-in, password hashing, and session issuance (issue #15).
@@ -31,6 +33,42 @@ export const auth = betterAuth({
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean),
+  /*
+   * Reset and verification tokens are stored hashed, not as issued (FR-015).
+   *
+   * Better Auth's default is 'plain', which writes the token itself into
+   * verification.identifier — so a copy of that table would be a set of working reset links to
+   * every account with an outstanding reset, and nothing about the running system would look
+   * wrong. Hashed, the stored value can confirm a token presented to it and cannot produce one.
+   *
+   * No salt, deliberately: the token is many bytes of randomness, so there is nothing to
+   * precompute against, and adding one would imply it needed stretching (research Decision 1).
+   */
+  verification: {
+    storeIdentifier: 'hashed',
+  },
+  emailVerification: {
+    sendOnSignUp: true,
+    // 24 hours. The default is one, and FR-003 allows a day — which is what somebody who
+    // registers at night and reads their mail the next morning needs (research Decision 5).
+    expiresIn: 60 * 60 * 24,
+    /*
+     * autoSignInAfterVerification is deliberately NOT set (FR-002a).
+     *
+     * It is opt-in, and turning it on is exactly the convenience a later contributor would add.
+     * A verification link lives 24 hours; treating it as a way in would make a forwarded or
+     * archived message access to somebody's vault for a day. Proving you can read an inbox is not
+     * proving you know a password. tests/unit/auth-config.test.ts guards this absence.
+     */
+    sendVerificationEmail: async ({ user, url }) => {
+      // Point the callback at Vaultory's own confirmation page. Better Auth defaults it to "/",
+      // which verifies the address correctly and then drops the collector on the landing page with
+      // no indication anything happened — found by following a real link rather than assuming.
+      const target = new URL(url)
+      target.searchParams.set('callbackURL', '/verify-email')
+      await send(verificationMessage(user.email, target.toString()))
+    },
+  },
   emailAndPassword: {
     enabled: true,
     // FR-004. Length only: a length rule is honest about what it buys, where a composition rule
