@@ -46,7 +46,9 @@ test: ## Run the backend suites (unit, integration, contract) against a throwawa
 	@$(COMPOSE) --profile test down --remove-orphans >/dev/null 2>&1 || true
 
 test-e2e: ## Run the browser suite. Requires `make up` first.
-	$(COMPOSE) --profile e2e run --rm e2e
+	@# Both profiles: the e2e container shares the frontend's network namespace, so that service
+	@# has to be part of the project Compose is resolving. It already had to be running anyway.
+	$(COMPOSE) --profile dev --profile e2e run --rm e2e
 
 shell-backend: ## Open a shell in the backend container
 	$(COMPOSE) --profile dev exec backend sh

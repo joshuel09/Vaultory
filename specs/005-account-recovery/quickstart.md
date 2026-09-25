@@ -96,7 +96,7 @@ Covers FR-008, SC-003.
 ```bash
 for a in "someone-who-exists@example.test" "nobody-at-all@example.test"; do
   curl -s -o /dev/null -w "$a -> %{http_code} %{time_total}s\n" \
-    -X POST http://localhost:3000/api/auth/forget-password \
+    -X POST http://localhost:3000/api/auth/request-password-reset \
     -H 'Content-Type: application/json' -H 'Origin: http://localhost:3000' \
     -d "{\"email\":\"$a\",\"redirectTo\":\"/reset-password\"}"
 done
@@ -119,7 +119,13 @@ docker compose --profile dev exec -T postgres psql -U vaultory -d vaultory_dev -
   -c 'select identifier from verification order by "createdAt" desc limit 1;'
 ```
 
-Expect a digest — **not** a value containing the token from the link in Mailpit. Then prove the
+Expect a digest — **not** a value containing the token from the link in Mailpit. Observed
+2026-09-25:
+
+```
+stored:     rVNC4Ap_ucStrqbCTF5A2SNkToyPTh-sDvwXLs5ZlTA
+link token: 49EYPuVZUYL6BJ50EJmDHlPl
+``` Then prove the
 stored form is useless on its own:
 
 ```

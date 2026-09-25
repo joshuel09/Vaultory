@@ -73,19 +73,19 @@ the repository root.
 
 **Independent Test**: Request a reset, follow the link, set a new password, sign in with it — and confirm the old one is refused.
 
-- [ ] T016 [US2] Enable reset in `frontend/lib/auth.ts`: `emailAndPassword.sendResetPassword` calling `lib/mail.ts`, and `resetPasswordTokenExpiresIn` left at its 1-hour default, which is already FR-010
+- [X] T016 [US2] Enable reset in `frontend/lib/auth.ts`: `emailAndPassword.sendResetPassword` calling `lib/mail.ts`, and `resetPasswordTokenExpiresIn` left at its 1-hour default, which is already FR-010
 - [X] T017 [US2] Set `verification.storeIdentifier: 'hashed'` in `frontend/lib/auth.ts` (FR-015). **This is the single most consequential line in the feature.** By default Better Auth stores the token itself, so a copy of the `verification` table would be a set of working reset links to every account with an outstanding reset — and nothing about the running system would look wrong
 - [X] T018 [P] [US2] Assert both of the above in `frontend/tests/unit/auth-config.test.ts`: storage is hashed and not plain, and the reset lifetime is an hour. A configuration that nothing checks is one a later edit can weaken unnoticed — the same reasoning that pinned the password hasher in feature 004
-- [ ] T019 [US2] Build `frontend/app/(auth)/forgot-password/page.tsx`: ask for an address, send a link only when it has an account (FR-009), and answer identically either way (FR-007, FR-008)
-- [ ] T020 [US2] Build `frontend/app/(auth)/reset-password/page.tsx`: accept the token, require a password meeting the same minimum as registration, and refuse without consuming the link (FR-013)
-- [ ] T021 [P] [US2] Link "forgotten your password" from `frontend/app/(auth)/sign-in/page.tsx`
-- [ ] T021a [US2] Sign the collector in once a reset completes (FR-014). Better Auth does **not** do this: `password.mjs` contains no `setSessionCookie` and no `createSession`, and no option changes it — the endpoint returns `{status:true}` and leaves them staring at a sign-in form immediately after proving their identity. Sign in with the password they just chose, which they demonstrably know because they typed it. This must run **after** `revokeSessionsOnPasswordReset` (T026), or the new session is deleted along with the old ones
-- [ ] T021b [P] [US2] Assert in `frontend/tests/e2e/reset-password.spec.ts` that the collector lands in their collection after a reset rather than on a sign-in form, and that the session they arrive with is accepted by **Go on :8080** (FR-014, FR-025). The second half is the point: signing in after a reset is legitimate only because it produces an ordinary session the backend verifies, and a shortcut that skipped that would look identical from the browser
-- [ ] T022 [US2] Mark the address verified when a reset completes, if it was not already (FR-014a, SC-012). Following a link sent to that address proves control of the inbox, which is what verification tests
-- [ ] T022a [US2] Invalidate any outstanding reset link when a new one is requested (FR-012). Better Auth does not: `forget-password` calls `createVerificationValue`, which inserts a row and deletes nothing, so with the FR-020 limit of three per hour **three working reset links can exist at once**, each for an hour. Delete prior `reset-password:` rows for that account first — `verification.value` holds the account id, so they are findable even though identifiers are hashed
-- [ ] T022b [P] [US2] Test in `frontend/tests/e2e/reset-password.spec.ts` that requesting a second reset makes the first link stop working (FR-012). Research Decision 3 narrowed single-use for *verification* tokens, where a replay does nothing; this is the other case, where a stale link is a way into a vault
-- [ ] T023 [P] [US2] Compose the reset message in `frontend/lib/messages.ts`, stating the one-hour lifetime and what to do if they did not request it (FR-024)
-- [ ] T024 [P] [US2] E2E test in `frontend/tests/e2e/reset-password.spec.ts` following quickstart walkthrough C, including the four refusals: short password, second use (FR-011), expired, altered. Also that the whole journey completes in a couple of minutes (SC-001)
+- [X] T019 [US2] Build `frontend/app/(auth)/forgot-password/page.tsx`: ask for an address, send a link only when it has an account (FR-009), and answer identically either way (FR-007, FR-008)
+- [X] T020 [US2] Build `frontend/app/(auth)/reset-password/page.tsx`: accept the token, require a password meeting the same minimum as registration, and refuse without consuming the link (FR-013)
+- [X] T021 [P] [US2] Link "forgotten your password" from `frontend/app/(auth)/sign-in/page.tsx`
+- [X] T021a [US2] Sign the collector in once a reset completes (FR-014). Better Auth does **not** do this: `password.mjs` contains no `setSessionCookie` and no `createSession`, and no option changes it — the endpoint returns `{status:true}` and leaves them staring at a sign-in form immediately after proving their identity. Sign in with the password they just chose, which they demonstrably know because they typed it. This must run **after** `revokeSessionsOnPasswordReset` (T026), or the new session is deleted along with the old ones
+- [X] T021b [P] [US2] Assert in `frontend/tests/e2e/reset-password.spec.ts` that the collector lands in their collection after a reset rather than on a sign-in form, and that the session they arrive with is accepted by **Go on :8080** (FR-014, FR-025). The second half is the point: signing in after a reset is legitimate only because it produces an ordinary session the backend verifies, and a shortcut that skipped that would look identical from the browser
+- [X] T022 [US2] Mark the address verified when a reset completes, if it was not already (FR-014a, SC-012). Following a link sent to that address proves control of the inbox, which is what verification tests
+- [X] T022a [US2] Invalidate any outstanding reset link when a new one is requested (FR-012). Better Auth does not: `forget-password` calls `createVerificationValue`, which inserts a row and deletes nothing, so with the FR-020 limit of three per hour **three working reset links can exist at once**, each for an hour. Delete prior `reset-password:` rows for that account first — `verification.value` holds the account id, so they are findable even though identifiers are hashed
+- [X] T022b [P] [US2] Test in `frontend/tests/e2e/reset-password.spec.ts` that requesting a second reset makes the first link stop working (FR-012). Research Decision 3 narrowed single-use for *verification* tokens, where a replay does nothing; this is the other case, where a stale link is a way into a vault
+- [X] T023 [P] [US2] Compose the reset message in `frontend/lib/messages.ts`, stating the one-hour lifetime and what to do if they did not request it (FR-024)
+- [X] T024 [P] [US2] E2E test in `frontend/tests/e2e/reset-password.spec.ts` following quickstart walkthrough C, including the four refusals: short password, second use (FR-011), expired, altered. Also that the whole journey completes in a couple of minutes (SC-001)
 - [ ] T025 [P] [US2] Integration test in `frontend/tests/e2e/reset-token-storage.spec.ts` following walkthrough F: request a reset, read `verification.identifier` from the database, confirm it is **not** the token from the link, and confirm the stored value **does not work** as a token (SC-009). Asserting the configuration is not the same as proving the property
 
 **Checkpoint**: a forgotten password is recoverable. The hole feature 004 shipped with is closed.
@@ -98,10 +98,10 @@ the repository root.
 
 **Independent Test**: Sign in on two browsers, reset from one, confirm the other can no longer reach the collection.
 
-- [ ] T026 [US3] Set `emailAndPassword.revokeSessionsOnPasswordReset: true` in `frontend/lib/auth.ts` (FR-018). It is **off by default**: left alone, a reset changes the password and leaves every session working, which changes the key without changing the lock
-- [ ] T027 [P] [US3] Assert it in `frontend/tests/unit/auth-config.test.ts`. Another test guarding a default that would silently undo a requirement
+- [X] T026 [US3] Set `emailAndPassword.revokeSessionsOnPasswordReset: true` in `frontend/lib/auth.ts` (FR-018). It is **off by default**: left alone, a reset changes the password and leaves every session working, which changes the key without changing the lock
+- [X] T027 [P] [US3] Assert it in `frontend/tests/unit/auth-config.test.ts`. Another test guarding a default that would silently undo a requirement
 - [ ] T028 [US3] E2E test in `frontend/tests/e2e/reset-evicts.spec.ts` following walkthrough D: two browser contexts, reset from one, and the other's captured cookie is refused **by Go on :8080** (SC-005). Checking it against the backend directly is what proves the eviction is real rather than a cleared cookie
-- [ ] T029 [P] [US3] Confirm the old password is refused after a reset (FR-019, SC-006)
+- [X] T029 [P] [US3] Confirm the old password is refused after a reset (FR-019, SC-006)
 
 **Checkpoint**: all three user stories work independently.
 
@@ -109,7 +109,7 @@ the repository root.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T030 Configure rate limits in `frontend/lib/auth.ts` for the recovery paths: three per hour each, verification and reset counted separately (FR-020). Feature 004's lesson applies — a path's own rule does not inherit the global ceiling, and Better Auth applies stricter built-in defaults to some paths, so each is stated explicitly
+- [X] T030 Configure rate limits in `frontend/lib/auth.ts` for the recovery paths: three per hour each, verification and reset counted separately (FR-020). Feature 004's lesson applies — a path's own rule does not inherit the global ceiling, and Better Auth applies stricter built-in defaults to some paths, so each is stated explicitly
 - [ ] T031 [P] E2E test following walkthrough H: the fourth verification request in an hour is refused **while a reset request for the same address still succeeds** (SC-011). Exhausting one limit must not block the other at the moment it is most needed
 - [ ] T032 Test in `frontend/tests/e2e/recovery-refusals.spec.ts` that expired, spent, altered and foreign tokens are refused **indistinguishably** — one test comparing status, body and timing across all four, rather than four tests each checking one (FR-017, SC-004)
 - [ ] T033 [P] Test that a reset request for an address with an account and one without are indistinguishable in status, body and timing (FR-008, SC-003)

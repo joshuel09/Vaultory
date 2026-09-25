@@ -170,6 +170,9 @@ services:
       # The browser suite creates an account per test from one container address. The production
       # default is 20 per fifteen minutes; development needs headroom for a full run.
       BETTER_AUTH_SIGNUP_MAX: ${BETTER_AUTH_SIGNUP_MAX:-1000}
+      # Three per hour in production (FR-020). The browser suite runs dozens of recovery journeys
+      # from one address, so development needs headroom; walkthrough H exercises the real limit.
+      BETTER_AUTH_RECOVERY_MAX: ${BETTER_AUTH_RECOVERY_MAX:-1000}
       # Mail. Captured by Mailpit locally and readable at http://localhost:${MAILPIT_PORT:-8025};
       # none of it leaves the machine.
       MAIL_HOST: mailpit
@@ -309,6 +312,14 @@ services:
     # library and the browsers in the image is a confusing class of failure.
     image: mcr.microsoft.com/playwright:v1.63.0-noble
     working_dir: /app
+    # Share the frontend's network namespace, so localhost:3000 in here is the app.
+    #
+    # Recovery mail carries links built from BETTER_AUTH_URL, and Better Auth redirects to
+    # absolute URLs on the same origin. Reaching the app as `frontend:3000` meant every one of
+    # those pointed at localhost — correct for a real collector, unreachable from a separate
+    # container. Sharing the namespace removes the mismatch instead of rewriting URLs in the
+    # tests, so the suite exercises exactly the links a collector receives.
+    network_mode: "service:frontend"
     # Chromium puts its shared renderer memory in /dev/shm, which Docker sizes at 64 MB by default.
     # A browser that runs out of it does not crash with a useful message — it hangs, and the suite
     # reports a wall of identical 30 s timeouts that look like application bugs. Playwright's own
@@ -316,7 +327,8 @@ services:
     ipc: host
     environment:
       # Reached by service name, not localhost: inside a container, localhost is the container.
-      VAULTORY_BASE_URL: http://frontend:3000
+      VAULTORY_BASE_URL: http://localhost:3000
+      MAILPIT_URL: http://mailpit:8025
       CI: "true"
       # Three browser projects times Playwright's default worker count is more concurrent Chromiums
       # than an 8 GB Docker VM can hold, and the run is killed for memory partway through. Capped

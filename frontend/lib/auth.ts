@@ -1,7 +1,8 @@
 import { betterAuth } from 'better-auth'
 import { Pool } from 'pg'
 import { send } from '@/lib/mail'
-import { verificationMessage } from '@/lib/messages'
+import { verificationMessage, resetMessage } from '@/lib/messages'
+import { createHash } from 'node:crypto'
 
 /**
  * Better Auth owns registration, sign-in, password hashing, and session issuance (issue #15).
@@ -13,8 +14,40 @@ import { verificationMessage } from '@/lib/messages'
  * The connection below uses a restricted role with no access to any collection table, so a bug
  * here cannot read a collection even though this process holds a database handle.
  */
+const pool = new Pool({ connectionString: process.env.BETTER_AUTH_DATABASE_URL })
+
+/**
+ * How Better Auth stores a token when `storeIdentifier: 'hashed'` is set: SHA-256 of the
+ * identifier, base64url, unpadded. Reproduced here so the row belonging to a *particular* token can
+ * be told apart from the rest without ever storing or comparing the token itself.
+ */
+function storedIdentifier(identifier: string): string {
+  return createHash('sha256').update(identifier, 'utf8').digest('base64url')
+}
+
+/**
+ * Invalidate every outstanding reset link for an account except the one just issued (FR-012).
+ *
+ * Better Auth does not do this: `forget-password` inserts a row and deletes nothing, so with the
+ * three-per-hour limit three working reset links could exist at once, each for an hour. A stale
+ * verification link is harmless — it sets a boolean that is already true — but a stale reset link
+ * is a way into a vault, which is why this one is implemented rather than narrowed away.
+ *
+ * `verification.value` holds the account id, so prior rows are findable even though identifiers
+ * are hashed.
+ */
+async function invalidatePreviousResets(userId: string, currentToken: string): Promise<void> {
+  await pool.query(
+    `DELETE FROM verification
+      WHERE value = $1
+        AND identifier <> $2
+        AND identifier NOT LIKE 'email-verification%'`,
+    [userId, storedIdentifier(`reset-password:${currentToken}`)],
+  )
+}
+
 export const auth = betterAuth({
-  database: new Pool({ connectionString: process.env.BETTER_AUTH_DATABASE_URL }),
+  database: pool,
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL,
   /*
@@ -71,6 +104,43 @@ export const auth = betterAuth({
   },
   emailAndPassword: {
     enabled: true,
+    /*
+     * Ending every other session is the difference between a reset and a rename (FR-018).
+     *
+     * This is off by default. Left alone, a reset changes the password and leaves every existing
+     * session working — so somebody resetting because they fear another person has their password
+     * would not evict them. Nothing is needed in the Go service for it: revocation deletes the
+     * session rows, and the resolver already requires a live row on every request.
+     */
+    revokeSessionsOnPasswordReset: true,
+    // One hour, which is already the default (FR-010). Deliberately shorter than a verification
+    // link, because a reset link is worth far more to whoever holds it.
+    resetPasswordTokenExpiresIn: 60 * 60,
+    sendResetPassword: async ({ user, url, token }) => {
+      await invalidatePreviousResets(user.id, token)
+      /*
+       * The callback carries the address as well as the token, so the reset page can sign the
+       * collector in once they have chosen a new password (FR-014). resetPassword returns only
+       * `{status:true}` — no user — so there is otherwise nothing to sign in *as*.
+       *
+       * The address is not a credential, and this link already carries the token, which is. It
+       * goes only to the inbox that owns the address.
+       */
+      const target = new URL(url)
+      target.searchParams.set('callbackURL', `/reset-password?email=${encodeURIComponent(user.email)}`)
+      await send(resetMessage(user.email, target.toString()))
+    },
+    /*
+     * Completing a reset verifies the address if it was not already (FR-014a). Following a link
+     * sent there proves control of the inbox, which is exactly what verification tests — asking
+     * them to prove it again would be asking for something they have just demonstrated.
+     */
+    onPasswordReset: async ({ user }) => {
+      await pool.query(
+        'UPDATE "user" SET "emailVerified" = true, "updatedAt" = now() WHERE id = $1 AND "emailVerified" = false',
+        [user.id],
+      )
+    },
     // FR-004. Length only: a length rule is honest about what it buys, where a composition rule
     // mostly teaches people to end passwords with "1!".
     minPasswordLength: 12,
@@ -107,6 +177,29 @@ export const auth = betterAuth({
         window: 15 * 60,
         max: Number(process.env.BETTER_AUTH_SIGNUP_MAX ?? 20),
       },
+      /*
+       * FR-020: three recovery messages per hour, verification and reset counted separately.
+       *
+       * Separately on purpose — somebody who has exhausted verification resends must still be
+       * able to request a reset, which is the moment they are most likely to need one.
+       *
+       * Stated explicitly rather than left to the global ceiling, for the reason feature 004
+       * learned the hard way: Better Auth applies its own stricter defaults to some paths, and the
+       * global setting does not override them. Here it silently throttled the browser suite until
+       * these rules were added.
+       */
+      '/request-password-reset': {
+        window: 60 * 60,
+        max: Number(process.env.BETTER_AUTH_RECOVERY_MAX ?? 3),
+      },
+      '/send-verification-email': {
+        window: 60 * 60,
+        max: Number(process.env.BETTER_AUTH_RECOVERY_MAX ?? 3),
+      },
+      // Following a link is not requesting a message. Refusing these would lock somebody out of a
+      // link they legitimately hold, so they are bounded generously rather than tightly.
+      '/reset-password': { window: 60 * 60, max: 60 },
+      '/verify-email': { window: 60 * 60, max: 60 },
     },
   },
   session: {

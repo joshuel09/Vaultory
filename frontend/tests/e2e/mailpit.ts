@@ -39,22 +39,15 @@ export async function latestMessageTo(
 }
 
 /**
- * The first link in a message body, pointed at wherever the suite reaches Vaultory.
+ * The first link in a message body, exactly as it was sent.
  *
- * Messages carry the public origin — `localhost:3000` in development — which is right for a real
- * collector and unreachable from inside the test container, where the app is `frontend:3000`.
- * Rewriting only the origin keeps the token and the callback exactly as they were sent.
+ * No rewriting: the e2e container shares the frontend's network namespace, so localhost is the app
+ * here too and the suite follows precisely the link a collector receives. An earlier version
+ * rewrote the origin, which worked and quietly hid the fact that Better Auth's own redirects point
+ * at the configured origin as well — those cannot be rewritten from a test.
  */
 export function linkIn(text: string): string {
   const match = /https?:\/\/\S+/.exec(text)
   if (!match) throw new Error(`No link found in the message:\n${text.slice(0, 400)}`)
-
-  const base = process.env.VAULTORY_BASE_URL
-  if (!base) return match[0]
-
-  const sent = new URL(match[0])
-  const reachable = new URL(base)
-  sent.protocol = reachable.protocol
-  sent.host = reachable.host
-  return sent.toString()
+  return match[0]
 }
