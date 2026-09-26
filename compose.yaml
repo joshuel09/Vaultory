@@ -154,6 +154,8 @@ services:
     depends_on:
       backend:
         condition: service_started
+      mailpit:
+        condition: service_healthy
     environment:
       # Inside the Compose network the backend is reachable by service name.
       VAULTORY_BACKEND_ORIGIN: http://backend:8080
@@ -168,6 +170,17 @@ services:
       # The browser suite creates an account per test from one container address. The production
       # default is 20 per fifteen minutes; development needs headroom for a full run.
       BETTER_AUTH_SIGNUP_MAX: ${BETTER_AUTH_SIGNUP_MAX:-1000}
+      # Three per hour in production (FR-020). The browser suite runs dozens of recovery journeys
+      # from one address, so development needs headroom; walkthrough H exercises the real limit.
+      BETTER_AUTH_RECOVERY_MAX: ${BETTER_AUTH_RECOVERY_MAX:-1000}
+      # Ten in production (FR-027). The browser suite signs in dozens of times from one address,
+      # and Better Auth keys limits by address rather than by account.
+      BETTER_AUTH_SIGNIN_MAX: ${BETTER_AUTH_SIGNIN_MAX:-1000}
+      # Mail. Captured by Mailpit locally and readable at http://localhost:${MAILPIT_PORT:-8025};
+      # none of it leaves the machine.
+      MAIL_HOST: mailpit
+      MAIL_PORT: "1025"
+      MAIL_FROM: ${MAIL_FROM:-Vaultory <no-reply@vaultory.local>}
       # A restricted role, never the backend's. It can reach Better Auth's own tables and nothing
       # else, so a bug here cannot read a collection (data-model.md, "Database privileges").
       BETTER_AUTH_DATABASE_URL: postgres://vaultory_auth:${VAULTORY_AUTH_DB_PASSWORD:-vaultory_auth_dev_password}@postgres:5432/${POSTGRES_DB:-vaultory_dev}?sslmode=disable
@@ -193,6 +206,29 @@ services:
             - tests/e2e/
         - action: rebuild
           path: ./frontend/package.json
+
+  # -------------------------------------------------------------------------------------------
+  # Mail, captured rather than sent.
+  #
+  # Mailpit accepts SMTP and shows every message it receives at a web interface. It holds them in
+  # memory and has no outbound path at all, so a message cannot escape by misconfiguration — there
+  # is nowhere for it to go. That is what makes it safe to point a real send at locally, and it is
+  # why development needs no third-party account (FR-023).
+  # -------------------------------------------------------------------------------------------
+  mailpit:
+    profiles: [dev]
+    image: axllent/mailpit:v1.21
+    environment:
+      MP_MAX_MESSAGES: 500
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    ports:
+      - "${MAILPIT_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
 
   # -------------------------------------------------------------------------------------------
   # Test database. Separate service, no published port, and nothing but tmpfs behind it.
@@ -279,6 +315,14 @@ services:
     # library and the browsers in the image is a confusing class of failure.
     image: mcr.microsoft.com/playwright:v1.63.0-noble
     working_dir: /app
+    # Share the frontend's network namespace, so localhost:3000 in here is the app.
+    #
+    # Recovery mail carries links built from BETTER_AUTH_URL, and Better Auth redirects to
+    # absolute URLs on the same origin. Reaching the app as `frontend:3000` meant every one of
+    # those pointed at localhost — correct for a real collector, unreachable from a separate
+    # container. Sharing the namespace removes the mismatch instead of rewriting URLs in the
+    # tests, so the suite exercises exactly the links a collector receives.
+    network_mode: "service:frontend"
     # Chromium puts its shared renderer memory in /dev/shm, which Docker sizes at 64 MB by default.
     # A browser that runs out of it does not crash with a useful message — it hangs, and the suite
     # reports a wall of identical 30 s timeouts that look like application bugs. Playwright's own
@@ -286,7 +330,8 @@ services:
     ipc: host
     environment:
       # Reached by service name, not localhost: inside a container, localhost is the container.
-      VAULTORY_BASE_URL: http://frontend:3000
+      VAULTORY_BASE_URL: http://localhost:3000
+      MAILPIT_URL: http://mailpit:8025
       CI: "true"
       # Three browser projects times Playwright's default worker count is more concurrent Chromiums
       # than an 8 GB Docker VM can hold, and the run is killed for memory partway through. Capped

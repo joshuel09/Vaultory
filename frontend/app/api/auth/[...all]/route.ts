@@ -1,5 +1,6 @@
 import { toNextJsHandler } from 'better-auth/next-js'
 import { auth } from '@/lib/auth'
+import { actionOf } from '@/lib/auth-logging'
 
 /**
  * Better Auth's own routes: sign-up, sign-in, sign-out, session.
@@ -25,7 +26,7 @@ const handlers = toNextJsHandler(auth)
 function withLogging(handler: (request: Request) => Promise<Response>) {
   return async (request: Request): Promise<Response> => {
     const started = Date.now()
-    const action = new URL(request.url).pathname.replace(/^\/api\/auth\//, '')
+    const action = actionOf(new URL(request.url).pathname)
     const response = await handler(request)
     console.info(
       JSON.stringify({

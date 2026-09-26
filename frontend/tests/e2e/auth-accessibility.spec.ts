@@ -11,6 +11,10 @@ import { gotoReady } from './support'
 for (const { page: path, submit } of [
   { page: '/register', submit: /create my vault/i },
   { page: '/sign-in', submit: /^sign in$/i },
+  // Recovery pages are held to the same standard (SC-010). Somebody locked out of their vault is
+  // already having a bad day; a form they cannot complete by keyboard, or an error they cannot
+  // hear, makes it worse at exactly the wrong moment.
+  { page: '/forgot-password', submit: /send me a link/i },
 ]) {
   test.describe(`${path}`, () => {
     test.beforeEach(async ({ page }) => page.context().clearCookies())
@@ -30,10 +34,13 @@ for (const { page: path, submit } of [
 
       await page.keyboard.type(`kbd-${Date.now()}@example.test`)
       await page.keyboard.press('Tab')
-      await page.keyboard.type('a-long-enough-password')
 
-      // The submit control must be reachable and operable by keyboard.
-      await page.keyboard.press('Tab')
+      // Some of these pages ask for a password and some do not — /forgot-password needs only an
+      // address. Follow whatever the page actually presents rather than assuming a shape.
+      if (await page.getByLabel(/^password/i).count()) {
+        await page.keyboard.type('a-long-enough-password')
+        await page.keyboard.press('Tab')
+      }
       const focused = await page.evaluate(() => document.activeElement?.textContent ?? '')
       expect(focused).toMatch(submit)
     })
