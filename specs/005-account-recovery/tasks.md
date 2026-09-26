@@ -120,7 +120,7 @@ the repository root.
 - [X] T037 [P] Verify `frontend/lib/types/api.ts` is byte-identical — the OpenAPI contract does not change, and contracts/README.md says so rather than assuming it
 - [X] T038 Amend `spec.md` to narrow FR-004 and FR-006 to reset tokens, with the reason. Verification tokens are stateless JWTs and neither requirement can hold for them; leaving them as written would read as a guarantee (plan.md Complexity Tracking)
 - [X] T039 Walk quickstart walkthroughs A–I and record the result of each, marking anything not observed as unverified rather than assumed
-- [ ] T040 Run the full suites — `make test`, and the browser suite per project — and record the outcome. Desktop, tablet and mobile were all green at the end of #22; a regression here is attributable
+- [X] T040 Run the full suites — `make test`, and the browser suite per project — and record the outcome. Desktop, tablet and mobile were all green at the end of #22; a regression here is attributable
 
 ---
 

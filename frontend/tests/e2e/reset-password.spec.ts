@@ -64,7 +64,12 @@ test.describe('resetting a forgotten password', () => {
     await expect(page.getByTestId('unverified-notice')).toHaveCount(0)
 
     // SC-006: the old password is refused, the new one works.
+    // Wait for sign-out to land before navigating. Without this the session can still exist when
+    // /sign-in is requested, which redirects a signed-in collector straight back to their
+    // collection — so the email field never appears and the failure looks like a missing control
+    // rather than a race. It passed on desktop and failed on the slower emulated devices.
     await page.getByTestId('sign-out').click()
+    await page.waitForURL(/\/$/)
     await gotoReady(page, '/sign-in')
     await page.getByLabel(/^email/i).fill(email)
     await page.getByLabel(/^password/i).fill(OLD)

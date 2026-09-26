@@ -219,6 +219,27 @@ redirects to sign-in, and the error state means what it says again.
 not `/forget-password`; and walkthrough G's grep matched the Next development server's own request
 log as well as ours, which is development-only and not something this feature controls.
 
+## Browser suite, 2026-09-26
+
+All 87 tests, per project. Run separately because three concurrent Chromium projects exhaust
+memory on this machine.
+
+| Project | Result |
+|---|---|
+| desktop | **87 passed, 0 failed** |
+| tablet | **77 passed, 10 flaky, 0 failed** |
+| mobile | **80 passed, 7 flaky, 0 failed** |
+
+The flakiness is contention on emulated devices at two workers — every one passes on retry, and the
+pattern matches what features 002 and 004 found on the same machine. It is reported rather than
+rounded down to "green".
+
+One genuine failure was fixed on the way, and it is worth recording because the error pointed
+somewhere misleading. A test clicked sign-out and navigated straight to the sign-in page; with the
+session still alive that page correctly redirects a signed-in collector to their collection, so the
+email field never appeared. It read as a missing control. Desktop passed on timing alone; the
+slower emulated devices did not.
+
 ## Acceptance summary
 
 | Walkthrough | Covers |
