@@ -86,7 +86,7 @@ the repository root.
 - [X] T022b [P] [US2] Test in `frontend/tests/e2e/reset-password.spec.ts` that requesting a second reset makes the first link stop working (FR-012). Research Decision 3 narrowed single-use for *verification* tokens, where a replay does nothing; this is the other case, where a stale link is a way into a vault
 - [X] T023 [P] [US2] Compose the reset message in `frontend/lib/messages.ts`, stating the one-hour lifetime and what to do if they did not request it (FR-024)
 - [X] T024 [P] [US2] E2E test in `frontend/tests/e2e/reset-password.spec.ts` following quickstart walkthrough C, including the four refusals: short password, second use (FR-011), expired, altered. Also that the whole journey completes in a couple of minutes (SC-001)
-- [ ] T025 [P] [US2] Integration test in `frontend/tests/e2e/reset-token-storage.spec.ts` following walkthrough F: request a reset, read `verification.identifier` from the database, confirm it is **not** the token from the link, and confirm the stored value **does not work** as a token (SC-009). Asserting the configuration is not the same as proving the property
+- [X] T025 [P] [US2] Integration test in `frontend/tests/e2e/reset-token-storage.spec.ts` following walkthrough F: request a reset, read `verification.identifier` from the database, confirm it is **not** the token from the link, and confirm the stored value **does not work** as a token (SC-009). Asserting the configuration is not the same as proving the property
 
 **Checkpoint**: a forgotten password is recoverable. The hole feature 004 shipped with is closed.
 
@@ -100,7 +100,7 @@ the repository root.
 
 - [X] T026 [US3] Set `emailAndPassword.revokeSessionsOnPasswordReset: true` in `frontend/lib/auth.ts` (FR-018). It is **off by default**: left alone, a reset changes the password and leaves every session working, which changes the key without changing the lock
 - [X] T027 [P] [US3] Assert it in `frontend/tests/unit/auth-config.test.ts`. Another test guarding a default that would silently undo a requirement
-- [ ] T028 [US3] E2E test in `frontend/tests/e2e/reset-evicts.spec.ts` following walkthrough D: two browser contexts, reset from one, and the other's captured cookie is refused **by Go on :8080** (SC-005). Checking it against the backend directly is what proves the eviction is real rather than a cleared cookie
+- [X] T028 [US3] E2E test in `frontend/tests/e2e/reset-evicts.spec.ts` following walkthrough D: two browser contexts, reset from one, and the other's captured cookie is refused **by Go on :8080** (SC-005). Checking it against the backend directly is what proves the eviction is real rather than a cleared cookie
 - [X] T029 [P] [US3] Confirm the old password is refused after a reset (FR-019, SC-006)
 
 **Checkpoint**: all three user stories work independently.
@@ -110,16 +110,16 @@ the repository root.
 ## Phase 6: Polish & Cross-Cutting Concerns
 
 - [X] T030 Configure rate limits in `frontend/lib/auth.ts` for the recovery paths: three per hour each, verification and reset counted separately (FR-020). Feature 004's lesson applies — a path's own rule does not inherit the global ceiling, and Better Auth applies stricter built-in defaults to some paths, so each is stated explicitly
-- [ ] T031 [P] E2E test following walkthrough H: the fourth verification request in an hour is refused **while a reset request for the same address still succeeds** (SC-011). Exhausting one limit must not block the other at the moment it is most needed
-- [ ] T032 Test in `frontend/tests/e2e/recovery-refusals.spec.ts` that expired, spent, altered and foreign tokens are refused **indistinguishably** — one test comparing status, body and timing across all four, rather than four tests each checking one (FR-017, SC-004)
-- [ ] T033 [P] Test that a reset request for an address with an account and one without are indistinguishable in status, body and timing (FR-008, SC-003)
-- [ ] T034 [P] Record recovery events — requested, sent, completed, refused — in `frontend/app/api/auth/[...all]/route.ts`, without tokens (FR-021). The existing handler already logs action and status without reading the body; confirm the recovery paths are covered
-- [ ] T034a Test that recovery introduces no new route to a session (FR-025, FR-026). After registering, verifying, requesting a reset and completing one, every session that exists must be a row the Go resolver accepts, and a request carrying an asserted identity instead of a session must still be refused. This feature adds two ways to become authenticated, which is when feature 004's guarantee is most likely to be undone by accident — and T021a deliberately adds one of them
-- [ ] T035 Verify no token reaches a log, following walkthrough G: grep the running stack's output for token-shaped strings and full links after exercising every flow (FR-016, SC-007). Inspect the output rather than assert the intention
-- [ ] T036 [P] Confirm recovery pages are keyboard-operable and announce failures to assistive technology, extending `frontend/tests/e2e/auth-accessibility.spec.ts` (SC-010)
-- [ ] T037 [P] Verify `frontend/lib/types/api.ts` is byte-identical — the OpenAPI contract does not change, and contracts/README.md says so rather than assuming it
-- [ ] T038 Amend `spec.md` to narrow FR-004 and FR-006 to reset tokens, with the reason. Verification tokens are stateless JWTs and neither requirement can hold for them; leaving them as written would read as a guarantee (plan.md Complexity Tracking)
-- [ ] T039 Walk quickstart walkthroughs A–I and record the result of each, marking anything not observed as unverified rather than assumed
+- [X] T031 [P] E2E test following walkthrough H: the fourth verification request in an hour is refused **while a reset request for the same address still succeeds** (SC-011). Exhausting one limit must not block the other at the moment it is most needed
+- [X] T032 Test in `frontend/tests/e2e/recovery-refusals.spec.ts` that expired, spent, altered and foreign tokens are refused **indistinguishably** — one test comparing status, body and timing across all four, rather than four tests each checking one (FR-017, SC-004)
+- [X] T033 [P] Test that a reset request for an address with an account and one without are indistinguishable in status, body and timing (FR-008, SC-003)
+- [X] T034 [P] Record recovery events — requested, sent, completed, refused — in `frontend/app/api/auth/[...all]/route.ts`, without tokens (FR-021). The existing handler already logs action and status without reading the body; confirm the recovery paths are covered
+- [X] T034a Test that recovery introduces no new route to a session (FR-025, FR-026). After registering, verifying, requesting a reset and completing one, every session that exists must be a row the Go resolver accepts, and a request carrying an asserted identity instead of a session must still be refused. This feature adds two ways to become authenticated, which is when feature 004's guarantee is most likely to be undone by accident — and T021a deliberately adds one of them
+- [X] T035 Verify no token reaches a log, following walkthrough G: grep the running stack's output for token-shaped strings and full links after exercising every flow (FR-016, SC-007). Inspect the output rather than assert the intention
+- [X] T036 [P] Confirm recovery pages are keyboard-operable and announce failures to assistive technology, extending `frontend/tests/e2e/auth-accessibility.spec.ts` (SC-010)
+- [X] T037 [P] Verify `frontend/lib/types/api.ts` is byte-identical — the OpenAPI contract does not change, and contracts/README.md says so rather than assuming it
+- [X] T038 Amend `spec.md` to narrow FR-004 and FR-006 to reset tokens, with the reason. Verification tokens are stateless JWTs and neither requirement can hold for them; leaving them as written would read as a guarantee (plan.md Complexity Tracking)
+- [X] T039 Walk quickstart walkthroughs A–I and record the result of each, marking anything not observed as unverified rather than assumed
 - [ ] T040 Run the full suites — `make test`, and the browser suite per project — and record the outcome. Desktop, tablet and mobile were all green at the end of #22; a regression here is attributable
 
 ---

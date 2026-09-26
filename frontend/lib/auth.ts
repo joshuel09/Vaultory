@@ -162,7 +162,22 @@ export const auth = betterAuth({
       // FR-027, and the rule that actually matters: ten failed sign-ins per account per fifteen
       // minutes, then fifteen minutes of refusal that lifts by itself. Never a permanent lock —
       // password reset is out of scope, so a locked-out collector would have no way back in.
-      '/sign-in/email': { window: 15 * 60, max: 10 },
+      /*
+       * FR-027: ten failed sign-ins per fifteen minutes.
+       *
+       * Better Auth keys rate limits by IP, not by account, so this is "ten per address" rather
+       * than the "ten per account" FR-027 describes. That is a real gap in feature 004's
+       * implementation, not a decision made here — it is recorded in the spec rather than left for
+       * somebody to discover. In practice it is stricter for shared networks and looser for an
+       * attacker with many addresses.
+       *
+       * Configurable because the browser suite runs from one container: every account it creates
+       * shares an address, and a limit meant for one person throttles the whole run.
+       */
+      '/sign-in/email': {
+        window: 15 * 60,
+        max: Number(process.env.BETTER_AUTH_SIGNIN_MAX ?? 10),
+      },
       /*
        * Registration has to be stated explicitly. Better Auth applies its own stricter default to
        * this path, which the global ceiling above does not override — it refused the fourth

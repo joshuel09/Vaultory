@@ -32,6 +32,7 @@ it.
 - Q: FR-020 requires limiting recovery messages but names no number. What should the limit be? → A: 3 per address per hour, with verification and reset counted separately so exhausting one cannot block the other. The refusal lifts on its own and never becomes permanent.
 - Q: Does completing a password reset mark an unverified address as verified? → A: Yes. Following a link sent to that address proves control of the inbox, which is what verification tests — and the reset link is the shorter-lived, higher-bar of the two.
 - Q: What happens after a verification link is followed, often on a device with no session? → A: Confirm the address is verified, then send them onward — to their vault if they already have a session, to sign-in if not. Verification never grants access by itself.
+- Q: Can FR-004 and FR-006 hold for verification tokens? → A: No. They are self-contained and nothing is stored, so there is no spend to record and nothing to invalidate. Both narrow to reset links, where the consequence of a replay is account takeover rather than nothing. Decided during implementation; see plan.md Complexity Tracking.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -137,10 +138,18 @@ can no longer reach the collection.
   long enough that treating it as a way in would make a forwarded or archived message a way into a
   vault.
 - **FR-003**: A verification link MUST expire no more than 24 hours after it is issued.
-- **FR-004**: A verification link MUST be usable once. A second use MUST be refused.
+- **FR-004**: A **reset** link MUST be usable once; a second use MUST be refused (see FR-011). A
+  **verification** link is exempt, and this is a narrowing made during implementation rather than a
+  requirement quietly dropped. Verification tokens are self-contained and nothing is stored when
+  one is issued, so there is no record of a spend to keep. The consequence is specific and small: a
+  replayed verification link sets a boolean that is already true. The consequence for a reset link
+  would be account takeover, which is why that half is enforced.
 - **FR-005**: The system MUST show an unverified collector that their address is unverified, and
   MUST let them request the message again.
-- **FR-006**: Requesting a new verification link MUST invalidate any previous one for that account.
+- **FR-006**: Requesting a new **reset** link MUST invalidate any previous one for that account
+  (see FR-012). A previous **verification** link stays valid until it expires, for the same reason
+  as FR-004: nothing is stored to invalidate. A stale verification link grants nothing — it
+  re-confirms an address its holder has already proven they control.
 
 ### Resetting a password
 
@@ -262,5 +271,11 @@ collector is told, and can still add and browse collectibles.
   link is worth more to an attacker than a verification link. They are not derived from a stated
   requirement.
 - Messages are plain and transactional. There is no template system, no marketing, and no tracking.
+- **Rate limits are keyed by network address, not by account.** FR-027 in feature 004 describes
+  ten failed sign-ins *per account*; the library counts per address, so several collectors behind
+  one connection share a budget while an attacker with many addresses does not. Found while
+  building this feature, recorded rather than quietly accepted. It is stricter than specified for
+  shared networks and looser for a determined attacker, and correcting it is a change to feature
+  004 rather than to this one.
 - The architecture is unchanged from feature 004 and deliberately not restated here. Issue #15
   records it, and `plan.md` is where libraries, token storage, and mail transport belong.

@@ -44,7 +44,9 @@ describe('the authentication configuration', () => {
   // FR-027 is the per-account sign-in rule. The global ceiling is abuse protection and must stay
   // well clear of it, or ordinary use behind a shared address trips the wrong limit first.
   it('limits sign-in attempts per account, without throttling ordinary use', () => {
-    expect(source).toMatch(/'\/sign-in\/email':\s*\{[^}]*max:\s*10/s)
+    // The default is ten; the value is configurable so the browser suite, which signs in dozens
+    // of times from one address, is not throttled by a limit meant for one person.
+    expect(source).toMatch(/'\/sign-in\/email':\s*\{[\s\S]*?BETTER_AUTH_SIGNIN_MAX \?\? 10/)
     const globalMax = Number(/\n\s*max:\s*(\d+),/.exec(source)?.[1] ?? 0)
     expect(globalMax).toBeGreaterThan(500)
   })

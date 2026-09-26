@@ -173,6 +173,9 @@ services:
       # Three per hour in production (FR-020). The browser suite runs dozens of recovery journeys
       # from one address, so development needs headroom; walkthrough H exercises the real limit.
       BETTER_AUTH_RECOVERY_MAX: ${BETTER_AUTH_RECOVERY_MAX:-1000}
+      # Ten in production (FR-027). The browser suite signs in dozens of times from one address,
+      # and Better Auth keys limits by address rather than by account.
+      BETTER_AUTH_SIGNIN_MAX: ${BETTER_AUTH_SIGNIN_MAX:-1000}
       # Mail. Captured by Mailpit locally and readable at http://localhost:${MAILPIT_PORT:-8025};
       # none of it leaves the machine.
       MAIL_HOST: mailpit

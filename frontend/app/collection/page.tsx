@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
 import { CollectionGallery } from '@/components/collection/CollectionGallery'
 import { StatusFilter } from '@/components/collection/StatusFilter'
 import { EmptyCollection } from '@/components/collection/EmptyCollection'
@@ -30,8 +31,21 @@ async function fetchFirstPage(status: CollectionStatus | null): Promise<Collecti
     headers: cookieHeader ? { cookie: cookieHeader } : {},
     cache: 'no-store',
   })
+  if (response.status === 401) {
+    /*
+     * Not signed in — which is not the same as unreachable, and must not look like it.
+     *
+     * The middleware only checks that a session cookie is present, so a cookie that has been
+     * revoked gets this far: a collector whose password was reset on another device arrives here
+     * holding a cookie that Go no longer accepts. Without this they would see "your collection
+     * could not be loaded" and a Try again button that can never succeed — the exact state
+     * FR-022 exists to eliminate.
+     */
+    redirect('/sign-in?next=/collection')
+  }
   if (!response.ok) {
-    // Thrown so the route's error boundary renders the designed error state (FR-043).
+    // A genuine failure to reach the collection. Thrown so the route's error boundary renders the
+    // designed state (FR-043), which now means what it says.
     throw new Error(`collection request failed with ${response.status}`)
   }
   return (await response.json()) as CollectionPage

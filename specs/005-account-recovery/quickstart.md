@@ -146,8 +146,19 @@ make logs > /tmp/vaultory.log 2>&1 &   # then exercise walkthroughs A and C
 grep -cE "reset-password:|verify-email\?token=|[A-Za-z0-9_-]{32,}" /tmp/vaultory.log
 ```
 
-Expect no token and no full link. Recovery events should be recorded — requested, sent, completed,
-refused — with none of their contents (FR-021).
+Expect no token in Vaultory's own log lines — the `{"event":"auth",…}` entries. Recovery events
+are recorded there (requested, sent, completed, refused) with none of their contents (FR-021).
+
+**Observed 2026-09-26, and fixed.** The logger was putting tokens into the log itself: the action
+was taken straight from the path, so `/api/auth/reset-password/:token` became
+`"action":"reset-password/RWDXKO80ywIDmFMemzr2pXCd"`. Forty-five of them were in one run.
+`lib/auth-logging.ts` now keeps only lowercase word segments, and a unit test pins it.
+
+**One source remains, and it is not ours.** The Next.js development server logs every request URL,
+including `GET /reset-password?…&token=…`. That is development-only — a production build does not
+log request URLs — and it is worth being plain about the deeper point: a token carried in a URL is
+exposed to browser history, referrers, and any proxy along the way, whoever is logging. That is
+precisely why a reset link lives one hour and works once, rather than why it is safe.
 
 ---
 
@@ -174,6 +185,39 @@ and web ports, and that every message from walkthroughs A and C is readable at
 <http://localhost:8025>.
 
 ---
+
+## Results, 2026-09-26
+
+Walked against the running stack. Recorded, not assumed.
+
+| Walkthrough | Result |
+|---|---|
+| A — verify an address | **pass** — a real message arrives; the vault says unverified and offers a resend |
+| B — a verification link is not a way in | **pass** — zero session cookies, `/collection` still unreachable |
+| C — get back in after forgetting | **pass** — and the old password is refused afterwards |
+| D — a reset is an eviction | **pass** — the other device is redirected to sign-in, its cookie refused by Go |
+| E — requesting reveals nothing | **pass** — identical status and body for an address with an account and one without |
+| F — the stored token is not the token | **pass** — `rVNC4Ap_…` stored against `49EYPuVZ…` in the link |
+| G — no token reaches a log | **fixed, then pass** — see below |
+| H — rate limiting | **pass** — the fourth request is refused while a reset for the same address still succeeds |
+| I — mail stays on the machine | **pass** — Mailpit holds everything, publishes only SMTP and its web interface |
+
+### What walking them found
+
+**Walkthrough G failed the first time, and the leak was ours.** The auth logger took its action
+straight from the path, so `/api/auth/reset-password/:token` was logged as
+`"action":"reset-password/RWDXKO80ywIDmFMemzr2pXCd"` — forty-five tokens in one run. Fixed by
+keeping only lowercase word segments, as a whitelist rather than a redaction list, so the next
+dynamic segment is dropped without anyone remembering to. Three unit tests pin it.
+
+**Walkthrough D found a second one.** The middleware only checks that a session cookie is
+*present*, so a device whose session had been revoked sailed past it and met "your collection could
+not be loaded" — the exact misleading state FR-022 exists to remove. A 401 from the backend now
+redirects to sign-in, and the error state means what it says again.
+
+**Two corrections to these instructions themselves.** The endpoint is `/request-password-reset`,
+not `/forget-password`; and walkthrough G's grep matched the Next development server's own request
+log as well as ours, which is development-only and not something this feature controls.
 
 ## Acceptance summary
 
