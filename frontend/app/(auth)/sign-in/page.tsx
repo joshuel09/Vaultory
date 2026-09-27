@@ -29,6 +29,10 @@ export default async function SignInPage({
       lead="Your collection is where you left it."
       footer={
         <>
+          <Link href="/forgot-password" className="text-accent hover:underline">
+            Forgotten your password?
+          </Link>
+          <br />
           No vault yet?{' '}
           <Link href="/register" className="text-accent hover:underline">
             Create one

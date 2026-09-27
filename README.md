@@ -90,6 +90,8 @@ Full instructions, including every walkthrough that demonstrates the feature, ar
 | `VAULTORY_SESSION_SECRET` | backend, frontend | The same value feeds both. **At least 32 characters** — the service refuses to start below that, because this is the only input to the signature it verifies. Required explicitly in production |
 | `VAULTORY_AUTH_DB_PASSWORD` | frontend, provisioning | Password for the restricted `vaultory_auth` role. Required explicitly in production |
 | `VAULTORY_PUBLIC_URL` | frontend | The origin collectors reach Vaultory on. Production only |
+| `MAIL_HOST` / `MAIL_PORT` / `MAIL_FROM` | frontend | Where recovery mail is sent. Development points at Mailpit; production needs a real service |
+| `MAIL_USER` / `MAIL_PASSWORD` | frontend | SMTP credentials. Production only, and required explicitly |
 
 The frontend holds a database connection of its own, because the authentication library owns the
 account and session tables. It connects as `vaultory_auth`, a role with privileges on those tables
@@ -101,6 +103,18 @@ That role is created by a migration **without a password**, and given one at sta
 constitution forbids, and this repository is public. A `LOGIN` role with no password cannot
 authenticate, so a missed provisioning step stops the frontend connecting rather than leaving an
 open account.
+
+### Reading mail in development
+
+Vaultory sends verification and password-reset messages. Locally they go to **Mailpit**, which
+starts with the rest of the stack:
+
+```
+http://localhost:8025
+```
+
+Mailpit holds messages in memory and has no outbound path, so nothing you send while developing can
+reach a real inbox — not by accident and not by misconfiguration. No third-party account is needed.
 
 ### Becoming a collector
 

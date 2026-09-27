@@ -46,7 +46,9 @@ test: ## Run the backend suites (unit, integration, contract) against a throwawa
 	@$(COMPOSE) --profile test down --remove-orphans >/dev/null 2>&1 || true
 
 test-e2e: ## Run the browser suite. Requires `make up` first.
-	$(COMPOSE) --profile e2e run --rm e2e
+	@# Both profiles: the e2e container shares the frontend's network namespace, so that service
+	@# has to be part of the project Compose is resolving. It already had to be running anyway.
+	$(COMPOSE) --profile dev --profile e2e run --rm e2e
 
 shell-backend: ## Open a shell in the backend container
 	$(COMPOSE) --profile dev exec backend sh
@@ -63,6 +65,8 @@ prod-build: ## Build the production images. Verification only — this is not a 
 	VAULTORY_SESSION_SECRET=build-only-secret-at-least-32-chars \
 	VAULTORY_AUTH_DB_PASSWORD=build-only \
 	VAULTORY_PUBLIC_URL=http://build-only.invalid \
+	MAIL_HOST=build-only.invalid MAIL_FROM=build-only@invalid \
+	MAIL_USER=build-only MAIL_PASSWORD=build-only \
 		docker compose -f compose.prod.yaml build
 	@echo
 	@docker image ls --format '{{.Repository}}:{{.Tag}}\t{{.Size}}' | grep '^vaultory-prod' || true
@@ -74,5 +78,7 @@ check: ## Validate the compose files without starting anything
 	VAULTORY_SESSION_SECRET=check-only-secret-at-least-32-characters \
 	VAULTORY_AUTH_DB_PASSWORD=check \
 	VAULTORY_PUBLIC_URL=http://check.invalid \
+	MAIL_HOST=check.invalid MAIL_FROM=check@invalid \
+	MAIL_USER=check MAIL_PASSWORD=check \
 		docker compose -f compose.prod.yaml config --quiet
 	@echo "compose.prod.yaml is valid"

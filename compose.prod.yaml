@@ -122,6 +122,12 @@ services:
       BETTER_AUTH_TRUSTED_ORIGINS: ${BETTER_AUTH_TRUSTED_ORIGINS:-${VAULTORY_PUBLIC_URL}}
       # The restricted role, never the backend's.
       BETTER_AUTH_DATABASE_URL: postgres://vaultory_auth:${VAULTORY_AUTH_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-vaultory}?sslmode=disable
+      # Mail. A real service in production; there is no capture-and-inspect here.
+      MAIL_HOST: ${MAIL_HOST:?set MAIL_HOST, the SMTP host recovery mail is sent through}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_FROM: ${MAIL_FROM:?set MAIL_FROM, the address recovery mail is sent from}
+      MAIL_USER: ${MAIL_USER:?set MAIL_USER}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:?set MAIL_PASSWORD}
     ports:
       - "${VAULTORY_FRONTEND_PORT:-3000}:3000"
     restart: "no"

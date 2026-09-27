@@ -4,6 +4,11 @@ import { resolve } from 'node:path'
 
 const source = readFileSync(resolve(__dirname, '../../lib/auth.ts'), 'utf8')
 
+/** Drop comments, so an assertion about configuration is not satisfied or broken by prose. */
+function stripComments(code: string): string {
+  return code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+}
+
 /**
  * FR-005, and FR-010's sliding half.
  *
@@ -39,9 +44,43 @@ describe('the authentication configuration', () => {
   // FR-027 is the per-account sign-in rule. The global ceiling is abuse protection and must stay
   // well clear of it, or ordinary use behind a shared address trips the wrong limit first.
   it('limits sign-in attempts per account, without throttling ordinary use', () => {
-    expect(source).toMatch(/'\/sign-in\/email':\s*\{[^}]*max:\s*10/s)
+    // The default is ten; the value is configurable so the browser suite, which signs in dozens
+    // of times from one address, is not throttled by a limit meant for one person.
+    expect(source).toMatch(/'\/sign-in\/email':\s*\{[\s\S]*?BETTER_AUTH_SIGNIN_MAX \?\? 10/)
     const globalMax = Number(/\n\s*max:\s*(\d+),/.exec(source)?.[1] ?? 0)
     expect(globalMax).toBeGreaterThan(500)
+  })
+
+  /*
+   * FR-002a, and a test guarding an absence.
+   *
+   * autoSignInAfterVerification is opt-in, so leaving it out is correct — and "correct by
+   * omission" is the kind of thing a later edit undoes without anyone noticing, because adding it
+   * looks like an improvement. A verification link lives 24 hours; treating it as a way in would
+   * make a forwarded or archived message access to a vault for a day.
+   */
+  it('does not sign anyone in after verification', () => {
+    // Look for an assignment, not a mention: the configuration explains at length why this option
+    // is left out, and a blunter check would fail on its own comment.
+    const assigned = /autoSignInAfterVerification\s*:/.test(stripComments(source))
+    expect(assigned, 'autoSignInAfterVerification must not be set — FR-002a').toBe(false)
+  })
+
+  it('sends a verification message on sign-up, valid for a day', () => {
+    expect(source).toMatch(/sendOnSignUp:\s*true/)
+    expect(source).toMatch(/expiresIn:\s*60 \* 60 \* 24\b/)
+    expect(source).toMatch(/sendVerificationEmail:/)
+  })
+
+  /*
+   * FR-015, and the single most consequential line in this feature.
+   *
+   * Better Auth stores reset tokens plain by default, which makes a copy of the verification
+   * table a set of working reset links to every account with an outstanding reset.
+   */
+  it('stores recovery tokens hashed, never plain', () => {
+    expect(source).toMatch(/storeIdentifier:\s*'hashed'/)
+    expect(source).not.toMatch(/storeIdentifier:\s*'plain'/)
   })
 
   it('never hard-codes a secret', () => {

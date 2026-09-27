@@ -1,6 +1,7 @@
-import Link from 'next/link'
-import { SignOutButton } from '@/components/auth/SignOutButton'
-import { currentCollector } from '@/lib/session'
+import Link from "next/link";
+import { SignOutButton } from "@/components/auth/SignOutButton";
+import { currentCollector } from "@/lib/session";
+import { UnverifiedNotice } from "@/components/auth/UnverifiedNotice";
 
 /**
  * The bar across every vault page (FR-025).
@@ -10,38 +11,49 @@ import { currentCollector } from '@/lib/session'
  * so someone sharing a machine can tell at a glance.
  */
 export async function VaultHeader() {
-  const collector = await currentCollector()
+  const collector = await currentCollector();
 
   return (
-    <header className="border-b border-edge">
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
-        <Link href="/" className="text-sm font-semibold tracking-tight text-ink">
-          Vault<span className="text-accent">ory</span>
-        </Link>
+    <>
+      {collector && !collector.emailVerified && (
+        <UnverifiedNotice email={collector.email} />
+      )}
+      <header className="border-b border-edge">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
+          <Link
+            href="/"
+            className="text-sm font-semibold tracking-tight text-ink"
+          >
+            Vault<span className="text-accent">ory</span>
+          </Link>
 
-        {collector ? (
-          <div className="flex items-center gap-3">
+          {collector ? (
+            <div className="flex items-center gap-3">
+              <Link
+                href="/collection"
+                className="text-sm text-ink-muted transition-colors hover:text-ink"
+              >
+                My vault
+              </Link>
+              <span
+                data-testid="signed-in-as"
+                className="hidden max-w-[16rem] truncate text-xs text-ink-faint sm:inline"
+                title={collector.email}
+              >
+                {collector.email}
+              </span>
+              <SignOutButton />
+            </div>
+          ) : (
             <Link
-              href="/collection"
+              href="/sign-in"
               className="text-sm text-ink-muted transition-colors hover:text-ink"
             >
-              My vault
+              Sign in
             </Link>
-            <span
-              data-testid="signed-in-as"
-              className="hidden max-w-[16rem] truncate text-xs text-ink-faint sm:inline"
-              title={collector.email}
-            >
-              {collector.email}
-            </span>
-            <SignOutButton />
-          </div>
-        ) : (
-          <Link href="/sign-in" className="text-sm text-ink-muted transition-colors hover:text-ink">
-            Sign in
-          </Link>
-        )}
-      </div>
-    </header>
-  )
+          )}
+        </div>
+      </header>
+    </>
+  );
 }
