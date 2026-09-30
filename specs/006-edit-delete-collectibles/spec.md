@@ -18,6 +18,40 @@ Constraints that must survive from feature 001, and that editing makes easier to
 
 Architecture unchanged: Go owns business logic, validation, authorization and persistence; Next.js renders. The Go service verifies every session itself and never trusts an identity asserted by the frontend. The OpenAPI contract is the source of truth for the frontend/backend seam, so new operations belong in it and frontend types are generated from it rather than hand-written."
 
+## Clarifications
+
+### Session 2026-09-30
+
+- Q: When a collector saves an edit from a form they opened before that same collectible was already
+  changed, what should happen? (FR-027) → A: Refuse the save, tell the collector the collectible
+  changed since they opened it, and show them the current values so they can redo their change
+  deliberately. The collectible carries a version or last-changed marker that the save is checked
+  against. Last-write-wins is rejected: it is precisely the silent overwrite Principle IV forbids.
+  Field-by-field merging is rejected as well, because two collectors editing the same field leaves
+  it ambiguous and it needs per-field original values to be carried around.
+- Q: When a photograph stops being referenced, when should the stored image file itself be
+  destroyed? (FR-020) → A: The reference is removed immediately, so the photograph is unfetchable at
+  once; the file is destroyed straight after. A failure to destroy the file does not fail the
+  deletion or the edit — the leftover file is retried rather than abandoned. Making storage success
+  a condition of deletion would let a storage fault make a collectible undeletable, which is the
+  worse failure.
+- Q: Where does a collector start an edit, and where is deleting offered? → A: Editing is started
+  from the collectible's own entry in the gallery and happens on a dedicated editing screen, mirroring
+  the screen for adding. Deleting is offered on that editing screen only, never as an action on a
+  gallery entry, so deletion is never one stray click away while browsing. No separate read-only
+  detail view is introduced by this feature.
+- Q: A collector deletes a collectible that is already gone — a retry, a second tab, or an entry
+  deleted elsewhere. Is that an error? (FR-025, FR-029) → A: No. Deleting something that is not in
+  the collector's vault is answered as a success, whatever the reason it is absent, because the end
+  state the collector asked for already holds. Retry-safety is a rule of the system rather than a
+  convention the browser observes. Editing something that is no longer there is still reported as
+  not found, because there is nothing to show the collector.
+- Q: Should a deletion leave any record, given that this feature deliberately ships no undo and no
+  history? → A: Yes, server-side only: which collector, which collectible identifier, and when —
+  never the collectible's content, and never surfaced in the product. An irreversible operation with
+  no trace at all cannot be investigated when a collector reports something missing. This is an
+  operational record, not the in-product history that remains out of scope.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Correct a collectible already in my vault (Priority: P1)
@@ -106,8 +140,8 @@ deletion required an explicit confirmation step.
    by a double click, or a retry after a connection loss — **Then** the outcome is still a deleted
    collectible and the collector is not shown an error.
 6. **Given** a collectible that belongs to another collector, **When** a collector tries to delete it,
-   **Then** the request is reported as not found, the collectible is not deleted, and nothing in the
-   response distinguishes it from an identifier that never existed.
+   **Then** the collectible is not deleted, and the answer is exactly the answer given for an
+   identifier that never existed, revealing nothing about whether it exists.
 7. **Given** a deleted collectible had a photograph, **When** anyone including its former owner
    requests that photograph afterwards, **Then** it is not retrievable.
 
@@ -155,9 +189,11 @@ confirming the placeholder is shown in its place.
   two tabs, edits one, then saves the other from a form loaded before that change. The second save
   MUST be refused with a message explaining that the collectible changed since it was opened, rather
   than silently discarding the first edit (FR-027).
-- **A collectible is edited or deleted after it has already been deleted elsewhere.** The request is
-  reported as not found and the collector is returned to their gallery with an explanation, rather
-  than being shown a generic failure.
+- **A collectible is edited after it has already been deleted elsewhere.** The edit is reported as not
+  found and the collector is returned to their gallery with an explanation, rather than being shown a
+  generic failure.
+- **A collectible is deleted after it has already been deleted elsewhere.** Answered as a success
+  (FR-025): the collector asked for it to be gone and it is gone. No error is shown.
 - **Editing does not reorder the gallery.** A collectible edited today does not jump to the front of a
   gallery ordered by when collectibles were added (FR-028).
 - **A name is changed to only whitespace.** Treated as a missing name and refused, exactly as when
@@ -166,6 +202,9 @@ confirming the placeholder is shown in its place.
   name and a collection status, which is a valid collectible.
 - **A photograph upload succeeds but the save that would reference it fails.** The collectible keeps
   the photograph it already had, and the uploaded file is not left retrievable indefinitely.
+- **Destroying a photograph's file fails.** The deletion or edit still succeeds and the photograph is
+  still unfetchable, because the reference is already gone. The leftover file is retried rather than
+  abandoned, and the collector is shown no error (FR-020a).
 - **A collector deletes the last collectible in their vault.** The gallery shows the designed empty
   state rather than an empty grid.
 - **A collector deletes a collectible while a status filter is active.** The filtered view refreshes
@@ -180,7 +219,8 @@ confirming the placeholder is shown in its place.
 
 #### Opening a collectible for editing
 
-- **FR-001**: Collectors MUST be able to open a collectible from their own collection for editing.
+- **FR-001**: Collectors MUST be able to open a collectible for editing from that collectible's own
+  entry in their gallery, on a dedicated editing screen.
 - **FR-002**: System MUST present, when a collectible is opened for editing, the current stored value
   of every attribute that collectible has, including its collection status and its photograph.
 - **FR-003**: System MUST present attributes the collector never supplied as empty rather than as
@@ -226,8 +266,11 @@ confirming the placeholder is shown in its place.
   photograph.
 - **FR-019**: System MUST keep the existing photograph in place when a replacement is refused or the
   edit fails.
-- **FR-020**: System MUST make a photograph unretrievable, by any requester including its owner, once
-  the collectible referencing it has been deleted or the photograph has been replaced or removed.
+- **FR-020**: System MUST make a photograph unretrievable, by any requester including its owner, from
+  the moment the collectible referencing it is deleted or the photograph is replaced or removed.
+- **FR-020a**: System MUST destroy the stored image file once nothing references it, and MUST NOT make
+  the success of a deletion or an edit conditional on that file having been destroyed. A file that
+  could not be destroyed MUST be retried rather than abandoned.
 - **FR-021**: System MUST NOT allow a collectible to reference a photograph belonging to a different
   collector, and this MUST be prevented by the persistence layer itself rather than by application
   code alone.
@@ -235,25 +278,32 @@ confirming the placeholder is shown in its place.
 #### Deleting
 
 - **FR-022**: Collectors MUST be able to delete a collectible they own, permanently.
+- **FR-022a**: System MUST offer deleting from the screen where a collectible is being edited, and MUST
+  NOT offer it as an action on a collectible's entry in the gallery.
 - **FR-023**: System MUST require an explicit confirmation before deleting, which names the
   collectible being deleted and states that deletion cannot be undone; the destructive choice MUST NOT
   be the action taken by dismissing the confirmation or by pressing Enter on it.
 - **FR-024**: System MUST delete exactly the confirmed collectible and MUST NOT affect any other entry,
   including identical ones.
-- **FR-025**: System MUST treat a repeated deletion of the same collectible as having succeeded,
-  presenting no error to the collector.
+- **FR-025**: System MUST answer a deletion of a collectible that is not in the acting collector's
+  vault as a success — whether it never existed, was already deleted, or belongs to another collector
+  — so that a repeated or retried deletion is never an error, and MUST enforce this on the server
+  rather than relying on the browser to interpret a failure as success.
 - **FR-026**: System MUST remove a deleted collectible from the gallery, from every status filter, and
   from any subsequent retrieval of the collection.
 
 #### Not losing data
 
 - **FR-027**: System MUST refuse a save based on a version of the collectible that has since changed,
-  and MUST tell the collector that the collectible changed since they opened it, rather than
-  overwriting the newer values silently.
+  MUST tell the collector that the collectible changed since they opened it, and MUST show them the
+  collectible's current values, rather than overwriting the newer values silently.
+- **FR-027a**: System MUST carry, on every collectible, a marker that changes whenever the
+  collectible changes, and MUST check a submitted edit against the marker the collector was shown
+  when they opened it.
 - **FR-028**: System MUST NOT change a collectible's position in a gallery ordered by when its entries
   were added; editing a collectible MUST NOT move it.
-- **FR-029**: System MUST report an edit or deletion of a collectible that no longer exists as not
-  found, and MUST return the collector to a usable view of their collection.
+- **FR-029**: System MUST report an edit of a collectible that no longer exists as not found, and MUST
+  return the collector to a usable view of their collection.
 
 #### Ownership and privacy
 
@@ -283,11 +333,19 @@ confirming the placeholder is shown in its place.
 - **FR-039**: System MUST present editing and deletion legibly and usably on desktop, tablet, and
   mobile.
 
+#### Keeping a record of what was destroyed
+
+- **FR-040**: System MUST record, server-side, that a deletion occurred — which collector, which
+  collectible identifier, and when — and MUST NOT record the collectible's content in that record.
+- **FR-041**: System MUST NOT surface any such record in the product; it exists for operational
+  investigation, not as collector-visible history.
+
 ### Key Entities *(include if data involved)*
 
 - **Collectible**: An entry in one collector's vault, as defined in feature 001. This feature adds two
-  things to it: a record of when it was last changed, so a collector can be told their edit is based
-  on a stale view (FR-027), and the fact that it can now cease to exist.
+  things to it: a marker that changes whenever the collectible changes, so a collector can be told
+  their edit is based on a stale view rather than having it silently applied (FR-027, FR-027a), and
+  the fact that it can now cease to exist.
 - **Collectible photograph**: An uploaded image owned by a collector and referenced by at most one
   collectible. This feature makes the reference changeable and removable, and makes a photograph's
   lifetime end when the collectible referencing it is deleted or its reference replaced (FR-020).
@@ -301,9 +359,10 @@ confirming the placeholder is shown in its place.
 - **SC-001**: A collector can correct a single wrong attribute on a collectible in their gallery — for
   example a price or a status — and see the corrected value, in under 30 seconds and without leaving
   and re-entering any other value.
-- **SC-002**: 100% of attempts to open, edit, or delete a collectible belonging to another collector
-  are answered as not found, with no response distinguishing an existing collectible from a
-  non-existent one.
+- **SC-002**: 100% of attempts to open or edit a collectible belonging to another collector are
+  answered as not found, and 100% of attempts to delete one are answered exactly as a deletion of an
+  identifier that never existed. In neither case does the response distinguish an existing
+  collectible from a non-existent one, and in no case is the collectible changed or deleted.
 - **SC-003**: 0 collectibles are deleted without the collector having passed an explicit confirmation
   step that named the collectible.
 - **SC-004**: 100% of edits leave the collectible in the same gallery position it occupied before the
@@ -317,16 +376,19 @@ confirming the placeholder is shown in its place.
   saved, and exactly one entry, in 100% of cases.
 - **SC-008**: Every validation rule that rejects a value when adding a collectible rejects the same
   value when editing one, with no rule applying in only one of the two.
+- **SC-009**: 100% of deletions leave a server-side record identifying the collector, the collectible,
+  and the time; 0 such records contain the collectible's name, notes, or any other content.
+- **SC-010**: Repeating a deletion that has already succeeded produces a success and no error message,
+  in 100% of cases.
 
 ## Assumptions
 
-- **Editing is reached from the gallery.** A collector starts an edit from the collectible's own entry
-  in their gallery rather than from a separate management screen. Feature 001 did not build a
-  single-collectible view, so retrieving one collectible for editing is new work this feature
-  introduces.
-- **Deleting is reached from the same place as editing.** Delete is offered where a collectible is
-  being edited or viewed, not as an action on gallery entries themselves, so that deletion is never
-  one stray click away in a browsing context.
+- **Editing is reached from the gallery, on its own screen.** A collector starts an edit from the
+  collectible's own entry in their gallery, and edits on a dedicated screen mirroring the one for
+  adding (FR-001). Feature 001 did not build a single-collectible view, so retrieving one collectible
+  for editing is new work this feature introduces; no read-only detail view is added.
+- **Deleting is offered on the editing screen only** (FR-022a), not as an action on gallery entries,
+  so that deletion is never one stray click away in a browsing context.
 - **The confirmation is a dialog, not a typed phrase.** Naming the collectible, stating that deletion
   is permanent, and requiring a deliberate non-default action is proportionate for a single entry.
   Requiring the collector to type the collectible's name is the friction appropriate to bulk or
@@ -336,7 +398,9 @@ confirming the placeholder is shown in its place.
   edit, so a save from a stale view is refused and the collector is told (FR-027). Field-level merging
   is deliberately not attempted.
 - **Deletion is immediate and permanent.** There is no trash, no retention window, and no restore. A
-  collector who deletes something and wants it back must add it again.
+  collector who deletes something and wants it back must add it again. Because there is no undo, the
+  operation leaves a server-side record (FR-040) so that a collector reporting something missing can
+  be answered.
 - **The four collection statuses are unchanged** from feature 001, and this feature introduces no new
   status and no meaning attached to the order of status changes.
 - **Photograph rules are unchanged** from feature 001: JPEG, PNG and WebP, at most 10 MB, at most one
@@ -351,7 +415,9 @@ confirming the placeholder is shown in its place.
 
 - Undo of an edit or a deletion.
 - A trash, archive, or recycle bin holding deleted collectibles, and restoring from one.
-- Edit history, revision history, or an audit trail of who changed what and when.
+- Edit history, revision history, or a collector-visible audit trail of who changed what and when.
+  The server-side record of deletions required by FR-040 is an operational trace, not a product
+  feature, and holds no collection content.
 - Bulk editing and bulk deleting of multiple collectibles in one action.
 - Deleting a collector's entire account or vault.
 - Merging two entries a collector considers duplicates into one.

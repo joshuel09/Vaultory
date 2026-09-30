@@ -39,6 +39,13 @@
   dismiss or Enter action) and by the Assumptions entry that rules out a type-the-name gate.
 - Concurrent editing was resolved in the spec rather than deferred: the constitution's "MUST NOT be
   silently lost, overwritten" (Principle IV) rules out last-write-wins, so FR-027 refuses a stale
-  save. `/speckit-clarify` should confirm this reading before `/speckit-plan`, since it determines
-  whether a schema change is needed to carry a version.
+  save. Confirmed by `/speckit-clarify` on 2026-09-30, which also settled that the collectible carries
+  a change marker (FR-027a) — so this feature does need a schema change.
+- Re-validated after the 2026-09-30 clarification session (5 questions). Four items were already
+  passing but rested on Assumptions that are now requirements: the photograph file lifecycle
+  (FR-020a), the entry points for editing and deleting (FR-001, FR-022a), the answer to a repeated
+  deletion (FR-025, which previously contradicted FR-029), and the server-side record of deletions
+  (FR-040, FR-041). The FR-025/FR-029 contradiction is the one item that would have failed
+  "Requirements are testable and unambiguous" had it been caught before; it is resolved rather than
+  carried into planning.
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`.
