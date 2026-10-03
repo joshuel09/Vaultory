@@ -69,8 +69,8 @@ a story, and the reason matters:
 - [ ] T008 Add `Version int` to `Collectible` in `backend/internal/domain/collectible/collectible.go`
 - [ ] T009 Extract the per-field rules from `Draft.Validate` into a shared routine in `backend/internal/domain/collectible/collectible.go`, leaving `Draft.Validate` responsible only for the submission key plus that routine
 - [ ] T010 Create `backend/internal/domain/collectible/edit.go` with `EditDraft` (the same fields, `ExpectedVersion` in place of `SubmissionKey`) and a `Validate` that calls the shared routine
-- [ ] T011 [P] Extend `backend/tests/unit/collectible_validation_test.go` so every existing rule is asserted against both `Draft` and `EditDraft` — a table driven from one case list, so a rule cannot be added to one path only (SC-008)
-- [ ] T012 [P] Add a unit test in `backend/tests/unit/collectible_validation_test.go` that `EditDraft` rejects a missing or zero `ExpectedVersion` and that `Draft` still requires a submission key
+- [ ] T011 [P] Extend `backend/tests/unit/collectible_validation_test.go` so every existing rule is asserted against both `Draft` and `EditDraft` — a table driven from one case list, so a rule cannot be added to one path only (SC-008) — and assert all sixteen status transitions are accepted, with none forbidden (FR-006)
+- [ ] T012 Add a unit test in `backend/tests/unit/collectible_validation_test.go` that `EditDraft` rejects a missing or zero `ExpectedVersion` and that `Draft` still requires a submission key
 
 ### Store
 
@@ -100,7 +100,7 @@ a story, and the reason matters:
 - [ ] T027 Create `frontend/app/collection/[id]/edit/page.tsx` as a Server Component that forwards the request's cookies to `VAULTORY_BACKEND_ORIGIN`, redirects to `/sign-in?next=…` on 401, and calls `notFound()` on 404 (research.md Decision 13)
 - [ ] T028 [P] Create `frontend/app/collection/[id]/edit/loading.tsx` and `frontend/app/collection/[id]/edit/not-found.tsx` as designed states matching `frontend/app/collection/loading.tsx`
 - [ ] T029 Add an edit affordance to `frontend/components/collection/CollectibleCard.tsx` linking to `/collection/{id}/edit`, carrying the active status filter as a `next` parameter
-- [ ] T030 [P] Add a contract test for `getCollectible` in `backend/tests/contract/edit_delete_test.go` — 200 for the owner with every field and a `version`, 404 for another collector, 404 for a random UUID, byte-identical bodies for the last two
+- [ ] T030 [P] Add a contract test for `getCollectible` in `backend/tests/contract/edit_delete_test.go` — 200 for the owner with every field and a `version`, 404 for another collector, 404 for a random UUID, byte-identical bodies for the last two, and 401 with no collection content when no session is presented (FR-033)
 - [ ] T031 [P] Add an integration test in `backend/tests/integration/image_lifecycle_test.go` that `DrainImageDeletions` removes queued files and their rows, and that a failing store leaves the row for a later drain (FR-020a)
 
 **Checkpoint**: a collector can open any of their collectibles on an edit screen and see its values. Nothing can be changed yet.
@@ -120,14 +120,14 @@ status, reload. The new values show, there is still one entry, and it has not mo
 
 > Write these first and watch them fail.
 
-- [ ] T032 [P] [US1] Contract test for `editCollectible` in `backend/tests/contract/edit_delete_test.go` — 200 with the new version, 400 carrying every violation together, 404 for another collector's, 409 for a stale version
-- [ ] T033 [P] [US1] Integration test in `backend/tests/integration/edit_collectible_test.go` that an edit changes exactly one row, leaves identical siblings untouched, creates nothing, and raises `version` by one (FR-007, FR-008)
-- [ ] T034 [P] [US1] Integration test in `backend/tests/integration/edit_collectible_test.go` that every optional attribute can be cleared back to NULL, and that a cleared purchase price is NULL rather than `0.00` (FR-005)
+- [ ] T032 [P] [US1] Contract test for `editCollectible` in `backend/tests/contract/edit_delete_test.go` — 200 with the new version, 400 carrying every violation together, 404 for another collector's, 409 for a stale version, 401 with no session, and a collector id supplied in a header, body field or query parameter ignored entirely (FR-032, FR-033)
+- [ ] T033 [P] [US1] Integration test in `backend/tests/integration/edit_collectible_test.go` that an edit changes exactly one row, leaves identical siblings untouched, creates nothing, and raises `version` by one (FR-007, FR-008), and that an edit failing partway leaves the collectible exactly as it was — no field changed, no version bump (FR-009)
+- [ ] T034 [US1] Integration test in `backend/tests/integration/edit_collectible_test.go` that every optional attribute can be cleared back to NULL, and that a cleared purchase price is NULL rather than `0.00` (FR-005)
 - [ ] T035 [P] [US1] Integration test in `backend/tests/integration/version_conflict_test.go` that a second edit carrying the first's version is refused with the current collectible and writes nothing, and that two concurrent edits produce one winner and one refusal (FR-027)
 - [ ] T036 [P] [US1] Integration test in `backend/tests/integration/ownership_test.go` that reading and editing another collector's collectible both answer not-found, and that the response is identical to one for a non-existent id (FR-030, FR-031, SC-002)
 - [ ] T037 [P] [US1] Integration test in `backend/tests/integration/money_roundtrip_test.go` that reading a purchase price and saving it back unchanged leaves it byte-identical, across the amounts already covered for adding (FR-013)
 - [ ] T038 [P] [US1] Integration test in `backend/tests/integration/ordering_test.go` that a collectible edited after a later one was added keeps its gallery position (FR-028)
-- [ ] T039 [P] [US1] Integration test in `backend/tests/integration/edit_collectible_test.go` that an edit changing only the name, sending the current `imageId` back, keeps the photograph and does not queue its files (FR-018) — the sharpest edge in the contract
+- [ ] T039 [US1] Integration test in `backend/tests/integration/edit_collectible_test.go` that an edit changing only the name, sending the current `imageId` back, keeps the photograph and does not queue its files (FR-018) — the sharpest edge in the contract
 
 ### Implementation for User Story 1
 
@@ -139,9 +139,9 @@ status, reload. The new values show, there is still one entry, and it has not mo
 - [ ] T045 [US1] Add `handleEditCollectible` to `backend/internal/transport/httpapi/collectibles.go` and register `PUT /api/collectibles/{collectibleId}` in `backend/internal/transport/httpapi/server.go`
 - [ ] T046 [US1] Add `editCollectible(id, body)` to `frontend/lib/api/collectibles.ts`
 - [ ] T047 [US1] Teach `frontend/lib/api/errors.ts` to recognise `version_conflict` and expose the `current` collectible it carries
-- [ ] T048 [US1] Create `frontend/components/collection/EditCollectibleForm.tsx` wrapping `CollectibleForm`, holding the version, echoing the current `imageId` when the photograph is untouched, and returning through `safeRedirect` with a single `router.push` (research.md Decision 14)
+- [ ] T048 [US1] Create `frontend/components/collection/EditCollectibleForm.tsx` wrapping `CollectibleForm`, holding the version, echoing the current `imageId` when the photograph is untouched, and returning through `safeRedirect` with a single `router.push` (research.md Decision 14). It MUST refuse a second submission while one is in flight (FR-036): two `PUT`s carrying the same `expectedVersion` means the second comes back 409 and tells the collector the collectible changed since they opened it — about their own save
 - [ ] T049 [US1] Create `frontend/components/collection/VersionConflictNotice.tsx` — says the collectible changed, shows how it now reads, and offers to load the current values rather than silently replacing what the collector typed
-- [ ] T050 [P] [US1] Unit test `frontend/tests/unit/collectible-form.test.tsx` — initial values populate, clearing an optional field submits it as absent, field errors render against the right inputs, entered values survive a failed save (FR-035)
+- [ ] T050 [P] [US1] Unit test `frontend/tests/unit/collectible-form.test.tsx` — initial values populate and attributes never supplied render empty rather than defaulted (FR-003), clearing an optional field submits it as absent, field errors render against the right inputs, entered values survive a failed save (FR-035), and a double-clicked save issues exactly one request (FR-036)
 - [ ] T051 [P] [US1] End-to-end test `frontend/tests/e2e/edit-collectible.spec.ts` covering the independent test above plus a validation failure and recovery
 
 **Checkpoint**: a collection is maintainable. This is a shippable increment on its own.
@@ -158,11 +158,11 @@ Exactly one remains. Cancelling the confirmation deletes nothing.
 
 ### Tests for User Story 2
 
-- [ ] T052 [P] [US2] Contract test for `deleteCollectible` in `backend/tests/contract/edit_delete_test.go` — 204 when it existed, 204 when repeated, 204 for a random UUID, 204 for another collector's with nothing deleted, and identical responses throughout (FR-025, FR-031)
+- [ ] T052 [P] [US2] Contract test for `deleteCollectible` in `backend/tests/contract/edit_delete_test.go` — 204 when it existed, 204 when repeated, 204 for a random UUID, 204 for another collector's with nothing deleted, and identical responses throughout (FR-025, FR-031); plus 401 with no session and an asserted collector id ignored — the destructive route is the worst place for an unproven auth path, and its correct answer is a silent 204 (FR-032, FR-033)
 - [ ] T053 [P] [US2] Integration test in `backend/tests/integration/delete_collectible_test.go` that deleting removes exactly one row, leaves identical siblings untouched, and that the entry is absent from the gallery and from every status filter afterwards (FR-024, FR-026)
-- [ ] T054 [P] [US2] Integration test in `backend/tests/integration/delete_collectible_test.go` that deleting a collectible added within the idempotency window succeeds and cascades its submission row, and that replaying that add afterwards creates a new collectible rather than failing
+- [ ] T054 [US2] Integration test in `backend/tests/integration/delete_collectible_test.go` that deleting a collectible added within the idempotency window succeeds and cascades its submission row, and that replaying that add afterwards creates a new collectible rather than failing
 - [ ] T055 [P] [US2] Integration test in `backend/tests/integration/image_lifecycle_test.go` that deleting a collectible with a photograph removes the `collectible_images` row in the same transaction, queues both storage keys, and makes the rendition answer not-found immediately (FR-020)
-- [ ] T056 [P] [US2] Integration test in `backend/tests/integration/delete_collectible_test.go` that a deletion emits its record exactly once and only when a row was actually deleted, carrying identifiers and no collection content (FR-040, FR-041)
+- [ ] T056 [US2] Integration test in `backend/tests/integration/delete_collectible_test.go` that a deletion emits its record exactly once and only when a row was actually deleted, carrying identifiers and no collection content (FR-040, FR-041)
 
 ### Implementation for User Story 2
 
@@ -170,10 +170,10 @@ Exactly one remains. Cancelling the confirmation deletes nothing.
 - [ ] T058 [US2] Create `backend/internal/collection/delete_collectible.go` with `Service.Delete` — delete, emit the structured deletion event only when a row was removed, then drain a bounded batch (research.md Decision 8)
 - [ ] T059 [US2] Add `handleDeleteCollectible` to `backend/internal/transport/httpapi/collectibles.go` returning 204 in every case including a malformed id, and register `DELETE /api/collectibles/{collectibleId}` in `backend/internal/transport/httpapi/server.go`
 - [ ] T060 [US2] Add `deleteCollectible(id)` to `frontend/lib/api/collectibles.ts`
-- [ ] T061 [US2] Create `frontend/components/collection/DeleteCollectibleDialog.tsx` using a native `<dialog>` opened with `showModal()` — names the collectible, states that deletion cannot be undone, focuses Cancel on open, and makes the destructive button neither the autofocused control nor the dialog's default submit (FR-023, FR-037)
+- [ ] T061 [US2] Create `frontend/components/collection/DeleteCollectibleDialog.tsx` using a native `<dialog>` opened with `showModal()` — names the collectible, states that deletion cannot be undone, focuses Cancel on open, and makes the destructive button neither the autofocused control nor the dialog's default submit, and refuses a second confirmation while one is in flight (FR-023, FR-036, FR-037)
 - [ ] T062 [US2] Add the delete affordance to `frontend/components/collection/EditCollectibleForm.tsx` only, never to `CollectibleCard.tsx` (FR-022a)
-- [ ] T063 [P] [US2] Unit test `frontend/tests/unit/delete-dialog.test.tsx` — Escape closes without deleting, Enter on open closes without deleting, Cancel holds initial focus, the collectible's name appears in the dialog, focus returns to the opener on close
-- [ ] T064 [P] [US2] End-to-end test `frontend/tests/e2e/delete-collectible.spec.ts` covering the independent test, cancellation, deleting the last collectible into the empty state, and deleting while a status filter is active
+- [ ] T063 [P] [US2] Unit test `frontend/tests/unit/delete-dialog.test.tsx` — Escape closes without deleting, Enter on open closes without deleting, Cancel holds initial focus, the collectible's name appears in the dialog, focus returns to the opener on close, and a double-clicked confirm issues exactly one request (FR-036)
+- [ ] T064 [P] [US2] End-to-end test `frontend/tests/e2e/delete-collectible.spec.ts` covering the independent test, cancellation, deleting the last collectible into the empty state, deleting while a status filter is active, and that no gallery entry offers a delete control (FR-022a)
 
 **Checkpoint**: duplicates and unwanted entries can be removed. Feature 001's unrecoverable-duplicate defect class is closed.
 
@@ -190,7 +190,7 @@ new one and the old rendition URL answers not-found. Remove it and confirm the p
 ### Tests for User Story 3
 
 - [ ] T065 [P] [US3] Integration test in `backend/tests/integration/image_lifecycle_test.go` that replacing a photograph deletes the old image row, queues its files, leaves the new one intact, and makes only the old rendition answer not-found (FR-020)
-- [ ] T066 [P] [US3] Integration test in `backend/tests/integration/image_lifecycle_test.go` that omitting `imageId` sets `image_id` to NULL and releases the image, and that the collectible then renders without one (FR-017)
+- [ ] T066 [US3] Integration test in `backend/tests/integration/image_lifecycle_test.go` that omitting `imageId` sets `image_id` to NULL and releases the image, and that the collectible then renders without one (FR-017)
 - [ ] T067 [P] [US3] Integration test in `backend/tests/integration/image_ownership_constraint_test.go` that an edit referencing another collector's image is refused as an unknown image, in the same words as one that never existed, and that the composite foreign key refuses it even if the check is bypassed (FR-021, FR-031)
 - [ ] T068 [P] [US3] Integration test in `backend/tests/integration/edit_collectible_test.go` that a refused edit — a validation failure or a version conflict — leaves the existing photograph in place and queues nothing (FR-019)
 
@@ -212,8 +212,9 @@ new one and the old rendition URL answers not-found. Remove it and confirm the p
 - [ ] T075 [P] Add an integration test in `backend/tests/integration/query_count_test.go` that an edit and a delete each issue a bounded number of statements and introduce no per-entry query
 - [ ] T076 Update the Current features list in `CLAUDE.md` with feature 006 and its outcome
 - [ ] T077 Update `README.md` where it describes what a collector can do, so editing and deleting are not missing from the product description
-- [ ] T078 Run `make test` and `make test-e2e` in full and record genuine results, including any flakiness, rather than rounding to green
+- [ ] T078 Run every suite in full — `make test` (backend), `cd frontend && npm run test` (frontend units, which `make test` does not cover), and `make test-e2e` — and record genuine results, including any flakiness, rather than rounding to green
 - [ ] T079 Walk `specs/006-edit-delete-collectibles/quickstart.md` end to end against a running stack, including the curl scenarios for another collector's collectible
+- [ ] T080 Confirm the production build gates pass: `cd frontend && npm run build` and `make prod-build`. The constitution lists both as MUST before a feature is complete, and neither is reached by `make test`
 
 ---
 
@@ -227,7 +228,7 @@ new one and the old rendition URL answers not-found. Remove it and confirm the p
 - **Phase 3–5 (Stories)**: all depend on Phase 2. US1 is the MVP; US2 and US3 are independent of each
   other and of US1 once Phase 2 is done, because the image lifecycle and the edit screen they share
   are both foundational.
-- **Phase 6 (Polish)**: depends on whichever stories are being shipped.
+- **Phase 6 (Polish)**: depends on whichever stories are being shipped. T078, T079 and T080 are the quality gates and come last.
 
 ### Within Phase 2
 
@@ -248,7 +249,7 @@ Tests before implementation. Store before service before transport. Frontend aft
 - Every test task in a story phase is marked [P] — they touch different files and are written before
   the implementation they describe.
 - US2 and US3 can be built by different people at the same time once Phase 2 is done.
-- All of Phase 6 except T078 and T079, which need everything else finished.
+- All of Phase 6 except T078, T079 and T080, which need everything else finished.
 
 ---
 
@@ -306,4 +307,4 @@ specifically to catch it:
 - [P] means a different file and no dependency on an unfinished task.
 - Run the backend suites with `-p 1` by hand; the integration and contract packages share one database.
 - Commit per task or per logical group, and push at every checkpoint — a local commit is invisible.
-- 79 tasks: 4 setup, 27 foundational, 20 for US1, 13 for US2, 7 for US3, 8 polish.
+- 80 tasks: 4 setup, 27 foundational, 20 for US1, 13 for US2, 7 for US3, 9 polish.

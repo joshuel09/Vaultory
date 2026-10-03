@@ -192,8 +192,8 @@ paths:
       responses:
         '200':
           description: |
-            The edit was applied. The body is the collectible as it now stands, carrying its new
-            `version` — so a collector can edit again without reloading.
+            The edit was applied. The body is the collectible as it now stands, carrying the
+            `version` a subsequent edit must present as `expectedVersion`.
           content:
             application/json:
               schema:

@@ -60,7 +60,7 @@ never a JSON number (Principle IV). Every collection statement carries `collecto
 predicate. No 403 anywhere in the transport.
 
 **Scale/Scope**: Three new API operations, two migrations, one new frontend route, one form
-generalised, one dialog. Roughly 20 new or changed source files plus tests.
+generalised, one dialog. Roughly 30 new or changed source files plus tests.
 
 ## Constitution Check
 

@@ -297,8 +297,8 @@ confirming the placeholder is shown in its place.
 - **FR-027**: System MUST refuse a save based on a version of the collectible that has since changed,
   MUST tell the collector that the collectible changed since they opened it, and MUST show them the
   collectible's current values, rather than overwriting the newer values silently.
-- **FR-027a**: System MUST carry, on every collectible, a marker that changes whenever the
-  collectible changes, and MUST check a submitted edit against the marker the collector was shown
+- **FR-027a**: System MUST carry, on every collectible, a marker — a version — that changes whenever
+  the collectible changes, and MUST check a submitted edit against the marker the collector was shown
   when they opened it.
 - **FR-028**: System MUST NOT change a collectible's position in a gallery ordered by when its entries
   were added; editing a collectible MUST NOT move it.
