@@ -26,14 +26,15 @@ Using only `CONTRIBUTING.md`, answer: how does a new piece of work start, what i
 which stages does it go through, how does it land, and when may the stages be shortened?
 
 **Expected**: issue on the project board first → `<issue-number>-<summary>` branch → specify through
-implement → pull request with `Closes #N`; shortened only for changes with no behaviour change.
+review, with the pull request carrying `Closes #N`; shortened only for changes with no behaviour change.
 
 ## D — The six rules, from the guide alone (FR-005, FR-006, SC-002)
 
 Using only `CONTRIBUTING.md`, answer the six questions in the spec's User Story 2 test.
 
 **Expected**: all six correct, each with its reason, and the guide names the constitution as the
-authority with a working link.
+authority with a working link. Every rule labelled constitutional appears in the constitution; the
+three conventions link to the feature that decided them.
 
 ## E — No drift, no tooling, no secrets (FR-007, FR-009, FR-011, SC-004, SC-005)
 
@@ -44,5 +45,6 @@ grep -n -E 'go test|npm run|make ' CONTRIBUTING.md
 grep -n 'Current feature' README.md
 ```
 
-**Expected**: no output from any of them. Then read the guide's rules against
+**Expected**: no output from any of them. A match on `agent` in ordinary prose is read, not failed
+automatically. Then read the guide's rules against
 `.specify/memory/constitution.md`: no rule contradicts it.

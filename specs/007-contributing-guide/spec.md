@@ -106,8 +106,9 @@ each.
 - **FR-002**: The guide MUST describe the work lifecycle in order: issue on the project board first,
   branch named `<issue-number>-<short-summary>`, commits referencing the issue, pull request that
   closes the issue, merge only through a pull request — never directly to `main`.
-- **FR-003**: The guide MUST describe the specification cycle (specify → clarify → plan → tasks →
-  analyze → implement) and state that significant work begins from a written specification.
+- **FR-003**: The guide MUST describe the constitution's full development lifecycle — specify,
+  clarify, plan, tasks, analyze, implement, test, review — and state that significant work begins
+  from a written specification.
 - **FR-004**: The guide MUST state when the specification cycle may be shortened for trivial changes,
   and that an issue and branch are still required.
 - **FR-005**: The guide MUST state each non-negotiable rule with its reason: the backend owns business
@@ -116,12 +117,16 @@ each.
   document is the source of truth for the frontend/backend seam; schema changes ship as reversible
   migrations; secrets and credentials are never committed.
 - **FR-006**: The guide MUST name the constitution as the governing document, link to it, and state
-  that it takes precedence over the guide.
+  that it takes precedence over the guide. Each rule MUST be attributed to its actual source: rules
+  the constitution states are linked to it; project conventions established by earlier features
+  (not-found rather than forbidden, reversible migrations, generated frontend types) are labelled as
+  conventions and linked to where they were decided — never presented as constitutional.
 - **FR-007**: The guide MUST list the quality gates required before work is complete and link to the
   README for the commands, rather than duplicating them.
-- **FR-008**: The README MUST link to the guide from a prominent position, and its existing "Working
-  on it" section MUST be replaced by a short pointer to the guide, removing the stale "current
-  feature" reference.
+- **FR-008**: The README MUST link to the guide from a prominent position. Its existing "Working on
+  it" section MUST be replaced by a short pointer to the guide, removing the stale "current feature"
+  reference, and its "Governance" rules list MUST become a pointer to the constitution and the guide,
+  so the rules are stated in one place.
 - **FR-009**: The guide MUST be tool-neutral: it MUST NOT name, depend on, or require any specific
   assistant or agent tooling.
 - **FR-010**: The agent instruction files MUST remain untracked; this feature MUST NOT change their

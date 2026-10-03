@@ -28,8 +28,10 @@ None. The README edits depend on the guide existing (T001), not on any shared gr
   Vaultory project board, with a body saying what and why; branch `<issue-number>-<short-summary>` from
   `main`; commits reference `Refs #N`; pull request whose body ends `Closes #N`; never commit to `main`;
   split a task that outgrows one reviewable branch (FR-002)
-- [ ] T003 [US1] Write "The specification cycle" section of `CONTRIBUTING.md`: the six stages in
-  order with one line each on what the stage produces; that the spec directory under `specs/` is
+- [ ] T003 [US1] Write "The specification cycle" section of `CONTRIBUTING.md`: the constitution's
+  eight stages in order — specify, clarify, plan, tasks, analyze, implement, test, review — with one
+  line each on what the stage produces, test pointing to the quality gates (T009) and review to the
+  pull request; that the spec directory under `specs/` is
   numbered independently of the issue; and when the cycle may be shortened — changes with no behaviour
   change only, with the listed exclusions (authorization, money, schema, API contract, anything a
   collector could notice), still with issue, branch and pull request (FR-003, FR-004, research
@@ -48,13 +50,16 @@ None. The README edits depend on the guide existing (T001), not on any shared gr
 **Independent test**: quickstart walkthrough D.
 
 - [ ] T006 [US2] Write "Rules that are not negotiable" in `CONTRIBUTING.md`: one bold sentence and
-  one sentence of reason each, linking the constitution section it comes from — Go owns business
-  logic, validation, authorization and persistence (II, Backend); money is exact decimals, never
-  floating point (IV); another collector's resource returns 404, never 403, because a 403 confirms it
-  exists (IV); the OpenAPI contract is the source of truth for the seam and frontend types are
-  generated from it (III); schema changes ship as reversible migrations with up and down files in
-  `backend/migrations/` (Quality Gates, Database); secrets and credentials are never committed (IV)
-  (FR-005, research decision 4)
+  one sentence of reason each, in two groups attributed to their real source (FR-006).
+  **From the constitution**, linked to it: Go owns business logic, validation, authorization and
+  persistence (II, Backend); money is exact decimals, never floating point (IV); OpenAPI describes the
+  frontend/backend contract (III, API); schema changes ship as version-controlled migrations (IV,
+  Quality Gates); secrets and credentials are never committed (IV).
+  **Project conventions**, linked to where they were decided: another collector's resource returns
+  404, never 403, because a 403 confirms it exists (`specs/004-collector-authentication/spec.md`);
+  every migration has an up and a down file in `backend/migrations/` (`specs/001-add-browse-collectibles/research.md`);
+  frontend types are generated from `openapi.yaml`, never hand-written (`specs/001-add-browse-collectibles/plan.md`)
+  (FR-005, FR-006, research decision 4)
 - [ ] T007 [US2] Open the same section of `CONTRIBUTING.md` with the precedence statement: the
   constitution at `.specify/memory/constitution.md` governs and wins any conflict with this guide
   (FR-006)
@@ -85,6 +90,8 @@ None. The README edits depend on the guide existing (T001), not on any shared gr
   contradiction in the guide, never in the constitution (SC-004)
 - [ ] T012 Confirm `git ls-files CLAUDE.md AGENTS.md` prints nothing and `.gitignore` is unchanged
   (FR-010)
+- [ ] T013 After pushing, run quickstart walkthrough B on GitHub: the README links the guide in its
+  first screen, and the new issue and pull request forms both offer it (SC-003)
 
 ## Dependencies
 

@@ -31,15 +31,17 @@ the repository is already worked.
   branch, and a pull request. Anything a collector could notice, or anything touching authorization,
   money, schema, or the API contract, takes the full cycle.
 - **Rationale**: The constitution requires the cycle for *significant* features. Naming what is not
-  significant stops contributors either skipping it for real work or forcing a typo through six stages
+  significant stops contributors either skipping it for real work or forcing a typo through eight stages
   (FR-004).
 - **Alternatives considered**: always the full cycle — ceremony without value. Contributor's
   judgement alone — "significant" is exactly what people disagree about, so the boundary is listed.
 
 ## 4. How much of each rule to state
 
-- **Decision**: each non-negotiable rule is one bold sentence plus one sentence of reason, with a link
-  to the constitution section it comes from.
+- **Decision**: each non-negotiable rule is one bold sentence plus one sentence of reason, linked to
+  its real source. Three of the six are not in the constitution — 404 rather than 403, reversible
+  migrations, generated frontend types — and are labelled project conventions, linked to the feature
+  that decided them, so the guide never claims the constitution says something it does not.
 - **Rationale**: a rule without its reason gets argued with or worked around; a rule restated at full
   length drifts from its source (FR-005, FR-006).
 - **Alternatives considered**: linking to the constitution only — fails US2's independent test,
