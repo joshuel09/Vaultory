@@ -7,6 +7,9 @@ preorder, what they are still hunting, and what they have sold.
 The collection is presented as a visual gallery rather than an inventory table. That is the point
 of the product, and it is written into the project's constitution.
 
+**Contributing?** Start with [CONTRIBUTING.md](CONTRIBUTING.md): how work moves from issue to merge,
+and the rules that are not negotiable.
+
 ## Repository layout
 
 ```text
@@ -23,13 +26,8 @@ types are generated from that file; it is the single source of truth for the sea
 ## Governance
 
 `.specify/memory/constitution.md` defines the engineering rules this project works to, and
-supersedes informal convention where they conflict. The ones that shape the code most:
-
-- Go owns business logic, validation, authorization, and persistence. Next.js renders.
-- REST, described by OpenAPI. Breaking changes are deliberate and documented.
-- Monetary values are exact decimals, never floating point.
-- A collector's vault is private, enforced server-side.
-- Features begin with a written specification, and tasks trace back to its requirements.
+supersedes informal convention where they conflict. [CONTRIBUTING.md](CONTRIBUTING.md#rules-that-are-not-negotiable)
+summarises the ones that most often catch people out.
 
 ## Running it locally
 
@@ -182,11 +180,5 @@ The constitution requires all of these to pass before a feature is complete.
 
 ## Working on it
 
-This project uses [Spec Kit](https://github.com/github/spec-kit). Work starts from a specification
-rather than from code:
-
-`/speckit-specify` → `/speckit-clarify` → `/speckit-plan` → `/speckit-tasks` → `/speckit-analyze` →
-`/speckit-implement`
-
-Current feature: [001-add-browse-collectibles](specs/001-add-browse-collectibles/spec.md) — adding
-collectibles to a private vault and browsing them as a gallery.
+Work starts as an issue, happens on its own branch, follows the Spec Kit specification cycle, and
+lands through a pull request. [CONTRIBUTING.md](CONTRIBUTING.md) has the details.

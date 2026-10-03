@@ -9,7 +9,7 @@ as the check.
 
 ## Phase 1: Setup
 
-- [ ] T001 Create `CONTRIBUTING.md` at the repository root with a title, a one-paragraph purpose
+- [X] T001 Create `CONTRIBUTING.md` at the repository root with a title, a one-paragraph purpose
   ("how to work on Vaultory; the constitution governs, this guide summarises it"), and empty section
   headings: How work moves, The specification cycle, Rules that are not negotiable, Before you open a
   pull request (research decision 1)
@@ -24,11 +24,11 @@ None. The README edits depend on the guide existing (T001), not on any shared gr
 
 **Independent test**: quickstart walkthroughs A, B and C.
 
-- [ ] T002 [US1] Write the "How work moves" section of `CONTRIBUTING.md`: issue first, on the
+- [X] T002 [US1] Write the "How work moves" section of `CONTRIBUTING.md`: issue first, on the
   Vaultory project board, with a body saying what and why; branch `<issue-number>-<short-summary>` from
   `main`; commits reference `Refs #N`; pull request whose body ends `Closes #N`; never commit to `main`;
   split a task that outgrows one reviewable branch (FR-002)
-- [ ] T003 [US1] Write "The specification cycle" section of `CONTRIBUTING.md`: the constitution's
+- [X] T003 [US1] Write "The specification cycle" section of `CONTRIBUTING.md`: the constitution's
   eight stages in order — specify, clarify, plan, tasks, analyze, implement, test, review — with one
   line each on what the stage produces, test pointing to the quality gates (T009) and review to the
   pull request; that the spec directory under `specs/` is
@@ -36,9 +36,9 @@ None. The README edits depend on the guide existing (T001), not on any shared gr
   change only, with the listed exclusions (authorization, money, schema, API contract, anything a
   collector could notice), still with issue, branch and pull request (FR-003, FR-004, research
   decision 3)
-- [ ] T004 [P] [US1] In `README.md`, add one line directly under the opening description linking to
+- [X] T004 [P] [US1] In `README.md`, add one line directly under the opening description linking to
   `CONTRIBUTING.md` (FR-008, research decision 2)
-- [ ] T005 [US1] In `README.md`, replace the "Working on it" section with a two-sentence pointer
+- [X] T005 [US1] In `README.md`, replace the "Working on it" section with a two-sentence pointer
   to `CONTRIBUTING.md`, removing the stale "Current feature: 001" line (FR-008)
 
 **Checkpoint**: run quickstart A and C; B after push.
@@ -49,7 +49,7 @@ None. The README edits depend on the guide existing (T001), not on any shared gr
 
 **Independent test**: quickstart walkthrough D.
 
-- [ ] T006 [US2] Write "Rules that are not negotiable" in `CONTRIBUTING.md`: one bold sentence and
+- [X] T006 [US2] Write "Rules that are not negotiable" in `CONTRIBUTING.md`: one bold sentence and
   one sentence of reason each, in two groups attributed to their real source (FR-006).
   **From the constitution**, linked to it: Go owns business logic, validation, authorization and
   persistence (II, Backend); money is exact decimals, never floating point (IV); OpenAPI describes the
@@ -60,10 +60,10 @@ None. The README edits depend on the guide existing (T001), not on any shared gr
   every migration has an up and a down file in `backend/migrations/` (`specs/001-add-browse-collectibles/research.md`);
   frontend types are generated from `openapi.yaml`, never hand-written (`specs/001-add-browse-collectibles/plan.md`)
   (FR-005, FR-006, research decision 4)
-- [ ] T007 [US2] Open the same section of `CONTRIBUTING.md` with the precedence statement: the
+- [X] T007 [US2] Open the same section of `CONTRIBUTING.md` with the precedence statement: the
   constitution at `.specify/memory/constitution.md` governs and wins any conflict with this guide
   (FR-006)
-- [ ] T008 [US2] In `README.md`, shrink the "Governance" section to a pointer: the constitution
+- [X] T008 [US2] In `README.md`, shrink the "Governance" section to a pointer: the constitution
   governs, and `CONTRIBUTING.md` summarises the rules that most often catch people out — removing the
   duplicated rules list (SC-004, research decision 2)
 
@@ -75,7 +75,7 @@ None. The README edits depend on the guide existing (T001), not on any shared gr
 
 **Independent test**: a reader lists the gates and finds the commands via the README link.
 
-- [ ] T009 [US3] Write "Before you open a pull request" in `CONTRIBUTING.md`: the constitution's
+- [X] T009 [US3] Write "Before you open a pull request" in `CONTRIBUTING.md`: the constitution's
   quality gates (type checks, lint, backend tests, frontend tests, production build, OpenAPI updated
   for contract changes, migrations for schema changes, acceptance criteria verified) and a link to the
   README's Testing section for the commands — no commands copied (FR-007)
@@ -84,11 +84,11 @@ None. The README edits depend on the guide existing (T001), not on any shared gr
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [ ] T010 Run quickstart walkthrough E against `CONTRIBUTING.md` and `README.md`: no tool names, no
+- [X] T010 Run quickstart walkthrough E against `CONTRIBUTING.md` and `README.md`: no tool names, no
   secret-shaped values, no copied commands, no "Current feature" line (FR-009, FR-011, SC-004, SC-005)
-- [ ] T011 Read every rule in `CONTRIBUTING.md` against `.specify/memory/constitution.md`; fix any
+- [X] T011 Read every rule in `CONTRIBUTING.md` against `.specify/memory/constitution.md`; fix any
   contradiction in the guide, never in the constitution (SC-004)
-- [ ] T012 Confirm `git ls-files CLAUDE.md AGENTS.md` prints nothing and `.gitignore` is unchanged
+- [X] T012 Confirm `git ls-files CLAUDE.md AGENTS.md` prints nothing and `.gitignore` is unchanged
   (FR-010)
 - [ ] T013 After pushing, run quickstart walkthrough B on GitHub: the README links the guide in its
   first screen, and the new issue and pull request forms both offer it (SC-003)
