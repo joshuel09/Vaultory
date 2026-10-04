@@ -71,7 +71,11 @@ type imageRefResponse struct {
 }
 
 type collectibleResponse struct {
-	ID            string            `json:"id"`
+	ID string `json:"id"`
+	// Version is sent back as expectedVersion when editing. It appears on every collectible the
+	// API returns, including in the gallery, because there is one projection rather than a
+	// separate detail shape to drift from it (FR-027a).
+	Version       int               `json:"version"`
 	Name          string            `json:"name"`
 	Status        string            `json:"collectionStatus"`
 	Character     *string           `json:"character"`
@@ -113,6 +117,7 @@ func toCollectibleResponse(row postgres.Row) collectibleResponse {
 	c := row.Collectible
 	out := collectibleResponse{
 		ID:           c.ID.String(),
+		Version:      c.Version,
 		Name:         c.Name,
 		Status:       string(c.Status),
 		Character:    c.Character,

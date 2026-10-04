@@ -42,7 +42,7 @@ const collectibleColumns = `
 	c.id, c.collector_id, c.name, c.collection_status,
 	c."character", c.series, c.manufacturer, c.category, c.scale, c.edition,
 	c.purchase_price::text, c.purchase_date, c.release_date, c.notes,
-	c.image_id, i.rendition_key, c.created_at`
+	c.image_id, i.rendition_key, c.created_at, c.version`
 
 // Row is one collectible as stored, with just enough of its image to render a card. The rendition
 // arrives through a join in the same statement — there is no per-entry image lookup (no N+1).
@@ -64,7 +64,7 @@ func scanRow(s pgx.Row) (Row, error) {
 		&c.ID, &c.CollectorID, &c.Name, &c.Status,
 		&c.Character, &c.Series, &c.Manufacturer, &c.Category, &c.Scale, &c.Edition,
 		&priceText, &purchaseDate, &releaseDate, &c.Notes,
-		&c.ImageID, &renditionKey, &c.CreatedAt,
+		&c.ImageID, &renditionKey, &c.CreatedAt, &c.Version,
 	)
 	if err != nil {
 		return Row{}, err
@@ -212,6 +212,64 @@ func (s *Store) findBySubmissionKey(
 		return Row{}, false, fmt.Errorf("look up submission key: %w", err)
 	}
 	return row, true, nil
+}
+
+// Get reads one collectible belonging to this collector.
+//
+// collector_id is part of the WHERE clause rather than something checked afterwards, so there is
+// no moment at which this code holds another collector's row and has yet to decide what to do with
+// it. Absent and someone-else's are the same answer (FR-030, FR-031).
+func (s *Store) Get(ctx context.Context, collectorID, collectibleID uuid.UUID) (Row, error) {
+	row, err := scanRow(s.pool.QueryRow(ctx, `
+		SELECT `+collectibleColumns+`
+		FROM collectibles c
+		LEFT JOIN collectible_images i ON i.id = c.image_id AND i.collector_id = c.collector_id
+		WHERE c.id = $1 AND c.collector_id = $2`, collectibleID, collectorID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Row{}, ErrNotFound
+	}
+	if err != nil {
+		return Row{}, fmt.Errorf("get collectible: %w", err)
+	}
+	return row, nil
+}
+
+// releaseImage deletes an image row and queues its files for removal, inside the caller's
+// transaction.
+//
+// Deleting the row is what makes the image unfetchable, and it is the whole of the privacy
+// guarantee (FR-020). A rendition is authorized against collectible_images.collector_id on its
+// own — it has to be, because the upload preview fetches one before any collectible references it
+// — so merely unlinking an image would leave it readable by its owner indefinitely.
+//
+// The files are a separate matter. They are queued rather than deleted here because a transaction
+// cannot roll back a filesystem, and because a storage fault must never be able to stop a
+// collector deleting something (FR-020a, research.md Decisions 4 and 5).
+func releaseImage(ctx context.Context, tx pgx.Tx, collectorID, imageID uuid.UUID) error {
+	var originalKey, renditionKey string
+	err := tx.QueryRow(ctx, `
+		DELETE FROM collectible_images
+		WHERE id = $1 AND collector_id = $2
+		RETURNING original_key, rendition_key`, imageID, collectorID,
+	).Scan(&originalKey, &renditionKey)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Already gone. Nothing to queue, and nothing wrong — a concurrent edit may have released
+		// it first, and the end state is the one we wanted.
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("delete image row: %w", err)
+	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO pending_image_deletions (image_id, collector_id, original_key, rendition_key)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (image_id) DO NOTHING`,
+		imageID, collectorID, originalKey, renditionKey)
+	if err != nil {
+		return fmt.Errorf("queue image deletion: %w", err)
+	}
+	return nil
 }
 
 // Page is one page of a collection.

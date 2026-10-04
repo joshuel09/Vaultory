@@ -74,22 +74,22 @@ a story, and the reason matters:
 
 ### Store
 
-- [ ] T013 Add `c.version` to `collectibleColumns` and to `scanRow` in `backend/internal/store/postgres/collectibles.go`
-- [ ] T014 Add `Store.Get(ctx, collectorID, collectibleID) (Row, error)` to `backend/internal/store/postgres/collectibles.go`, carrying `collector_id` as a predicate and returning `ErrNotFound` for absent or another collector's
-- [ ] T015 Create `backend/internal/store/postgres/image_deletions.go` with `QueueImageDeletion` (inside a caller's transaction), `PendingImageDeletions(limit)` and `ForgetImageDeletion`
-- [ ] T016 Add an unexported `releaseImage(ctx, tx, collectorID, imageID)` helper to `backend/internal/store/postgres/collectibles.go` that deletes the `collectible_images` row and queues its storage keys in one transaction
+- [X] T013 Add `c.version` to `collectibleColumns` and to `scanRow` in `backend/internal/store/postgres/collectibles.go`
+- [X] T014 Add `Store.Get(ctx, collectorID, collectibleID) (Row, error)` to `backend/internal/store/postgres/collectibles.go`, carrying `collector_id` as a predicate and returning `ErrNotFound` for absent or another collector's
+- [X] T015 Create `backend/internal/store/postgres/image_deletions.go` with `QueueImageDeletion` (inside a caller's transaction), `PendingImageDeletions(limit)` and `ForgetImageDeletion`
+- [X] T016 Add an unexported `releaseImage(ctx, tx, collectorID, imageID)` helper to `backend/internal/store/postgres/collectibles.go` that deletes the `collectible_images` row and queues its storage keys in one transaction
 
 ### Service
 
-- [ ] T017 Create `backend/internal/collection/get_collectible.go` with `Service.Get`
-- [ ] T018 Create `backend/internal/collection/image_cleanup.go` with `Service.DrainImageDeletions(ctx, limit)` — delete each file, treat an already-absent file as deleted, remove the queue row, and leave a row behind on failure
-- [ ] T019 Call `DrainImageDeletions` once at start-up in `backend/cmd/vaultory-api/main.go`, logging the outcome and never failing start-up on it
+- [X] T017 Create `backend/internal/collection/get_collectible.go` with `Service.Get`
+- [X] T018 Create `backend/internal/collection/image_cleanup.go` with `Service.DrainImageDeletions(ctx, limit)` — delete each file, treat an already-absent file as deleted, remove the queue row, and leave a row behind on failure
+- [X] T019 Call `DrainImageDeletions` once at start-up in `backend/cmd/vaultory-api/main.go`, logging the outcome and never failing start-up on it
 
 ### Transport
 
-- [ ] T020 Add `Version int` to `collectibleResponse` and populate it in `toCollectibleResponse` in `backend/internal/transport/httpapi/dto.go`
-- [ ] T021 Add `handleGetCollectible` to `backend/internal/transport/httpapi/collectibles.go` — parse the id, 404 on a malformed one, 404 on `ErrNotFound`
-- [ ] T022 Register `GET /api/collectibles/{collectibleId}` in `backend/internal/transport/httpapi/server.go` and update the comment that currently says there is no collectible-detail endpoint
+- [X] T020 Add `Version int` to `collectibleResponse` and populate it in `toCollectibleResponse` in `backend/internal/transport/httpapi/dto.go`
+- [X] T021 Add `handleGetCollectible` to `backend/internal/transport/httpapi/collectibles.go` — parse the id, 404 on a malformed one, 404 on `ErrNotFound`
+- [X] T022 Register `GET /api/collectibles/{collectibleId}` in `backend/internal/transport/httpapi/server.go` and update the comment that currently says there is no collectible-detail endpoint
 
 ### Frontend shell
 

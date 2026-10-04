@@ -8,9 +8,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"github.com/joshuel09/vaultory/backend/internal/collection"
 	"github.com/joshuel09/vaultory/backend/internal/domain/collectible"
 	"github.com/joshuel09/vaultory/backend/internal/identity"
+	"github.com/joshuel09/vaultory/backend/internal/store/postgres"
 )
 
 // maxJSONBody bounds a collectible submission. Generous for the largest legitimate one — a 2000
@@ -121,4 +124,29 @@ func (s *Server) handleListCollectibles(w http.ResponseWriter, r *http.Request, 
 		resp.NextCursor = &page.NextCursor
 	}
 	WriteJSON(w, http.StatusOK, resp)
+}
+
+// handleGetCollectible reads one of the acting collector's collectibles, which is what the edit
+// screen is filled from (FR-001, FR-002).
+func (s *Server) handleGetCollectible(w http.ResponseWriter, r *http.Request, collector identity.CollectorID) {
+	id, err := uuid.Parse(r.PathValue("collectibleId"))
+	if err != nil {
+		// A malformed identifier gets the same answer as one that does not exist, so probing with
+		// rubbish learns nothing either (FR-031).
+		WriteNotFound(w)
+		return
+	}
+
+	row, err := s.service.Get(r.Context(), collector, id)
+	if errors.Is(err, postgres.ErrNotFound) {
+		// 404, never 403. A 403 would confirm the collectible exists and belongs to someone, which
+		// is exactly what a collector's private vault must not disclose (FR-031).
+		WriteNotFound(w)
+		return
+	}
+	if err != nil {
+		WriteInternal(w, r, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, toCollectibleResponse(row))
 }

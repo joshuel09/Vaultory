@@ -23,10 +23,14 @@ func NewServer(service *collection.Service, resolver identity.Resolver) *Server 
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 
-	// The four operations in contracts/openapi.yaml. Nothing else is exposed: there is no
-	// collectible-detail endpoint because the spec is gallery-only.
+	// The operations in contracts/openapi.yaml, and nothing else.
+	//
+	// Reading one collectible arrived with feature 006: the edit screen has to be filled from
+	// somewhere, and the gallery's page response is not it. The representation is the same either
+	// way, so there is no detail shape that can drift from the list shape.
 	mux.Handle("POST /api/collectibles", s.requireCollector(s.handleAddCollectible))
 	mux.Handle("GET /api/collectibles", s.requireCollector(s.handleListCollectibles))
+	mux.Handle("GET /api/collectibles/{collectibleId}", s.requireCollector(s.handleGetCollectible))
 	mux.Handle("POST /api/images", s.requireCollector(s.handleUploadImage))
 	mux.Handle("GET /api/images/{imageId}/rendition", s.requireCollector(s.handleGetRendition))
 
