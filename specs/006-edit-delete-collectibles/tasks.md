@@ -34,10 +34,10 @@ need `-p 1` when run by hand.
 **Purpose**: The OpenAPI document was written during planning and is already at 0.2.0. What remains
 is propagating it, which must happen first because everything on the frontend is typed from it.
 
-- [ ] T001 Regenerate the frontend's API types with `cd frontend && npm run generate:api`, producing `frontend/lib/types/api.ts`
-- [ ] T002 Add the now-required `version` to the collectible factory in `frontend/tests/unit/fixtures.ts`
-- [ ] T003 [P] Re-export `Collectible` with its `version` and add `EditCollectibleRequest` to `frontend/lib/api/types.ts`
-- [ ] T004 Confirm `cd frontend && npm run typecheck && npm run lint` pass with the regenerated types
+- [X] T001 Regenerate the frontend's API types with `cd frontend && npm run generate:api`, producing `frontend/lib/types/api.ts`
+- [X] T002 Add the now-required `version` to the collectible factory in `frontend/tests/unit/fixtures.ts`
+- [X] T003 [P] Re-export `Collectible` with its `version` and add `EditCollectibleRequest` to `frontend/lib/api/types.ts`
+- [X] T004 Confirm `cd frontend && npm run typecheck && npm run lint` pass with the regenerated types
 
 **Checkpoint**: the seam's types describe the three new operations; nothing implements them yet.
 
@@ -60,17 +60,17 @@ a story, and the reason matters:
 
 ### Migrations
 
-- [ ] T005 Create `backend/migrations/000009_add_collectible_version.up.sql` adding `version integer NOT NULL DEFAULT 1` with a `>= 1` check, and `000009_add_collectible_version.down.sql` dropping both
-- [ ] T006 Create `backend/migrations/000010_create_pending_image_deletions.up.sql` per data-model.md — no foreign keys, with the comment explaining why — and `000010_create_pending_image_deletions.down.sql`
-- [ ] T007 Extend `backend/tests/integration/schema_test.go` to assert the `version` column, its check constraint, and the `pending_image_deletions` table and index exist
+- [X] T005 Create `backend/migrations/000009_add_collectible_version.up.sql` adding `version integer NOT NULL DEFAULT 1` with a `>= 1` check, and `000009_add_collectible_version.down.sql` dropping both
+- [X] T006 Create `backend/migrations/000010_create_pending_image_deletions.up.sql` per data-model.md — no foreign keys, with the comment explaining why — and `000010_create_pending_image_deletions.down.sql`
+- [X] T007 Extend `backend/tests/integration/schema_test.go` to assert the `version` column, its check constraint, and the `pending_image_deletions` table and index exist
 
 ### Domain
 
-- [ ] T008 Add `Version int` to `Collectible` in `backend/internal/domain/collectible/collectible.go`
-- [ ] T009 Extract the per-field rules from `Draft.Validate` into a shared routine in `backend/internal/domain/collectible/collectible.go`, leaving `Draft.Validate` responsible only for the submission key plus that routine
-- [ ] T010 Create `backend/internal/domain/collectible/edit.go` with `EditDraft` (the same fields, `ExpectedVersion` in place of `SubmissionKey`) and a `Validate` that calls the shared routine
-- [ ] T011 [P] Extend `backend/tests/unit/collectible_validation_test.go` so every existing rule is asserted against both `Draft` and `EditDraft` — a table driven from one case list, so a rule cannot be added to one path only (SC-008) — and assert all sixteen status transitions are accepted, with none forbidden (FR-006)
-- [ ] T012 Add a unit test in `backend/tests/unit/collectible_validation_test.go` that `EditDraft` rejects a missing or zero `ExpectedVersion` and that `Draft` still requires a submission key
+- [X] T008 Add `Version int` to `Collectible` in `backend/internal/domain/collectible/collectible.go`
+- [X] T009 Extract the per-field rules from `Draft.Validate` into a shared routine in `backend/internal/domain/collectible/collectible.go`, leaving `Draft.Validate` responsible only for the submission key plus that routine
+- [X] T010 Create `backend/internal/domain/collectible/edit.go` with `EditDraft` (the same fields, `ExpectedVersion` in place of `SubmissionKey`) and a `Validate` that calls the shared routine
+- [X] T011 [P] Extend `backend/tests/unit/collectible_validation_test.go` so every existing rule is asserted against both `Draft` and `EditDraft` — a table driven from one case list, so a rule cannot be added to one path only (SC-008) — and assert all sixteen status transitions are accepted, with none forbidden (FR-006)
+- [X] T012 Add a unit test in `backend/tests/unit/collectible_validation_test.go` that `EditDraft` rejects a missing or zero `ExpectedVersion` and that `Draft` still requires a submission key
 
 ### Store
 

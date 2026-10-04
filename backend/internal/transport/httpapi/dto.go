@@ -12,8 +12,12 @@ import (
 // Wire types. These mirror contracts/openapi.yaml exactly; the contract is the source of truth and
 // the frontend's types are generated from it (Constitution Principle III).
 
-type addCollectibleRequest struct {
-	SubmissionKey string  `json:"submissionKey"`
+// collectibleFields is every attribute of a collectible as it crosses the wire. Embedded by both
+// requests without a json tag, so the fields appear inline exactly as the contract defines them.
+//
+// Shared rather than duplicated because the two requests must carry the same attributes: an edit
+// is a full replacement validated by the same rules as an add (FR-010, SC-008).
+type collectibleFields struct {
 	Name          string  `json:"name"`
 	Status        string  `json:"collectionStatus"`
 	Character     *string `json:"character"`
@@ -29,9 +33,8 @@ type addCollectibleRequest struct {
 	ImageID       *string `json:"imageId"`
 }
 
-func (r addCollectibleRequest) toDraft() collectible.Draft {
-	return collectible.Draft{
-		SubmissionKey: r.SubmissionKey,
+func (r collectibleFields) toSubmitted() collectible.Submitted {
+	return collectible.Submitted{
 		Name:          r.Name,
 		Status:        r.Status,
 		Character:     r.Character,
@@ -45,6 +48,18 @@ func (r addCollectibleRequest) toDraft() collectible.Draft {
 		ReleaseDate:   r.ReleaseDate,
 		Notes:         r.Notes,
 		ImageID:       r.ImageID,
+	}
+}
+
+type addCollectibleRequest struct {
+	SubmissionKey string `json:"submissionKey"`
+	collectibleFields
+}
+
+func (r addCollectibleRequest) toDraft() collectible.Draft {
+	return collectible.Draft{
+		SubmissionKey: r.SubmissionKey,
+		Submitted:     r.toSubmitted(),
 	}
 }
 
