@@ -24,6 +24,10 @@ interface Props {
  * effect, which would cascade an extra render and risk showing the old filter's items briefly.
  */
 export function CollectionGallery({ initialItems, initialCursor, status }: Props) {
+  // The gallery as the collector is currently looking at it, so an edit returns them to the same
+  // filtered view rather than to an unfiltered one.
+  const returnTo = status ? `/collection?status=${status}` : '/collection'
+
   const [items, setItems] = useState(initialItems)
   const [cursor, setCursor] = useState(initialCursor)
   const [loading, setLoading] = useState(false)
@@ -69,7 +73,7 @@ export function CollectionGallery({ initialItems, initialCursor, status }: Props
       >
         {items.map((collectible) => (
           <li key={collectible.id}>
-            <CollectibleCard collectible={collectible} />
+            <CollectibleCard collectible={collectible} returnTo={returnTo} />
           </li>
         ))}
       </ul>

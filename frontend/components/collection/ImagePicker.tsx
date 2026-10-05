@@ -4,11 +4,11 @@ import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { ApiError } from '@/lib/api/errors'
 import { describeObviousProblem, uploadImage } from '@/lib/api/images'
-import type { CollectibleImage } from '@/lib/api/types'
+import type { CollectibleImageRef } from '@/lib/api/types'
 
 interface Props {
-  image: CollectibleImage | null
-  onChange: (image: CollectibleImage | null) => void
+  image: CollectibleImageRef | null
+  onChange: (image: CollectibleImageRef | null) => void
 }
 
 /**

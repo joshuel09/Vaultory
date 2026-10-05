@@ -93,15 +93,15 @@ a story, and the reason matters:
 
 ### Frontend shell
 
-- [ ] T023 Add `getCollectible(id)` to `frontend/lib/api/collectibles.ts`
-- [ ] T024 Extract the form body of `frontend/components/collection/AddCollectibleForm.tsx` into a new `frontend/components/collection/CollectibleForm.tsx` taking initial values, an existing image, a submit label and an `onSubmit`
-- [ ] T025 Rewrite `frontend/components/collection/AddCollectibleForm.tsx` as a thin wrapper over `CollectibleForm` that owns the submission key and calls `addCollectible`, preserving the no-`router.refresh()` comment and its reasoning
-- [ ] T026 Confirm `frontend/tests/unit/add-collectible-form.test.tsx` still passes unchanged against the wrapper; adjust only selectors if the DOM moved, not assertions
-- [ ] T027 Create `frontend/app/collection/[id]/edit/page.tsx` as a Server Component that forwards the request's cookies to `VAULTORY_BACKEND_ORIGIN`, redirects to `/sign-in?next=…` on 401, and calls `notFound()` on 404 (research.md Decision 13)
-- [ ] T028 [P] Create `frontend/app/collection/[id]/edit/loading.tsx` and `frontend/app/collection/[id]/edit/not-found.tsx` as designed states matching `frontend/app/collection/loading.tsx`
-- [ ] T029 Add an edit affordance to `frontend/components/collection/CollectibleCard.tsx` linking to `/collection/{id}/edit`, carrying the active status filter as a `next` parameter
-- [ ] T030 [P] Add a contract test for `getCollectible` in `backend/tests/contract/edit_delete_test.go` — 200 for the owner with every field and a `version`, 404 for another collector, 404 for a random UUID, byte-identical bodies for the last two, and 401 with no collection content when no session is presented (FR-033)
-- [ ] T031 [P] Add an integration test in `backend/tests/integration/image_lifecycle_test.go` that `DrainImageDeletions` removes queued files and their rows, and that a failing store leaves the row for a later drain (FR-020a)
+- [X] T023 Add `getCollectible(id)` to `frontend/lib/api/collectibles.ts`
+- [X] T024 Extract the form body of `frontend/components/collection/AddCollectibleForm.tsx` into a new `frontend/components/collection/CollectibleForm.tsx` taking initial values, an existing image, a submit label and an `onSubmit`
+- [X] T025 Rewrite `frontend/components/collection/AddCollectibleForm.tsx` as a thin wrapper over `CollectibleForm` that owns the submission key and calls `addCollectible`, preserving the no-`router.refresh()` comment and its reasoning
+- [X] T026 Confirm `frontend/tests/unit/add-collectible-form.test.tsx` still passes unchanged against the wrapper; adjust only selectors if the DOM moved, not assertions
+- [X] T027 Create `frontend/app/collection/[id]/edit/page.tsx` as a Server Component that forwards the request's cookies to `VAULTORY_BACKEND_ORIGIN`, redirects to `/sign-in?next=…` on 401, and calls `notFound()` on 404 (research.md Decision 13)
+- [X] T028 [P] Create `frontend/app/collection/[id]/edit/loading.tsx` and `frontend/app/collection/[id]/edit/not-found.tsx` as designed states matching `frontend/app/collection/loading.tsx`
+- [X] T029 Add an edit affordance to `frontend/components/collection/CollectibleCard.tsx` linking to `/collection/{id}/edit`, carrying the active status filter as a `next` parameter
+- [X] T030 [P] Add a contract test for `getCollectible` in `backend/tests/contract/edit_delete_test.go` — 200 for the owner with every field and a `version`, 404 for another collector, 404 for a random UUID, byte-identical bodies for the last two, and 401 with no collection content when no session is presented (FR-033)
+- [X] T031 [P] Add an integration test in `backend/tests/integration/image_lifecycle_test.go` that `DrainImageDeletions` removes queued files and their rows, and that a failing store leaves the row for a later drain (FR-020a)
 
 **Checkpoint**: a collector can open any of their collectibles on an edit screen and see its values. Nothing can be changed yet.
 
