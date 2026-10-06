@@ -4,6 +4,8 @@ package contract
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -157,3 +159,130 @@ func TestGetCollectibleRefusesWithoutASession(t *testing.T) {
 		}
 	})
 }
+
+// putJSON sends an edit.
+func putJSON(t *testing.T, h *harness, id, body string, cookie *http.Cookie) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPut, h.server.URL+"/api/collectibles/"+id, strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	return h.do(t, req, cookie)
+}
+
+// T032 — the editCollectible operation, against the contract.
+func TestEditCollectibleResponseShapes(t *testing.T) {
+	h := newHarness(t)
+	cookie := h.sessionFor(t, "")
+
+	add := func(key, name string) (string, int) {
+		t.Helper()
+		body := decode(t, postJSON(t, h,
+			`{"submissionKey":"`+key+`","name":"`+name+`","collectionStatus":"owned"}`, cookie))
+		v, _ := body["version"].(float64)
+		id, _ := body["id"].(string)
+		return id, int(v)
+	}
+
+	t.Run("200 carries the collectible and its new version", func(t *testing.T) {
+		id, version := add("ed-ok", "Kaiju Sentinel")
+		resp := putJSON(t, h, id, `{"expectedVersion":`+itoa(version)+
+			`,"name":"Kaiju Sentinel MkII","collectionStatus":"sold"}`, cookie)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status %d, want 200", resp.StatusCode)
+		}
+		body := decode(t, resp)
+		if body["name"] != "Kaiju Sentinel MkII" || body["collectionStatus"] != "sold" {
+			t.Errorf("the response does not reflect the edit: %+v", body)
+		}
+		if v, _ := body["version"].(float64); int(v) != version+1 {
+			t.Errorf("version = %v, want %d", body["version"], version+1)
+		}
+	})
+
+	t.Run("400 reports every violation together", func(t *testing.T) {
+		id, version := add("ed-bad", "Kaiju Sentinel")
+		resp := putJSON(t, h, id, `{"expectedVersion":`+itoa(version)+
+			`,"name":"   ","collectionStatus":"borrowed","purchasePrice":"-5.00","purchaseDate":"2030-01-01"}`,
+			cookie)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("status %d, want 400", resp.StatusCode)
+		}
+		fields, _ := decode(t, resp)["error"].(map[string]any)["fields"].([]any)
+		if len(fields) < 4 {
+			t.Errorf("%d field errors, want at least 4 reported together (FR-014)", len(fields))
+		}
+	})
+
+	t.Run("409 carries the collectible as it now stands", func(t *testing.T) {
+		id, version := add("ed-stale", "Kaiju Sentinel")
+		// Somebody edits first.
+		if resp := putJSON(t, h, id, `{"expectedVersion":`+itoa(version)+
+			`,"name":"Won the race","collectionStatus":"owned"}`, cookie); resp.StatusCode != http.StatusOK {
+			t.Fatalf("the first edit failed with %d", resp.StatusCode)
+		}
+		// The stale save.
+		resp := putJSON(t, h, id, `{"expectedVersion":`+itoa(version)+
+			`,"name":"Lost the race","collectionStatus":"owned"}`, cookie)
+		if resp.StatusCode != http.StatusConflict {
+			t.Fatalf("status %d, want 409 — accepting it would silently discard the first edit", resp.StatusCode)
+		}
+		body := decode(t, resp)
+		if body["error"].(map[string]any)["code"] != "version_conflict" {
+			t.Errorf("code = %v, want version_conflict", body["error"])
+		}
+		current, ok := body["current"].(map[string]any)
+		if !ok {
+			t.Fatalf("the 409 carried no current collectible: %+v", body)
+		}
+		if current["name"] != "Won the race" {
+			t.Errorf("current.name = %v, want the winning edit's", current["name"])
+		}
+	})
+
+	t.Run("404 for another collector's, identical to a fictional one", func(t *testing.T) {
+		id, version := add("ed-theirs", "Private Statue")
+		theirs := h.sessionFor(t, "second")
+		body := `{"expectedVersion":` + itoa(version) + `,"name":"Taken","collectionStatus":"owned"}`
+
+		mine := decode(t, putJSON(t, h, id, body, theirs))
+		fiction := decode(t, putJSON(t, h, uuid.NewString(), body, theirs))
+
+		// Both must be 404 with the same envelope. A distinct refusal would confirm the id is real.
+		if mine["error"].(map[string]any)["code"] != "not_found" ||
+			fiction["error"].(map[string]any)["code"] != "not_found" {
+			t.Errorf("not both not_found: %+v / %+v", mine, fiction)
+		}
+		if mine["error"].(map[string]any)["message"] != fiction["error"].(map[string]any)["message"] {
+			t.Error("another collector's collectible answered differently from a fictional one (FR-031)")
+		}
+	})
+
+	t.Run("401 without a session, and an asserted identity is ignored", func(t *testing.T) {
+		id, version := add("ed-auth", "Kaiju Sentinel")
+		body := `{"expectedVersion":` + itoa(version) + `,"name":"Hijacked","collectionStatus":"owned"}`
+
+		req, err := http.NewRequest(http.MethodPut,
+			h.server.URL+"/api/collectibles/"+id+"?collectorId="+h.collectorA.String(),
+			strings.NewReader(body))
+		if err != nil {
+			t.Fatalf("request: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		// A collector named in a header or a query parameter counts for nothing (FR-032).
+		req.Header.Set("X-Collector-Id", h.collectorA.String())
+		if resp := h.do(t, req, nil); resp.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("status %d, want 401", resp.StatusCode)
+		}
+
+		// And the collectible is untouched.
+		getReq, _ := http.NewRequest(http.MethodGet, h.server.URL+"/api/collectibles/"+id, nil)
+		after := decode(t, h.do(t, getReq, cookie))
+		if after["name"] == "Hijacked" {
+			t.Error("an unauthenticated request changed a collectible")
+		}
+	})
+}
+
+func itoa(n int) string { return strconv.Itoa(n) }

@@ -74,6 +74,12 @@ interface Props {
   footer?: ReactNode
   /** Clears the form after a successful submission. Adding does; editing navigates away instead. */
   resetOnSuccess?: boolean
+  /**
+   * Offered a failed submission before the form renders its own message. Returning true means the
+   * parent has presented it — a version conflict is not a form error and deserves better than a
+   * red banner (FR-027).
+   */
+  onError?: (error: unknown) => boolean
   onSubmit: (values: CollectibleFormValues, image: CollectibleImageRef | null) => Promise<void>
 }
 
@@ -98,6 +104,7 @@ export function CollectibleForm({
   notice,
   footer,
   resetOnSuccess = false,
+  onError,
   onSubmit,
 }: Props) {
   const [values, setValues] = useState<CollectibleFormValues>(initialValues)
@@ -141,6 +148,8 @@ export function CollectibleForm({
         setImage(null)
       }
     } catch (err) {
+      // The parent gets first refusal. Everything the collector typed stays put either way.
+      if (onError?.(err)) return
       if (err instanceof ApiError) {
         // Everything the collector typed stays exactly where it is (FR-035). Losing a filled-in
         // form to a failed save is the thing this must never do.

@@ -272,6 +272,131 @@ func releaseImage(ctx context.Context, tx pgx.Tx, collectorID, imageID uuid.UUID
 	return nil
 }
 
+// VersionConflictError means the collectible changed after the collector opened it.
+//
+// It carries the collectible as it now stands, because the collector has to be shown what it
+// actually says, and making them fetch it again would open a second window in which it changes
+// (FR-027).
+type VersionConflictError struct {
+	Current Row
+}
+
+func (e *VersionConflictError) Error() string {
+	return fmt.Sprintf("collectible %s is at version %d",
+		e.Current.Collectible.ID, e.Current.Collectible.Version)
+}
+
+// Edit replaces every attribute of one collectible, if nobody has changed it in the meantime.
+//
+// The shape here is deliberate. The obvious implementation —
+//
+//	UPDATE collectibles SET … WHERE id = $1 AND collector_id = $2 AND version = $3
+//
+// reports zero rows affected for three different situations: no such collectible, somebody else's
+// collectible, and a version that has moved on. The first two must answer 404 and the third 409,
+// so collapsing them loses the distinction the requirements depend on (research.md Decision 6).
+//
+// SELECT … FOR UPDATE also serialises concurrent edits of the same row. Without it, two
+// transactions both read version 3, both find it current, and both write — one collector's work
+// disappearing with nobody told, which is the thing Principle IV forbids.
+func (s *Store) Edit(
+	ctx context.Context,
+	collectorID, collectibleID uuid.UUID,
+	v collectible.ValidatedEdit,
+) (Row, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Row{}, fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Lock the row and read what it currently holds. The image id comes back too, which is what
+	// tells us whether the photograph is being replaced or removed.
+	var (
+		currentVersion int
+		currentImageID *uuid.UUID
+	)
+	err = tx.QueryRow(ctx, `
+		SELECT version, image_id FROM collectibles
+		WHERE id = $1 AND collector_id = $2
+		FOR UPDATE`, collectibleID, collectorID).Scan(&currentVersion, &currentImageID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Absent, or another collector's. Deliberately the same answer (FR-031).
+		return Row{}, ErrNotFound
+	}
+	if err != nil {
+		return Row{}, fmt.Errorf("lock collectible: %w", err)
+	}
+
+	if currentVersion != v.ExpectedVersion {
+		// Read the current state through the same transaction so what the collector is shown is
+		// the row we just locked, not a third version that arrived in between.
+		current, readErr := scanRow(tx.QueryRow(ctx, `
+			SELECT `+collectibleColumns+`
+			FROM collectibles c
+			LEFT JOIN collectible_images i ON i.id = c.image_id AND i.collector_id = c.collector_id
+			WHERE c.id = $1 AND c.collector_id = $2`, collectibleID, collectorID))
+		if readErr != nil {
+			return Row{}, fmt.Errorf("read the current collectible: %w", readErr)
+		}
+		return Row{}, &VersionConflictError{Current: current}
+	}
+
+	var price *string
+	if v.PurchasePrice != nil {
+		text := v.PurchasePrice.String()
+		price = &text
+	}
+
+	_, err = tx.Exec(ctx, `
+		UPDATE collectibles SET
+			name = $3, collection_status = $4,
+			"character" = $5, series = $6, manufacturer = $7, category = $8,
+			scale = $9, edition = $10,
+			purchase_price = $11::numeric, purchase_date = $12, release_date = $13,
+			notes = $14, image_id = $15,
+			version = version + 1
+		WHERE id = $1 AND collector_id = $2`,
+		collectibleID, collectorID,
+		v.Name, string(v.Status),
+		v.Character, v.Series, v.Manufacturer, v.Category,
+		v.Scale, v.Edition,
+		price, v.PurchaseDate, v.ReleaseDate,
+		v.Notes, v.ImageID,
+	)
+	if err != nil {
+		// The composite foreign key refusing an image that is not this collector's. Reaches the
+		// collector as an unknown-image violation rather than an internal error (FR-021).
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+			return Row{}, ErrUnknownImage
+		}
+		return Row{}, fmt.Errorf("update collectible: %w", err)
+	}
+
+	// The photograph is gone from this collectible — replaced or removed. Deleting its row is what
+	// makes it unfetchable, and it happens here, inside the same transaction as the edit, so the
+	// two cannot disagree (FR-020).
+	if currentImageID != nil && (v.ImageID == nil || *v.ImageID != *currentImageID) {
+		if err := releaseImage(ctx, tx, collectorID, *currentImageID); err != nil {
+			return Row{}, err
+		}
+	}
+
+	row, err := scanRow(tx.QueryRow(ctx, `
+		SELECT `+collectibleColumns+`
+		FROM collectibles c
+		LEFT JOIN collectible_images i ON i.id = c.image_id AND i.collector_id = c.collector_id
+		WHERE c.id = $1 AND c.collector_id = $2`, collectibleID, collectorID))
+	if err != nil {
+		return Row{}, fmt.Errorf("read back collectible: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Row{}, fmt.Errorf("commit: %w", err)
+	}
+	return row, nil
+}
+
 // Page is one page of a collection.
 type Page struct {
 	Rows            []Row

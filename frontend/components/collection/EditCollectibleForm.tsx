@@ -1,8 +1,11 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CollectibleForm, optional, valuesOf, type CollectibleFormValues } from './CollectibleForm'
+import { VersionConflictNotice } from './VersionConflictNotice'
 import { editCollectible } from '@/lib/api/collectibles'
+import { ApiError } from '@/lib/api/errors'
 import type { Collectible, CollectibleImageRef, CollectionStatus } from '@/lib/api/types'
 
 interface Props {
@@ -21,9 +24,19 @@ interface Props {
 export function EditCollectibleForm({ collectible, returnTo }: Props) {
   const router = useRouter()
 
+  /*
+   * The collectible the form is currently based on, and the version its save will present.
+   *
+   * It moves only when the collector asks it to, by accepting the values a conflict reported.
+   * Changing it for them would be the silent overwrite this mechanism exists to prevent, in the
+   * other direction.
+   */
+  const [base, setBase] = useState<Collectible>(collectible)
+  const [conflict, setConflict] = useState<Collectible | null>(null)
+
   async function handleSubmit(values: CollectibleFormValues, image: CollectibleImageRef | null) {
-    await editCollectible(collectible.id, {
-      expectedVersion: collectible.version,
+    await editCollectible(base.id, {
+      expectedVersion: base.version,
       name: values.name,
       collectionStatus: values.collectionStatus as CollectionStatus,
       character: optional(values.character) ?? null,
@@ -59,13 +72,47 @@ export function EditCollectibleForm({ collectible, returnTo }: Props) {
     router.push(returnTo)
   }
 
+  /**
+   * A version conflict is the parent's to present, not the form's.
+   *
+   * Returning true keeps the form from rendering a red error banner over something that is not an
+   * error: nothing was lost, and what the collector typed is still in the fields below.
+   */
+  function handleError(error: unknown): boolean {
+    if (error instanceof ApiError && error.isVersionConflict && error.current) {
+      setConflict(error.current)
+      return true
+    }
+    return false
+  }
+
   return (
     <CollectibleForm
-      initialValues={valuesOf(collectible)}
-      initialImage={collectible.image ?? null}
+      /*
+       * Remounting on a new base, rather than syncing props into state in an effect.
+       *
+       * Accepting the conflict's values has to replace every field at once. A key change does that
+       * in one render; an effect would cascade an extra one and could show the old values briefly
+       * — the same reasoning the gallery uses when the filter changes.
+       */
+      key={`${base.id}@${base.version}`}
+      initialValues={valuesOf(base)}
+      initialImage={base.image ?? null}
       submitLabel="Save changes"
       submittingLabel="Saving…"
       onSubmit={handleSubmit}
+      onError={handleError}
+      notice={
+        conflict && (
+          <VersionConflictNotice
+            current={conflict}
+            onUseCurrent={() => {
+              setBase(conflict)
+              setConflict(null)
+            }}
+          />
+        )
+      }
     />
   )
 }

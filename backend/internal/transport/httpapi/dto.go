@@ -56,6 +56,22 @@ type addCollectibleRequest struct {
 	collectibleFields
 }
 
+// editCollectibleRequest mirrors EditCollectibleRequest in the contract.
+//
+// A full replacement: every attribute the collectible should have afterwards. An omitted or null
+// imageId means it has no photograph and removes the one it had (FR-017).
+type editCollectibleRequest struct {
+	ExpectedVersion int `json:"expectedVersion"`
+	collectibleFields
+}
+
+func (r editCollectibleRequest) toEditDraft() collectible.EditDraft {
+	return collectible.EditDraft{
+		ExpectedVersion: r.ExpectedVersion,
+		Submitted:       r.toSubmitted(),
+	}
+}
+
 func (r addCollectibleRequest) toDraft() collectible.Draft {
 	return collectible.Draft{
 		SubmissionKey: r.SubmissionKey,

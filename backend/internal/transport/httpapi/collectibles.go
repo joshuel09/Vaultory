@@ -150,3 +150,62 @@ func (s *Server) handleGetCollectible(w http.ResponseWriter, r *http.Request, co
 	}
 	WriteJSON(w, http.StatusOK, toCollectibleResponse(row))
 }
+
+// handleEditCollectible replaces every attribute of one collectible (FR-004).
+func (s *Server) handleEditCollectible(w http.ResponseWriter, r *http.Request, collector identity.CollectorID) {
+	if ct := r.Header.Get("Content-Type"); ct != "" && !strings.HasPrefix(ct, "application/json") {
+		WriteError(w, http.StatusUnsupportedMediaType, CodeUnsupportedMedia,
+			"Send this request as JSON.")
+		return
+	}
+
+	id, err := uuid.Parse(r.PathValue("collectibleId"))
+	if err != nil {
+		WriteNotFound(w)
+		return
+	}
+
+	var req editCollectibleRequest
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody))
+	// The contract declares additionalProperties: false, and refusing unknown fields is what makes
+	// that real rather than aspirational.
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			WriteError(w, http.StatusBadRequest, CodeValidationFailed, "That submission is too large.")
+			return
+		}
+		WriteError(w, http.StatusBadRequest, CodeValidationFailed,
+			"That request could not be read as JSON.")
+		return
+	}
+	if err := dec.Decode(new(json.RawMessage)); !errors.Is(err, io.EOF) {
+		WriteError(w, http.StatusBadRequest, CodeValidationFailed,
+			"That request body contained more than one JSON value.")
+		return
+	}
+
+	row, violations, err := s.service.Edit(r.Context(), collector, id, req.toEditDraft())
+	if len(violations) > 0 {
+		WriteValidationFailed(w, toFieldErrors(violations))
+		return
+	}
+	var conflict *postgres.VersionConflictError
+	switch {
+	case errors.As(err, &conflict):
+		// Somebody changed it first. The collector is shown what it now says rather than having
+		// their edit applied over it (FR-027).
+		WriteVersionConflict(w, toCollectibleResponse(conflict.Current))
+		return
+	case errors.Is(err, postgres.ErrNotFound):
+		// Gone, or never theirs. 404, never 403 (FR-031).
+		WriteNotFound(w)
+		return
+	case err != nil:
+		WriteInternal(w, r, err)
+		return
+	}
+
+	WriteJSON(w, http.StatusOK, toCollectibleResponse(row))
+}

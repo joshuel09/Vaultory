@@ -13,6 +13,7 @@ const (
 	CodeValidationFailed  = "validation_failed"
 	CodeUnauthenticated   = "unauthenticated"
 	CodeNotFound          = "not_found"
+	CodeVersionConflict   = "version_conflict"
 	CodeImageTooLarge     = "image_too_large"
 	CodeUnsupportedFormat = "unsupported_image_format"
 	CodeUnsupportedMedia  = "unsupported_media_type"
@@ -85,6 +86,30 @@ func WriteUnauthenticated(w http.ResponseWriter) {
 // This is why there is no 403 anywhere in this transport.
 func WriteNotFound(w http.ResponseWriter) {
 	WriteError(w, http.StatusNotFound, CodeNotFound, "Not found.")
+}
+
+// versionConflictBody is the 409 envelope. Distinct from ErrorResponse because it carries the
+// collectible as it now stands; the error envelope itself is unchanged (contracts/openapi.yaml,
+// VersionConflictResponse).
+type versionConflictBody struct {
+	Error struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
+	Current any `json:"current"`
+}
+
+// WriteVersionConflict refuses an edit made from a view that is no longer current, and shows the
+// collector what the collectible actually says (FR-027).
+//
+// The current state is in the body on purpose. Telling the collector "this changed" and making
+// them fetch it again would open a second window in which it changes again.
+func WriteVersionConflict(w http.ResponseWriter, current any) {
+	var body versionConflictBody
+	body.Error.Code = CodeVersionConflict
+	body.Error.Message = "This collectible changed since you opened it. Here is how it reads now."
+	body.Current = current
+	WriteJSON(w, http.StatusConflict, body)
 }
 
 // WriteInternal logs the cause and tells the client nothing about it.
