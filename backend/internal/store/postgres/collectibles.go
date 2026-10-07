@@ -397,6 +397,52 @@ func (s *Store) Edit(
 	return row, nil
 }
 
+// Delete removes one collectible permanently, and the photograph it referenced with it.
+//
+// Reports whether a row was actually removed. The caller does not vary its response on that —
+// deleting something absent is answered as a success either way (FR-025) — but it decides whether
+// a deletion is recorded, because a record of a deletion that did not happen is wrong in exactly
+// the situation the record exists to explain (FR-040).
+//
+// collector_id is in the WHERE clause, so there is no path by which this reaches another
+// collector's row (FR-030).
+func (s *Store) Delete(ctx context.Context, collectorID, collectibleID uuid.UUID) (bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return false, fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var imageID *uuid.UUID
+	err = tx.QueryRow(ctx, `
+		DELETE FROM collectibles
+		WHERE id = $1 AND collector_id = $2
+		RETURNING image_id`, collectibleID, collectorID).Scan(&imageID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Already gone, never existed, or someone else's. Nothing to do, and nothing to disclose.
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("delete collectible: %w", err)
+	}
+
+	// The photograph goes with it, in the same transaction. Nothing can observe a state in which
+	// the collectible is gone and its image is still fetchable (FR-020).
+	//
+	// collectible_submissions cascades on collectible_id, so a collectible added inside the
+	// idempotency window deletes cleanly rather than tripping over its own submission row.
+	if imageID != nil {
+		if err := releaseImage(ctx, tx, collectorID, *imageID); err != nil {
+			return false, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("commit: %w", err)
+	}
+	return true, nil
+}
+
 // Page is one page of a collection.
 type Page struct {
 	Rows            []Row

@@ -286,3 +286,93 @@ func TestEditCollectibleResponseShapes(t *testing.T) {
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }
+
+// T052 — deleteCollectible. The surprising part of this operation is that it defines no 404, and
+// that is the contract rather than an oversight.
+func TestDeleteCollectibleAlwaysAnswersTheSameWay(t *testing.T) {
+	h := newHarness(t)
+	cookie := h.sessionFor(t, "")
+
+	del := func(id string, c *http.Cookie) *http.Response {
+		t.Helper()
+		req, err := http.NewRequest(http.MethodDelete, h.server.URL+"/api/collectibles/"+id, nil)
+		if err != nil {
+			t.Fatalf("request: %v", err)
+		}
+		return h.do(t, req, c)
+	}
+
+	created := decode(t, postJSON(t, h,
+		`{"submissionKey":"d-1","name":"Kaiju Sentinel","collectionStatus":"owned"}`, cookie))
+	id, _ := created["id"].(string)
+
+	t.Run("204 when it existed", func(t *testing.T) {
+		resp := del(id, cookie)
+		if resp.StatusCode != http.StatusNoContent {
+			t.Fatalf("status %d, want 204", resp.StatusCode)
+		}
+		if resp.ContentLength > 0 {
+			t.Errorf("204 carried a body of %d bytes", resp.ContentLength)
+		}
+	})
+
+	t.Run("204 when repeated", func(t *testing.T) {
+		// A retry after a lost response must not greet the collector with an error about something
+		// they already removed (FR-025).
+		if resp := del(id, cookie); resp.StatusCode != http.StatusNoContent {
+			t.Errorf("status %d on a repeat, want 204", resp.StatusCode)
+		}
+	})
+
+	t.Run("204 for an identifier that never existed", func(t *testing.T) {
+		if resp := del(uuid.NewString(), cookie); resp.StatusCode != http.StatusNoContent {
+			t.Errorf("status %d, want 204", resp.StatusCode)
+		}
+	})
+
+	t.Run("204 for a malformed identifier", func(t *testing.T) {
+		if resp := del("not-a-uuid", cookie); resp.StatusCode != http.StatusNoContent {
+			t.Errorf("status %d, want 204", resp.StatusCode)
+		}
+	})
+
+	t.Run("204 for another collector's, with nothing deleted", func(t *testing.T) {
+		mine := decode(t, postJSON(t, h,
+			`{"submissionKey":"d-2","name":"Private Statue","collectionStatus":"owned"}`, cookie))
+		mineID, _ := mine["id"].(string)
+
+		// Indistinguishable from the fictional identifier above, which is the point: a different
+		// answer here would confirm the id is real (FR-031).
+		if resp := del(mineID, h.sessionFor(t, "second")); resp.StatusCode != http.StatusNoContent {
+			t.Fatalf("status %d, want 204", resp.StatusCode)
+		}
+
+		req, _ := http.NewRequest(http.MethodGet, h.server.URL+"/api/collectibles/"+mineID, nil)
+		if resp := h.do(t, req, cookie); resp.StatusCode != http.StatusOK {
+			t.Errorf("the collectible was actually deleted by another collector (status %d)", resp.StatusCode)
+		}
+	})
+
+	t.Run("401 without a session, and an asserted identity is ignored", func(t *testing.T) {
+		mine := decode(t, postJSON(t, h,
+			`{"submissionKey":"d-3","name":"Still Here","collectionStatus":"owned"}`, cookie))
+		mineID, _ := mine["id"].(string)
+
+		req, err := http.NewRequest(http.MethodDelete,
+			h.server.URL+"/api/collectibles/"+mineID+"?collectorId="+h.collectorA.String(), nil)
+		if err != nil {
+			t.Fatalf("request: %v", err)
+		}
+		// The destructive route is the worst place for an unproven auth path, because its correct
+		// answer is a silent 204 — a mistake here looks exactly like success (FR-032, FR-033).
+		req.Header.Set("X-Collector-Id", h.collectorA.String())
+		if resp := h.do(t, req, nil); resp.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("status %d, want 401 — an asserted identity must count for nothing", resp.StatusCode)
+		}
+
+		getReq, _ := http.NewRequest(http.MethodGet, h.server.URL+"/api/collectibles/"+mineID, nil)
+		if resp := h.do(t, getReq, cookie); resp.StatusCode != http.StatusOK {
+			t.Errorf("an unauthenticated request deleted a collectible (status %d)", resp.StatusCode)
+		}
+	})
+}

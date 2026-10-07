@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CollectibleForm, optional, valuesOf, type CollectibleFormValues } from './CollectibleForm'
 import { VersionConflictNotice } from './VersionConflictNotice'
+import { DeleteCollectibleDialog } from './DeleteCollectibleDialog'
 import { editCollectible } from '@/lib/api/collectibles'
 import { ApiError } from '@/lib/api/errors'
 import type { Collectible, CollectibleImageRef, CollectionStatus } from '@/lib/api/types'
@@ -102,6 +103,23 @@ export function EditCollectibleForm({ collectible, returnTo }: Props) {
       submittingLabel="Saving…"
       onSubmit={handleSubmit}
       onError={handleError}
+      footer={
+        /*
+         * Deleting is offered here and only here (FR-022a). Never on a gallery entry: a
+         * destructive action one stray click away in a browsing context is how a collection gets
+         * damaged by accident.
+         */
+        <div className="border-t border-edge pt-6">
+          <DeleteCollectibleDialog
+            collectibleId={base.id}
+            name={base.name}
+            onDeleted={() => router.push(returnTo)}
+          />
+          <p className="mt-2 text-xs text-ink-faint">
+            Deleting is permanent. There is no undo and no trash.
+          </p>
+        </div>
+      }
       notice={
         conflict && (
           <VersionConflictNotice

@@ -209,3 +209,25 @@ func (s *Server) handleEditCollectible(w http.ResponseWriter, r *http.Request, c
 
 	WriteJSON(w, http.StatusOK, toCollectibleResponse(row))
 }
+
+// handleDeleteCollectible removes one collectible permanently (FR-022).
+//
+// Answers 204 in every case for an authenticated collector. There is no 404 here, deliberately:
+// a collectible that is not in this collector's vault — already deleted, never existed, or
+// somebody else's — means the state they asked for already holds (FR-025), and answering
+// differently for an identifier that happens to be real would disclose that it is (FR-031).
+func (s *Server) handleDeleteCollectible(w http.ResponseWriter, r *http.Request, collector identity.CollectorID) {
+	id, err := uuid.Parse(r.PathValue("collectibleId"))
+	if err != nil {
+		// Even a malformed identifier. It names nothing in anybody's vault, which is the condition
+		// this operation reports success for.
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if err := s.service.Delete(r.Context(), collector, id); err != nil {
+		WriteInternal(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

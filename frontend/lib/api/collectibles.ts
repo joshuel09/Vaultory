@@ -89,3 +89,18 @@ export async function editCollectible(
   if (!response.ok) throw await toApiError(response)
   return (await response.json()) as Collectible
 }
+
+/**
+ * Delete a collectible permanently.
+ *
+ * Succeeds whether or not anything was there: already deleted, never existed, or another
+ * collector's all answer the same way (FR-025). A retry after a lost response is therefore safe,
+ * and no response distinguishes a real identifier from a fictional one (FR-031).
+ */
+export async function deleteCollectible(id: string): Promise<void> {
+  const response = await fetch(`${API}/collectibles/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    credentials: 'same-origin',
+  })
+  if (!response.ok) throw await toApiError(response)
+}
