@@ -85,6 +85,21 @@ describe('EditCollectibleForm', () => {
     expect(sentBody().imageId).toBe(anImage.id)
   })
 
+  it('sends imageId null when the collector removes the photograph (FR-017)', async () => {
+    const withPhoto = aCollectible({ version: 2, image: anImage })
+    fetchMock.mockResolvedValue(jsonResponse(200, { ...withPhoto, image: null }))
+    const user = userEvent.setup()
+    render(<EditCollectibleForm collectible={withPhoto} returnTo="/collection" />)
+
+    // The picker opens holding the stored photograph, and its Remove clears the reference rather
+    // than only the preview — otherwise the save would send the old id straight back.
+    await user.click(screen.getByRole('button', { name: /remove/i }))
+    await user.click(screen.getByRole('button', { name: /save changes/i }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+
+    expect(sentBody().imageId).toBeNull()
+  })
+
   it('submits a cleared optional as absent rather than as an empty string (FR-005)', async () => {
     fetchMock.mockResolvedValue(jsonResponse(200, stored))
     const user = userEvent.setup()

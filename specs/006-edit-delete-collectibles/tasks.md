@@ -142,7 +142,7 @@ status, reload. The new values show, there is still one entry, and it has not mo
 - [X] T048 [US1] Create `frontend/components/collection/EditCollectibleForm.tsx` wrapping `CollectibleForm`, holding the version, echoing the current `imageId` when the photograph is untouched, and returning through `safeRedirect` with a single `router.push` (research.md Decision 14). It MUST refuse a second submission while one is in flight (FR-036): two `PUT`s carrying the same `expectedVersion` means the second comes back 409 and tells the collector the collectible changed since they opened it — about their own save
 - [X] T049 [US1] Create `frontend/components/collection/VersionConflictNotice.tsx` — says the collectible changed, shows how it now reads, and offers to load the current values rather than silently replacing what the collector typed
 - [X] T050 [P] [US1] Unit test `frontend/tests/unit/collectible-form.test.tsx` — initial values populate and attributes never supplied render empty rather than defaulted (FR-003), clearing an optional field submits it as absent, field errors render against the right inputs, entered values survive a failed save (FR-035), and a double-clicked save issues exactly one request (FR-036)
-- [ ] T051 [P] [US1] End-to-end test `frontend/tests/e2e/edit-collectible.spec.ts` covering the independent test above plus a validation failure and recovery
+- [X] T051 [P] [US1] End-to-end test `frontend/tests/e2e/edit-collectible.spec.ts` covering the independent test above plus a validation failure and recovery
 
 **Checkpoint**: a collection is maintainable. This is a shippable increment on its own.
 
@@ -173,7 +173,7 @@ Exactly one remains. Cancelling the confirmation deletes nothing.
 - [X] T061 [US2] Create `frontend/components/collection/DeleteCollectibleDialog.tsx` using a native `<dialog>` opened with `showModal()` — names the collectible, states that deletion cannot be undone, focuses Cancel on open, and makes the destructive button neither the autofocused control nor the dialog's default submit, and refuses a second confirmation while one is in flight (FR-023, FR-036, FR-037)
 - [X] T062 [US2] Add the delete affordance to `frontend/components/collection/EditCollectibleForm.tsx` only, never to `CollectibleCard.tsx` (FR-022a)
 - [X] T063 [P] [US2] Unit test `frontend/tests/unit/delete-dialog.test.tsx` — Escape closes without deleting, Enter on open closes without deleting, Cancel holds initial focus, the collectible's name appears in the dialog, focus returns to the opener on close, and a double-clicked confirm issues exactly one request (FR-036)
-- [ ] T064 [P] [US2] End-to-end test `frontend/tests/e2e/delete-collectible.spec.ts` covering the independent test, cancellation, deleting the last collectible into the empty state, deleting while a status filter is active, and that no gallery entry offers a delete control (FR-022a)
+- [X] T064 [P] [US2] End-to-end test `frontend/tests/e2e/delete-collectible.spec.ts` covering the independent test, cancellation, deleting the last collectible into the empty state, deleting while a status filter is active, and that no gallery entry offers a delete control (FR-022a)
 
 **Checkpoint**: duplicates and unwanted entries can be removed. Feature 001's unrecoverable-duplicate defect class is closed.
 
@@ -189,16 +189,16 @@ new one and the old rendition URL answers not-found. Remove it and confirm the p
 
 ### Tests for User Story 3
 
-- [ ] T065 [P] [US3] Integration test in `backend/tests/integration/image_lifecycle_test.go` that replacing a photograph deletes the old image row, queues its files, leaves the new one intact, and makes only the old rendition answer not-found (FR-020)
-- [ ] T066 [US3] Integration test in `backend/tests/integration/image_lifecycle_test.go` that omitting `imageId` sets `image_id` to NULL and releases the image, and that the collectible then renders without one (FR-017)
-- [ ] T067 [P] [US3] Integration test in `backend/tests/integration/image_ownership_constraint_test.go` that an edit referencing another collector's image is refused as an unknown image, in the same words as one that never existed, and that the composite foreign key refuses it even if the check is bypassed (FR-021, FR-031)
-- [ ] T068 [P] [US3] Integration test in `backend/tests/integration/edit_collectible_test.go` that a refused edit — a validation failure or a version conflict — leaves the existing photograph in place and queues nothing (FR-019)
+- [X] T065 [P] [US3] Integration test in `backend/tests/integration/image_lifecycle_test.go` that replacing a photograph deletes the old image row, queues its files, leaves the new one intact, and makes only the old rendition answer not-found (FR-020)
+- [X] T066 [US3] Integration test in `backend/tests/integration/image_lifecycle_test.go` that omitting `imageId` sets `image_id` to NULL and releases the image, and that the collectible then renders without one (FR-017)
+- [X] T067 [P] [US3] Integration test in `backend/tests/integration/image_ownership_constraint_test.go` that an edit referencing another collector's image is refused as an unknown image, in the same words as one that never existed, and that the composite foreign key refuses it even if the check is bypassed (FR-021, FR-031)
+- [X] T068 [P] [US3] Integration test in `backend/tests/integration/edit_collectible_test.go` that a refused edit — a validation failure or a version conflict — leaves the existing photograph in place and queues nothing (FR-019)
 
 ### Implementation for User Story 3
 
-- [ ] T069 [US3] Wire `frontend/components/collection/ImagePicker.tsx` into `CollectibleForm.tsx` so it opens with the collectible's existing photograph and its Remove control clears the reference rather than only the preview
-- [ ] T070 [US3] Ensure `frontend/components/collection/EditCollectibleForm.tsx` sends `imageId: null` when the collector removed the photograph and the current id when they did not touch it, with a comment naming the consequence of getting it wrong
-- [ ] T071 [P] [US3] End-to-end test `frontend/tests/e2e/edit-photograph.spec.ts` — replace, remove, a refused oversized replacement leaving the original in place, and the placeholder after removal
+- [X] T069 [US3] Wire `frontend/components/collection/ImagePicker.tsx` into `CollectibleForm.tsx` so it opens with the collectible's existing photograph and its Remove control clears the reference rather than only the preview
+- [X] T070 [US3] Ensure `frontend/components/collection/EditCollectibleForm.tsx` sends `imageId: null` when the collector removed the photograph and the current id when they did not touch it, with a comment naming the consequence of getting it wrong
+- [X] T071 [P] [US3] End-to-end test `frontend/tests/e2e/edit-photograph.spec.ts` — replace, remove, a refused oversized replacement leaving the original in place, and the placeholder after removal
 
 **Checkpoint**: all three stories work independently.
 

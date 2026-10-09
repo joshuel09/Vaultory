@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -170,4 +171,184 @@ func TestDrainToleratesAFileThatIsAlreadyGone(t *testing.T) {
 	if n := queueDepth(t); n != 0 {
 		t.Errorf("queue holds %d entries, want 0", n)
 	}
+}
+
+// attach uploads an image and returns a collectible referencing it.
+func attach(t *testing.T, svc *collection.Service, key string) (uuid.UUID, uuid.UUID) {
+	t.Helper()
+	ctx := context.Background()
+	img, err := svc.UploadImage(ctx, collectorA, bytes.NewReader(testJPEG(t, 300, 400)))
+	if err != nil {
+		t.Fatalf("upload: %v", err)
+	}
+	d := draft(key, "Kaiju Sentinel")
+	d.ImageID = strPtr(img.ID.String())
+	added, v, err := svc.Add(ctx, collectorA, d)
+	if err != nil || len(v) > 0 {
+		t.Fatalf("add with an image: %v %+v", err, v)
+	}
+	return added.Row.Collectible.ID, img.ID
+}
+
+// T065 — FR-020: replacing a photograph makes the old one unretrievable at once, and leaves the
+// new one alone.
+func TestReplacingAPhotographReleasesTheOldOne(t *testing.T) {
+	store, svc := freshStore(t)
+	ctx := context.Background()
+
+	collectibleID, oldImage := attach(t, svc, "img-replace")
+
+	replacement, err := svc.UploadImage(ctx, collectorA, bytes.NewReader(testJPEG(t, 400, 500)))
+	if err != nil {
+		t.Fatalf("upload the replacement: %v", err)
+	}
+
+	current, err := svc.Get(ctx, collectorA, collectibleID)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	e := edit(current.Collectible, current.Collectible.Version)
+	e.ImageID = strPtr(replacement.ID.String())
+
+	updated, v, err := svc.Edit(ctx, collectorA, collectibleID, e)
+	if err != nil || len(v) > 0 {
+		t.Fatalf("edit: %v %+v", err, v)
+	}
+	if updated.Collectible.ImageID == nil || *updated.Collectible.ImageID != replacement.ID {
+		t.Fatalf("the collectible points at %v, want the replacement", updated.Collectible.ImageID)
+	}
+
+	// The old photograph is gone, by its owner's own session. Deleting the image row is what does
+	// this — unlinking would not, because a rendition is authorized on the image's own
+	// collector_id, so that it can be previewed before any collectible references it.
+	if _, err := svc.OpenRendition(ctx, collectorA, oldImage); err == nil {
+		t.Error("the replaced photograph is still readable by its owner (FR-020)")
+	}
+	if _, err := store.GetImage(ctx, collectorA, oldImage); err == nil {
+		t.Error("the replaced image's row survived")
+	}
+
+	// The new one is untouched and still readable.
+	if rc, err := svc.OpenRendition(ctx, collectorA, replacement.ID); err != nil {
+		t.Errorf("the replacement is not readable: %v", err)
+	} else {
+		_ = rc.Close()
+	}
+}
+
+// T066 — FR-017: omitting the image removes the photograph, and the collectible falls back to the
+// designed placeholder.
+func TestRemovingAPhotographClearsTheReference(t *testing.T) {
+	store, svc := freshStore(t)
+	ctx := context.Background()
+
+	collectibleID, imageID := attach(t, svc, "img-remove")
+
+	current, err := svc.Get(ctx, collectorA, collectibleID)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	e := edit(current.Collectible, current.Collectible.Version)
+	e.ImageID = nil // the full replacement's meaning: this collectible has no photograph
+
+	updated, v, err := svc.Edit(ctx, collectorA, collectibleID, e)
+	if err != nil || len(v) > 0 {
+		t.Fatalf("edit: %v %+v", err, v)
+	}
+	if updated.Collectible.ImageID != nil {
+		t.Errorf("image_id = %v after removal, want NULL", updated.Collectible.ImageID)
+	}
+	if updated.RenditionKey != nil {
+		t.Error("a rendition key came back for a collectible with no photograph; the gallery " +
+			"would try to render one instead of the placeholder (FR-017)")
+	}
+	if _, err := store.GetImage(ctx, collectorA, imageID); err == nil {
+		t.Error("the removed image's row survived, so it is still fetchable by its owner (FR-020)")
+	}
+
+	// Confirm against the column, not just the Go value.
+	var stored *uuid.UUID
+	if err := pool.QueryRow(ctx,
+		`SELECT image_id FROM collectibles WHERE id = $1`, collectibleID).Scan(&stored); err != nil {
+		t.Fatalf("read the column: %v", err)
+	}
+	if stored != nil {
+		t.Errorf("image_id is %v in the database, want NULL", stored)
+	}
+}
+
+// T068 — FR-019: a refused edit leaves the existing photograph exactly where it was, and queues
+// nothing for destruction.
+//
+// The dangerous shape would be releasing the old image before the edit is known to succeed: a
+// collector whose save is rejected for a negative price would lose their photograph to a
+// validation error.
+func TestARefusedEditKeepsThePhotograph(t *testing.T) {
+	store, svc := freshStore(t)
+	ctx := context.Background()
+
+	collectibleID, imageID := attach(t, svc, "img-refused")
+
+	t.Run("a validation failure", func(t *testing.T) {
+		current, err := svc.Get(ctx, collectorA, collectibleID)
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		e := edit(current.Collectible, current.Collectible.Version)
+		e.ImageID = nil // they also tried to remove the photograph
+		e.PurchasePrice = strPtr("-5.00")
+
+		if _, v, err := svc.Edit(ctx, collectorA, collectibleID, e); err != nil {
+			t.Fatalf("edit: %v", err)
+		} else if len(v) == 0 {
+			t.Fatal("a negative price was accepted")
+		}
+
+		after, err := svc.Get(ctx, collectorA, collectibleID)
+		if err != nil {
+			t.Fatalf("read back: %v", err)
+		}
+		if after.Collectible.ImageID == nil || *after.Collectible.ImageID != imageID {
+			t.Error("a refused edit removed the photograph anyway (FR-019)")
+		}
+		if _, err := store.GetImage(ctx, collectorA, imageID); err != nil {
+			t.Errorf("the image row was deleted by a refused edit: %v", err)
+		}
+		if n := queueDepth(t); n != 0 {
+			t.Errorf("%d deletions queued by a refused edit", n)
+		}
+	})
+
+	t.Run("a version conflict", func(t *testing.T) {
+		current, err := svc.Get(ctx, collectorA, collectibleID)
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		opened := current.Collectible
+
+		// Somebody else edits first.
+		winner := edit(opened, opened.Version)
+		winner.Name = "Won the race"
+		if _, v, err := svc.Edit(ctx, collectorA, collectibleID, winner); err != nil || len(v) > 0 {
+			t.Fatalf("the first edit failed: %v %+v", err, v)
+		}
+
+		// The stale save, which also wanted the photograph gone.
+		stale := edit(opened, opened.Version)
+		stale.ImageID = nil
+		if _, _, err := svc.Edit(ctx, collectorA, collectibleID, stale); err == nil {
+			t.Fatal("the stale edit was accepted")
+		}
+
+		after, err := svc.Get(ctx, collectorA, collectibleID)
+		if err != nil {
+			t.Fatalf("read back: %v", err)
+		}
+		if after.Collectible.ImageID == nil || *after.Collectible.ImageID != imageID {
+			t.Error("a refused edit removed the photograph anyway (FR-019)")
+		}
+		if n := queueDepth(t); n != 0 {
+			t.Errorf("%d deletions queued by a refused edit", n)
+		}
+	})
 }
