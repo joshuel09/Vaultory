@@ -125,3 +125,108 @@ func TestSchemaCarriesItsConstraints(t *testing.T) {
 		_, _ = pool.Exec(ctx, `DELETE FROM collectibles WHERE name = 'Duplicate probe'`)
 	})
 }
+
+// T007: the two things migrations 000009 and 000010 add.
+//
+// Feature 006 is the first work that writes over an existing row rather than only inserting one.
+// Both of these exist to make that safe, and both are the kind of thing a later migration can
+// remove without any test noticing.
+func TestFeature006SchemaAdditions(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("every collectible carries a version", func(t *testing.T) {
+		var dataType, nullable, dflt string
+		err := pool.QueryRow(ctx, `
+			SELECT data_type, is_nullable, coalesce(column_default, '')
+			FROM information_schema.columns
+			WHERE table_name = 'collectibles' AND column_name = 'version'`,
+		).Scan(&dataType, &nullable, &dflt)
+		if err != nil {
+			t.Fatalf("collectibles.version is missing — a stale save cannot be refused without "+
+				"it (FR-027a): %v", err)
+		}
+		if dataType != "integer" {
+			t.Errorf("version is %s, want integer — the marker is compared for equality, and a "+
+				"timestamp cannot tell two edits in one tick apart (research.md Decision 1)", dataType)
+		}
+		if nullable != "NO" {
+			t.Error("version is nullable; a collectible with no version could never be edited safely")
+		}
+		if !strings.Contains(dflt, "1") {
+			t.Errorf("version defaults to %q, want 1 — rows that predate the migration need a "+
+				"starting point", dflt)
+		}
+	})
+
+	t.Run("version cannot go below one", func(t *testing.T) {
+		var id string
+		if err := pool.QueryRow(ctx, `
+			INSERT INTO collectibles (collector_id, name, collection_status)
+			VALUES ($1, 'Version probe', 'owned') RETURNING id`, collectorA).Scan(&id); err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+		defer func() { _, _ = pool.Exec(ctx, `DELETE FROM collectibles WHERE id = $1`, id) }()
+
+		if _, err := pool.Exec(ctx,
+			`UPDATE collectibles SET version = 0 WHERE id = $1`, id); err == nil {
+			t.Error("the database accepted version = 0; collectibles_version_positive is missing")
+		}
+	})
+
+	t.Run("files pending deletion have somewhere to wait", func(t *testing.T) {
+		for _, col := range []string{"image_id", "collector_id", "original_key", "rendition_key", "created_at"} {
+			var exists bool
+			if err := pool.QueryRow(ctx, `
+				SELECT EXISTS (
+					SELECT 1 FROM information_schema.columns
+					WHERE table_name = 'pending_image_deletions' AND column_name = $1)`,
+				col).Scan(&exists); err != nil {
+				t.Fatalf("query: %v", err)
+			}
+			if !exists {
+				t.Errorf("pending_image_deletions.%s is missing — without the storage keys the "+
+					"files cannot be found again once the image row is gone (FR-020a)", col)
+			}
+		}
+	})
+
+	t.Run("the queue outlives the image row it describes", func(t *testing.T) {
+		// No foreign key to collectible_images, deliberately: that row is already deleted by the
+		// time a queue row exists. A key here would make the table impossible to write to.
+		var count int
+		if err := pool.QueryRow(ctx, `
+			SELECT count(*) FROM information_schema.table_constraints
+			WHERE table_name = 'pending_image_deletions' AND constraint_type = 'FOREIGN KEY'`,
+		).Scan(&count); err != nil {
+			t.Fatalf("query: %v", err)
+		}
+		if count != 0 {
+			t.Errorf("pending_image_deletions has %d foreign key(s); it must have none, because "+
+				"every row describes something that no longer exists (data-model.md)", count)
+		}
+
+		// A row can be written for an image id that is not in collectible_images. That is the
+		// normal case, not an edge case.
+		orphan := "99999999-8888-4777-8666-555555555555"
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO pending_image_deletions (image_id, collector_id, original_key, rendition_key)
+			VALUES ($1, $2, 'orig/probe', 'rend/probe')`, orphan, collectorA); err != nil {
+			t.Fatalf("could not queue a deletion for an image row that is already gone: %v", err)
+		}
+		_, _ = pool.Exec(ctx, `DELETE FROM pending_image_deletions WHERE image_id = $1`, orphan)
+	})
+
+	t.Run("the drain can take the oldest first", func(t *testing.T) {
+		var exists bool
+		if err := pool.QueryRow(ctx, `
+			SELECT EXISTS (SELECT 1 FROM pg_indexes
+				WHERE tablename = 'pending_image_deletions'
+				  AND indexname = 'pending_image_deletions_created_idx')`).Scan(&exists); err != nil {
+			t.Fatalf("query: %v", err)
+		}
+		if !exists {
+			t.Error("pending_image_deletions_created_idx is missing; a file that keeps failing " +
+				"would starve the rest of the queue")
+		}
+	})
+}

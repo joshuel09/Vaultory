@@ -4,6 +4,11 @@ A premium collectibles collection management platform. Collectors build a person
 and track figures, statues, comics, and trading collectibles — what they own, what they have on
 preorder, what they are still hunting, and what they have sold.
 
+A collector can add a collectible with a photograph, browse their vault as a gallery, filter it by
+status, correct anything they recorded wrongly, replace or remove a photograph, and delete an entry
+for good. Accounts are their own: registration, email verification, and password reset, with every
+vault private and enforced on the server.
+
 The collection is presented as a visual gallery rather than an inventory table. That is the point
 of the product, and it is written into the project's constitution.
 
