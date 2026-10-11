@@ -212,9 +212,41 @@ new one and the old rendition URL answers not-found. Remove it and confirm the p
 - [X] T075 [P] Add an integration test in `backend/tests/integration/query_count_test.go` that an edit and a delete each issue a bounded number of statements and introduce no per-entry query
 - [X] T076 Update the Current features list in `CLAUDE.md` with feature 006 and its outcome
 - [X] T077 Update `README.md` where it describes what a collector can do, so editing and deleting are not missing from the product description
-- [ ] T078 Run every suite in full — `make test` (backend), `cd frontend && npm run test` (frontend units, which `make test` does not cover), and `make test-e2e` — and record genuine results, including any flakiness, rather than rounding to green
-- [ ] T079 Walk `specs/006-edit-delete-collectibles/quickstart.md` end to end against a running stack, including the curl scenarios for another collector's collectible
-- [ ] T080 Confirm the production build gates pass: `cd frontend && npm run build` and `make prod-build`. The constitution lists both as MUST before a feature is complete, and neither is reached by `make test`
+- [X] T078 Run every suite in full — `make test` (backend), `cd frontend && npm run test` (frontend units, which `make test` does not cover), and `make test-e2e` — and record genuine results, including any flakiness, rather than rounding to green
+- [X] T079 Walk `specs/006-edit-delete-collectibles/quickstart.md` end to end against a running stack, including the curl scenarios for another collector's collectible
+- [X] T080 Confirm the production build gates pass: `cd frontend && npm run build` and `make prod-build`. The constitution lists both as MUST before a feature is complete, and neither is reached by `make test`
+
+### Results, as run on 2026-10-11
+
+Recorded rather than summarised, because a number rounded to green is worth nothing.
+
+| Suite | Result |
+|---|---|
+| Backend unit | 34 passed |
+| Backend integration + contract | passed, against a real PostgreSQL with both migrations applied |
+| Frontend unit | 90 passed across 14 files |
+| Browser, full (369 tests, 2 workers) | **341 passed, 27 flaky, 1 failed** in 26.4 minutes |
+| Browser, feature 006 on desktop, 1 worker | **26 passed, 0 flaky** in 3.3 minutes |
+| `npm run build` | succeeded; `/collection/[id]/edit` present in the route table |
+| `make prod-build` | succeeded — backend 20.6 MB, frontend 461 MB |
+
+**The one hard failure is not this feature's.** `[mobile] reset-password › asking again makes the
+previous link stop working` belongs to feature 005 and passes in 14 seconds when run alone. The 27
+flaky are concentrated in tablet and mobile, span features 001 through 006 indiscriminately, and
+every one passes on retry — the profile tracked as issue #34.
+
+**Backend integration and contract results were confirmed by test name, not by the package's `ok`.**
+A missing `VAULTORY_TEST_DATABASE_URL` makes `TestMain` exit 0 with nothing run, which reads
+identically to success.
+
+**SC-006 of feature 002 is still missed**, and moved slightly: the frontend production image is
+461 MB against a 150 MB criterion, up from 458.6 MB because this feature adds a route. Tracked as
+issue #29, not fixed here.
+
+**One run was discarded rather than reported.** Three isolated test containers were started while
+the 369-test suite was running on two workers; the resulting cluster of failures at exactly 30.4
+seconds was that contention. Reporting those numbers would have meant reporting self-inflicted
+interference as a product result.
 
 ---
 
