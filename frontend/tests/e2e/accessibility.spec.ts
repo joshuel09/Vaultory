@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { addCollectible, gotoReady, signIn } from './support'
+import { addCollectible, gotoReady, openEditScreen, signIn } from './support'
 
 /**
  * T079, FR-044, FR-045, SC-011.
@@ -92,5 +92,82 @@ test.describe('accessibility', () => {
         .locator('[role=status], [data-testid=collection-gallery], [data-testid=empty-collection]')
         .first(),
     ).toBeAttached()
+  })
+
+  // T072 — FR-037: editing and deleting are fully operable by keyboard, and the dialog behaves
+  // like a dialog.
+  test('the edit screen is reachable from the gallery by keyboard', async ({ page }) => {
+    const name = `Keyboard ${Date.now()}`
+    await addCollectible(page, name)
+    await gotoReady(page, '/collection')
+
+    const edit = page.getByTestId('edit-collectible').first()
+    await edit.focus()
+    await expect(edit).toBeFocused()
+    await page.keyboard.press('Enter')
+
+    await page.waitForURL(/\/collection\/[^/]+\/edit/)
+    await expect(page.getByLabel(/^name/i)).toBeVisible()
+  })
+
+  test('the delete confirmation traps focus and restores it on close', async ({ page }) => {
+    const name = `Dialog ${Date.now()}`
+    await addCollectible(page, name)
+    await openEditScreen(page, name)
+
+    const opener = page.getByTestId('delete-collectible')
+    await opener.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByTestId('delete-dialog')).toBeVisible()
+
+    // Focus moves into the dialog, onto the way out rather than the way through.
+    await expect(page.getByTestId('cancel-delete')).toBeFocused()
+
+    // Tabbing cannot leave it. Ten presses is well past the dialog's two buttons.
+    for (let i = 0; i < 10; i++) {
+      await page.keyboard.press('Tab')
+      const inside = await page.evaluate(() => {
+        const dialog = document.querySelector('[data-testid=delete-dialog]')
+        return dialog?.contains(document.activeElement) ?? false
+      })
+      expect(inside, `focus left the dialog after ${i + 1} Tab presses`).toBe(true)
+    }
+
+    await page.keyboard.press('Escape')
+    await expect(page.getByTestId('delete-dialog')).toBeHidden()
+    // And back where it came from, so a keyboard user is not dropped at the top of the document.
+    await expect(opener).toBeFocused()
+  })
+
+  test('the dialog names the collectible for assistive technology', async ({ page }) => {
+    const name = `Named ${Date.now()}`
+    await addCollectible(page, name)
+    await openEditScreen(page, name)
+    await page.getByTestId('delete-collectible').click()
+
+    const dialog = page.getByTestId('delete-dialog')
+    await expect(dialog).toHaveAttribute('aria-labelledby', /.+/)
+    const labelId = await dialog.getAttribute('aria-labelledby')
+    await expect(page.locator(`#${labelId}`)).toContainText(name)
+  })
+
+  test('a version conflict is announced rather than shown silently', async ({ page, context }) => {
+    const name = `Announced ${Date.now()}`
+    await addCollectible(page, name)
+    await openEditScreen(page, name)
+    const staleUrl = page.url()
+
+    const other = await context.newPage()
+    await other.goto(staleUrl)
+    await other.waitForLoadState('networkidle')
+    await other.getByLabel(/^name/i).fill(`${name} elsewhere`)
+    await other.getByRole('button', { name: /save changes/i }).click()
+    await other.waitForURL(/\/collection(\?|$)/)
+    await other.close()
+
+    await page.getByRole('button', { name: /save changes/i }).click()
+    // role=alert, so a screen reader is told the save did not land rather than being left to
+    // wonder why nothing happened.
+    await expect(page.getByTestId('version-conflict')).toHaveAttribute('role', 'alert')
   })
 })

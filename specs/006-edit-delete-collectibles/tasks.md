@@ -206,12 +206,12 @@ new one and the old rendition URL answers not-found. Remove it and confirm the p
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T072 [P] Extend `frontend/tests/e2e/accessibility.spec.ts` with the edit screen and the delete dialog — keyboard reachable from the gallery, focus trapped, focus restored (FR-037)
-- [ ] T073 [P] Extend `frontend/tests/e2e/appearance.spec.ts` so the edit screen and the dialog are asserted in both dark and light (FR-038)
-- [ ] T074 [P] Extend `frontend/tests/e2e/responsive.spec.ts` with the edit screen and the dialog at tablet and mobile widths (FR-039)
-- [ ] T075 [P] Add an integration test in `backend/tests/integration/query_count_test.go` that an edit and a delete each issue a bounded number of statements and introduce no per-entry query
-- [ ] T076 Update the Current features list in `CLAUDE.md` with feature 006 and its outcome
-- [ ] T077 Update `README.md` where it describes what a collector can do, so editing and deleting are not missing from the product description
+- [X] T072 [P] Extend `frontend/tests/e2e/accessibility.spec.ts` with the edit screen and the delete dialog — keyboard reachable from the gallery, focus trapped, focus restored (FR-037)
+- [X] T073 [P] Extend `frontend/tests/e2e/appearance.spec.ts` so the edit screen and the dialog are asserted in both dark and light (FR-038)
+- [X] T074 [P] Extend `frontend/tests/e2e/responsive.spec.ts` with the edit screen and the dialog at tablet and mobile widths (FR-039)
+- [X] T075 [P] Add an integration test in `backend/tests/integration/query_count_test.go` that an edit and a delete each issue a bounded number of statements and introduce no per-entry query
+- [X] T076 Update the Current features list in `CLAUDE.md` with feature 006 and its outcome
+- [X] T077 Update `README.md` where it describes what a collector can do, so editing and deleting are not missing from the product description
 - [ ] T078 Run every suite in full — `make test` (backend), `cd frontend && npm run test` (frontend units, which `make test` does not cover), and `make test-e2e` — and record genuine results, including any flakiness, rather than rounding to green
 - [ ] T079 Walk `specs/006-edit-delete-collectibles/quickstart.md` end to end against a running stack, including the curl scenarios for another collector's collectible
 - [ ] T080 Confirm the production build gates pass: `cd frontend && npm run build` and `make prod-build`. The constitution lists both as MUST before a feature is complete, and neither is reached by `make test`

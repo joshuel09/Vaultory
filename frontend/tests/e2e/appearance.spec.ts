@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { addCollectible, gotoReady, signIn } from './support'
+import { addCollectible, gotoReady, openEditScreen, signIn } from './support'
 
 /**
  * FR-046, SC-015: every screen and every interface state is legible in both appearances.
@@ -44,6 +44,43 @@ for (const scheme of ['dark', 'light'] as const) {
     test('the success state is legible', async ({ page }) => {
       await addCollectible(page, `Success ${scheme} ${Date.now()}`)
       await expect(page.getByTestId('add-success')).toBeVisible()
+    })
+
+    // T073 — FR-038: the screens this feature adds, in both appearances.
+    test('the edit screen is legible', async ({ page }) => {
+      const name = `Edit ${scheme} ${Date.now()}`
+      await addCollectible(page, name)
+      await openEditScreen(page, name)
+
+      const background = await bodyBackground(page)
+      expect(background, `the edit screen has no ${scheme} ground`).toBeTruthy()
+      // The heading has to be readable against it, not merely present.
+      const heading = page.getByRole('heading', { level: 1 })
+      await expect(heading).toBeVisible()
+      const colour = await heading.evaluate((el) => getComputedStyle(el).color)
+      expect(colour).not.toBe(background)
+    })
+
+    test('the delete confirmation is legible', async ({ page }) => {
+      const name = `Dialog ${scheme} ${Date.now()}`
+      await addCollectible(page, name)
+      await openEditScreen(page, name)
+      await page.getByTestId('delete-collectible').click()
+
+      const dialog = page.getByTestId('delete-dialog')
+      await expect(dialog).toBeVisible()
+      const styles = await dialog.evaluate((el) => {
+        const s = getComputedStyle(el)
+        return { background: s.backgroundColor, colour: s.color }
+      })
+      // A dialog that inherits the browser's default white in dark mode is the classic failure
+      // here, and it is invisible unless something checks.
+      expect(styles.background).not.toBe(styles.colour)
+      expect(styles.background).not.toBe('rgba(0, 0, 0, 0)')
+
+      const confirm = page.getByTestId('confirm-delete')
+      const confirmColour = await confirm.evaluate((el) => getComputedStyle(el).backgroundColor)
+      expect(confirmColour).not.toBe(styles.background)
     })
 
     test('the no-results state is legible', async ({ page }) => {
