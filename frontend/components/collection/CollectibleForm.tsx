@@ -112,6 +112,15 @@ export function CollectibleForm({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  /*
+   * A photograph is still uploading.
+   *
+   * Saving during one would submit the image the form is still holding — the old photograph when
+   * replacing, or none at all when adding — and the collector would be told nothing. The upload is
+   * a separate operation precisely so a refused image leaves the rest of the form alone; that
+   * same separation is what makes this race possible.
+   */
+  const [uploading, setUploading] = useState(false)
 
   function set<K extends keyof CollectibleFormValues>(key: K, value: CollectibleFormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: value }))
@@ -135,7 +144,7 @@ export function CollectibleForm({
      * the first has already raised the version, comes back 409, and tells the collector the
      * collectible changed since they opened it — about their own save.
      */
-    if (saving) return
+    if (saving || uploading) return
 
     setSaving(true)
     setFormError(null)
@@ -214,7 +223,7 @@ export function CollectibleForm({
           )}
         </Field>
 
-        <ImagePicker image={image} onChange={setImage} />
+        <ImagePicker image={image} onChange={setImage} onUploadingChange={setUploading} />
       </section>
 
       <section className="space-y-5">
@@ -312,8 +321,8 @@ export function CollectibleForm({
       </section>
 
       <div className="flex items-center gap-3 border-t border-edge pt-6">
-        <Button type="submit" size="lg" disabled={saving}>
-          {saving ? submittingLabel : submitLabel}
+        <Button type="submit" size="lg" disabled={saving || uploading}>
+          {saving ? submittingLabel : uploading ? 'Waiting for the photo…' : submitLabel}
         </Button>
         {hint && <p className="text-xs text-ink-faint">{hint}</p>}
       </div>

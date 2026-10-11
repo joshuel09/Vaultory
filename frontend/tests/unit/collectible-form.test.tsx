@@ -221,4 +221,49 @@ describe('EditCollectibleForm', () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith('/collection?status=sold'))
     expect(push).toHaveBeenCalledTimes(1)
   })
+
+  it('refuses to save while a photograph is still uploading (FR-019)', async () => {
+    // Uploading is a separate operation from saving, which is what lets a refused image leave the
+    // rest of the form alone. The same separation means a collector who chooses a replacement and
+    // presses Save immediately would otherwise submit the id the form is still holding — their old
+    // photograph — and be told nothing about it.
+    let releaseUpload: (r: Response) => void = () => {}
+    fetchMock.mockImplementation((_url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        return new Promise<Response>((resolve) => { releaseUpload = resolve })
+      }
+      return Promise.resolve(jsonResponse(200, stored))
+    })
+
+    const user = userEvent.setup()
+    const { container } = render(<EditCollectibleForm collectible={stored} returnTo="/collection" />)
+
+    // The file input is visually hidden and driven by the button beside it, so it is reached by id
+    // rather than by label.
+    const input = container.querySelector<HTMLInputElement>('#collectible-image')
+    expect(input).not.toBeNull()
+    const file = new File(['pretend-jpeg-bytes'], 'photo.jpg', { type: 'image/jpeg' })
+    await user.upload(input as HTMLInputElement, file)
+
+    const save = screen.getByRole('button', { name: /waiting for the photo/i })
+    expect(save).toBeDisabled()
+    await user.click(save)
+    // Only the upload. No PUT went out behind it.
+    expect(fetchMock.mock.calls.filter(([, i]) => (i as RequestInit)?.method === 'PUT')).toHaveLength(0)
+
+    await act(async () => {
+      releaseUpload(
+        jsonResponse(201, {
+          id: 'new-image-id',
+          renditionUrl: '/api/images/new-image-id/rendition',
+          contentType: 'image/jpeg',
+          byteSize: 1024,
+          width: 800,
+          height: 1000,
+        }),
+      )
+    })
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /save changes/i })).toBeEnabled())
+  })
 })

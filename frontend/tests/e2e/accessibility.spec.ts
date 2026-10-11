@@ -123,15 +123,37 @@ test.describe('accessibility', () => {
     // Focus moves into the dialog, onto the way out rather than the way through.
     await expect(page.getByTestId('cancel-delete')).toBeFocused()
 
-    // Tabbing cannot leave it. Ten presses is well past the dialog's two buttons.
+    /*
+     * What showModal() actually guarantees, and what matters here: everything behind the dialog is
+     * inert. Not that Tab cycles within the dialog's own children — Tab legitimately passes
+     * through the browser's own chrome, so document.activeElement becomes <body> for a step, and
+     * asserting otherwise tests the browser rather than the product.
+     *
+     * The failure this is looking for is a collector tabbing out of a confirmation and into the
+     * form behind it, editing a collectible that is halfway through being deleted.
+     */
     for (let i = 0; i < 10; i++) {
       await page.keyboard.press('Tab')
-      const inside = await page.evaluate(() => {
+      const landedBehind = await page.evaluate(() => {
+        const active = document.activeElement
+        if (!active || active === document.body || active === document.documentElement) return null
         const dialog = document.querySelector('[data-testid=delete-dialog]')
-        return dialog?.contains(document.activeElement) ?? false
+        if (dialog?.contains(active)) return null
+        return active.tagName + (active.getAttribute('name') ?? active.id ?? '')
       })
-      expect(inside, `focus left the dialog after ${i + 1} Tab presses`).toBe(true)
+      expect(landedBehind, `Tab ${i + 1} reached ${landedBehind}, which is behind the dialog`)
+        .toBeNull()
     }
+
+    // The same property, asserted directly rather than by tabbing: the form behind cannot take
+    // focus even when asked.
+    const focusedBehind = await page.evaluate(() => {
+      const field = document.querySelector<HTMLInputElement>('input[id$=name], input')
+      field?.focus()
+      const dialog = document.querySelector('[data-testid=delete-dialog]')
+      return field !== null && document.activeElement === field && !dialog?.contains(field)
+    })
+    expect(focusedBehind, 'a field behind the dialog took focus; the dialog is not modal').toBe(false)
 
     await page.keyboard.press('Escape')
     await expect(page.getByTestId('delete-dialog')).toBeHidden()

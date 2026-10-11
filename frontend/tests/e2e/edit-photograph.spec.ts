@@ -11,6 +11,21 @@ import {
 test.describe("changing a collectible's photograph", () => {
   test.beforeEach(async ({ page }) => signIn(page))
 
+  /**
+   * The rendition URL on a collectible's card, once the gallery has rendered it.
+   *
+   * Deliberately not gotoReady: its networkidle wait is for hydration before typing, and these
+   * checks only read. On a gallery of lazily-loaded images behind a dev-mode websocket, networkidle
+   * is a signal that may never arrive — waiting for the element itself is both more reliable and
+   * closer to what the assertion is about.
+   */
+  async function renditionUrlOf(page: import('@playwright/test').Page, name: string) {
+    await page.goto('/collection')
+    const img = page.getByTestId('collectible-card').filter({ hasText: name }).first().locator('img')
+    await expect(img).toBeVisible()
+    return (await img.getAttribute('src')) ?? ''
+  }
+
   /** Add a collectible carrying a real photograph, and return its rendition URL. */
   async function addWithPhoto(page: import('@playwright/test').Page, name: string) {
     await gotoReady(page, '/collection/new')
@@ -21,10 +36,7 @@ test.describe("changing a collectible's photograph", () => {
     await expect(page.getByTestId('add-success')).toBeVisible()
     await page.waitForLoadState('networkidle')
 
-    await gotoReady(page, '/collection')
-    const img = page.getByTestId('collectible-card').filter({ hasText: name }).first().locator('img')
-    await expect(img).toBeVisible()
-    return (await img.getAttribute('src')) ?? ''
+    return renditionUrlOf(page, name)
   }
 
   // User Story 3's independent test.
@@ -38,13 +50,20 @@ test.describe("changing a collectible's photograph", () => {
 
     await openEditScreen(page, name)
     await page.locator('#collectible-image').setInputFiles(replacementPhoto)
+    // Wait for the upload to finish before saving. Uploading is a separate operation from saving,
+    // so without this the form is still holding the old photograph when the save goes out — which
+    // is exactly the race the Save button is now disabled for.
+    await expect(page.getByTestId('image-preview')).toHaveAttribute('data-uploading', 'false')
+    await expect(page.locator('#collectible-image')).toBeEnabled()
     await page.getByRole('button', { name: /save changes/i }).click()
     await page.waitForURL(/\/collection(\?|$)/)
 
-    await gotoReady(page, '/collection')
-    const newUrl = await page.getByTestId('collectible-card').filter({ hasText: name }).first()
-      .locator('img').getAttribute('src')
-    expect(newUrl).not.toBe(originalUrl)
+    // The card now shows a different rendition. Polled rather than read once, because the save
+    // navigates and the gallery re-renders on arrival.
+    const newUrl = await expect
+      .poll(() => renditionUrlOf(page, name), { timeout: 15_000 })
+      .not.toBe(originalUrl)
+      .then(() => renditionUrlOf(page, name))
 
     /*
      * The old rendition is gone, by its owner's own session.
@@ -66,7 +85,7 @@ test.describe("changing a collectible's photograph", () => {
     await page.getByRole('button', { name: /save changes/i }).click()
     await page.waitForURL(/\/collection(\?|$)/)
 
-    await gotoReady(page, '/collection')
+    await page.goto('/collection')
     const card = page.getByTestId('collectible-card').filter({ hasText: name }).first()
     // The designed placeholder, not a broken image (FR-017).
     await expect(card.locator('img')).toHaveCount(0)
@@ -89,7 +108,7 @@ test.describe("changing a collectible's photograph", () => {
     await page.waitForURL(/\/collection(\?|$)/)
 
     expect((await page.request.get(url)).status()).toBe(200)
-    await gotoReady(page, '/collection')
+    await page.goto('/collection')
     await expect(
       page.getByTestId('collectible-card').filter({ hasText: `${name} renamed` }).first().locator('img'),
     ).toBeVisible()
@@ -107,7 +126,7 @@ test.describe("changing a collectible's photograph", () => {
     await page.waitForURL(/\/collection(\?|$)/)
 
     expect((await page.request.get(url)).status()).toBe(200)
-    await gotoReady(page, '/collection')
+    await page.goto('/collection')
     await expect(
       page.getByTestId('collectible-card').filter({ hasText: `${name} corrected` }).first().locator('img'),
     ).toBeVisible()
