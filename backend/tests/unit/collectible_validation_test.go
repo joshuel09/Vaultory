@@ -10,12 +10,18 @@ import (
 
 var today = time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
 
+// minimalSubmitted is the smallest valid set of attributes: a name and a status, nothing else
+// (FR-005). Both entry points take it, which is the point.
+func minimalSubmitted() collectible.Submitted {
+	return collectible.Submitted{Name: "Kaiju Sentinel", Status: "owned"}
+}
+
 func minimalDraft() collectible.Draft {
-	return collectible.Draft{
-		SubmissionKey: "key-1",
-		Name:          "Kaiju Sentinel",
-		Status:        "owned",
-	}
+	return collectible.Draft{SubmissionKey: "key-1", Submitted: minimalSubmitted()}
+}
+
+func minimalEdit() collectible.EditDraft {
+	return collectible.EditDraft{ExpectedVersion: 1, Submitted: minimalSubmitted()}
 }
 
 func ptr(s string) *string { return &s }
@@ -121,13 +127,12 @@ func v(d collectible.Draft) []collectible.Violation {
 
 // FR-020: every problem is reported together, not one at a time.
 func TestAllViolationsReportedTogether(t *testing.T) {
-	d := collectible.Draft{
-		SubmissionKey: "k",
+	d := collectible.Draft{SubmissionKey: "k", Submitted: collectible.Submitted{
 		Name:          "   ",
 		Status:        "borrowed",
 		PurchasePrice: ptr("-5.00"),
 		PurchaseDate:  ptr("2030-01-01"),
-	}
+	}}
 	_, vs := d.Validate(today)
 	f := fieldsOf(vs)
 	for field, want := range map[string]string{
@@ -277,4 +282,159 @@ func TestInvalidImageReference(t *testing.T) {
 	if fieldsOf(v(d))["imageId"] != collectible.CodeInvalidValue {
 		t.Error("a malformed image reference must be refused")
 	}
+}
+
+// ---------------------------------------------------------------------------
+// T011 — adding and editing apply one rule set
+// ---------------------------------------------------------------------------
+
+// Every case runs through both entry points and must produce the same verdict.
+//
+// This is SC-008 expressed as a test rather than as a promise: "every validation rule that rejects
+// a value when adding rejects the same value when editing, with no rule applying in only one of
+// the two". A rule added to one path and forgotten on the other fails here, which is the whole
+// reason the two share a validator (FR-010).
+func TestAddAndEditApplyTheSameRules(t *testing.T) {
+	cases := []struct {
+		name   string
+		mutate func(*collectible.Submitted)
+		want   map[string]string // field -> code; empty means the submission must be accepted
+	}{
+		{"minimal is valid", func(s *collectible.Submitted) {}, nil},
+		{"name required", func(s *collectible.Submitted) { s.Name = "" },
+			map[string]string{"name": collectible.CodeRequired}},
+		{"whitespace name is missing", func(s *collectible.Submitted) { s.Name = " \t\n " },
+			map[string]string{"name": collectible.CodeRequired}},
+		{"name length cap", func(s *collectible.Submitted) { s.Name = strings.Repeat("a", collectible.MaxNameLength+1) },
+			map[string]string{"name": collectible.CodeTooLong}},
+		{"status required", func(s *collectible.Submitted) { s.Status = "" },
+			map[string]string{"collectionStatus": collectible.CodeRequired}},
+		{"status closed to four", func(s *collectible.Submitted) { s.Status = "borrowed" },
+			map[string]string{"collectionStatus": collectible.CodeInvalidValue}},
+		{"status is case sensitive", func(s *collectible.Submitted) { s.Status = "Owned" },
+			map[string]string{"collectionStatus": collectible.CodeInvalidValue}},
+		{"negative price", func(s *collectible.Submitted) { s.PurchasePrice = ptr("-0.01") },
+			map[string]string{"purchasePrice": collectible.CodeNegative}},
+		{"zero price is a recorded amount", func(s *collectible.Submitted) { s.PurchasePrice = ptr("0.00") }, nil},
+		{"excess precision refused not rounded", func(s *collectible.Submitted) { s.PurchasePrice = ptr("1.005") },
+			map[string]string{"purchasePrice": collectible.CodeInvalidValue}},
+		{"future purchase date", func(s *collectible.Submitted) { s.PurchaseDate = ptr("2030-01-01") },
+			map[string]string{"purchaseDate": collectible.CodeDateInFuture}},
+		{"purchase date today is fine", func(s *collectible.Submitted) { s.PurchaseDate = ptr("2026-09-10") }, nil},
+		{"malformed purchase date", func(s *collectible.Submitted) { s.PurchaseDate = ptr("14/08/2026") },
+			map[string]string{"purchaseDate": collectible.CodeInvalidValue}},
+		{"future release date is fine", func(s *collectible.Submitted) { s.ReleaseDate = ptr("2099-12-31") }, nil},
+		{"notes length cap", func(s *collectible.Submitted) { s.Notes = ptr(strings.Repeat("n", collectible.MaxNotesLength+1)) },
+			map[string]string{"notes": collectible.CodeTooLong}},
+		{"category length cap", func(s *collectible.Submitted) { s.Category = ptr(strings.Repeat("c", collectible.MaxCategoryLength+1)) },
+			map[string]string{"category": collectible.CodeTooLong}},
+		{"scale length cap", func(s *collectible.Submitted) { s.Scale = ptr(strings.Repeat("s", collectible.MaxScaleLength+1)) },
+			map[string]string{"scale": collectible.CodeTooLong}},
+		{"malformed image reference", func(s *collectible.Submitted) { s.ImageID = ptr("not-a-uuid") },
+			map[string]string{"imageId": collectible.CodeInvalidValue}},
+		{"blank optionals become absent", func(s *collectible.Submitted) {
+			s.Character = ptr("  ")
+			s.Notes = ptr("")
+		}, nil},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			added := minimalSubmitted()
+			c.mutate(&added)
+			_, addViolations := collectible.Draft{SubmissionKey: "key-1", Submitted: added}.Validate(today)
+
+			edited := minimalSubmitted()
+			c.mutate(&edited)
+			_, editViolations := collectible.EditDraft{ExpectedVersion: 1, Submitted: edited}.Validate(today)
+
+			addFields, editFields := fieldsOf(addViolations), fieldsOf(editViolations)
+
+			for field, code := range c.want {
+				if addFields[field] != code {
+					t.Errorf("adding: field %q gave code %q, want %q", field, addFields[field], code)
+				}
+			}
+			if len(c.want) == 0 && len(addViolations) != 0 {
+				t.Errorf("adding: expected no violations, got %+v", addViolations)
+			}
+
+			// The real assertion. Not "editing also rejects this" but "editing reaches exactly the
+			// same verdict", so a rule cannot be stricter or looser on one path.
+			if len(addFields) != len(editFields) {
+				t.Fatalf("adding reported %v, editing reported %v — the two paths disagree (SC-008)",
+					addFields, editFields)
+			}
+			for field, code := range addFields {
+				if editFields[field] != code {
+					t.Errorf("field %q: adding says %q, editing says %q (SC-008)",
+						field, code, editFields[field])
+				}
+			}
+		})
+	}
+}
+
+// FR-006: any status to any other, in any order, with no transition forbidden.
+//
+// This holds by construction today — the domain validates the new status and knows nothing of the
+// old one — which is exactly the kind of property a later change removes without noticing.
+func TestEveryStatusTransitionIsAllowed(t *testing.T) {
+	statuses := []string{"owned", "preordered", "wishlist", "sold"}
+	for _, from := range statuses {
+		for _, to := range statuses {
+			e := minimalEdit()
+			e.Status = to
+			if _, vs := e.Validate(today); len(vs) != 0 {
+				t.Errorf("%s -> %s was refused: %+v — no transition is forbidden (FR-006)",
+					from, to, vs)
+			}
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// T012 — the one field each path has that the other does not
+// ---------------------------------------------------------------------------
+
+// FR-027a: an edit that names no version cannot be checked for staleness, and accepting it would
+// mean overwriting whatever changed since the collector opened the collectible.
+func TestEditRequiresTheVersionItWasBasedOn(t *testing.T) {
+	for _, version := range []int{0, -1} {
+		e := minimalEdit()
+		e.ExpectedVersion = version
+		if fieldsOf(violationsOfEdit(e))["expectedVersion"] != collectible.CodeRequired {
+			t.Errorf("expectedVersion %d must be refused (FR-027a)", version)
+		}
+	}
+
+	e := minimalEdit()
+	e.ExpectedVersion = 7
+	got, vs := e.Validate(today)
+	if len(vs) != 0 {
+		t.Fatalf("a valid edit was refused: %+v", vs)
+	}
+	if got.ExpectedVersion != 7 {
+		t.Errorf("ExpectedVersion = %d, want 7", got.ExpectedVersion)
+	}
+}
+
+// The mirror of the above: adding still requires its submission key, and editing must not have
+// acquired one. Sharing a validator must not have loosened FR-047.
+func TestSubmissionKeyBelongsToAddingOnly(t *testing.T) {
+	d := minimalDraft()
+	d.SubmissionKey = ""
+	if fieldsOf(v(d))["submissionKey"] != collectible.CodeRequired {
+		t.Error("adding still requires a submission key (FR-047)")
+	}
+
+	// An edit carries no key and must not be asked for one.
+	if f := fieldsOf(violationsOfEdit(minimalEdit())); f["submissionKey"] != "" {
+		t.Errorf("editing asked for a submission key (%q); it has nothing to de-duplicate", f["submissionKey"])
+	}
+}
+
+func violationsOfEdit(e collectible.EditDraft) []collectible.Violation {
+	_, vs := e.Validate(today)
+	return vs
 }

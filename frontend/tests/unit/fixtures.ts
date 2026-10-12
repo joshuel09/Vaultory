@@ -4,6 +4,7 @@ import type { Collectible, CollectionStatus } from '@/lib/api/types'
 export function aCollectible(overrides: Partial<Collectible> = {}): Collectible {
   return {
     id: '6f9619ff-8b86-d011-b42d-00cf4fc964ff',
+    version: 1,
     name: 'Kaiju Sentinel',
     collectionStatus: 'owned' as CollectionStatus,
     character: null,

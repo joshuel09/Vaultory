@@ -12,8 +12,12 @@ import (
 // Wire types. These mirror contracts/openapi.yaml exactly; the contract is the source of truth and
 // the frontend's types are generated from it (Constitution Principle III).
 
-type addCollectibleRequest struct {
-	SubmissionKey string  `json:"submissionKey"`
+// collectibleFields is every attribute of a collectible as it crosses the wire. Embedded by both
+// requests without a json tag, so the fields appear inline exactly as the contract defines them.
+//
+// Shared rather than duplicated because the two requests must carry the same attributes: an edit
+// is a full replacement validated by the same rules as an add (FR-010, SC-008).
+type collectibleFields struct {
 	Name          string  `json:"name"`
 	Status        string  `json:"collectionStatus"`
 	Character     *string `json:"character"`
@@ -29,9 +33,8 @@ type addCollectibleRequest struct {
 	ImageID       *string `json:"imageId"`
 }
 
-func (r addCollectibleRequest) toDraft() collectible.Draft {
-	return collectible.Draft{
-		SubmissionKey: r.SubmissionKey,
+func (r collectibleFields) toSubmitted() collectible.Submitted {
+	return collectible.Submitted{
 		Name:          r.Name,
 		Status:        r.Status,
 		Character:     r.Character,
@@ -48,6 +51,34 @@ func (r addCollectibleRequest) toDraft() collectible.Draft {
 	}
 }
 
+type addCollectibleRequest struct {
+	SubmissionKey string `json:"submissionKey"`
+	collectibleFields
+}
+
+// editCollectibleRequest mirrors EditCollectibleRequest in the contract.
+//
+// A full replacement: every attribute the collectible should have afterwards. An omitted or null
+// imageId means it has no photograph and removes the one it had (FR-017).
+type editCollectibleRequest struct {
+	ExpectedVersion int `json:"expectedVersion"`
+	collectibleFields
+}
+
+func (r editCollectibleRequest) toEditDraft() collectible.EditDraft {
+	return collectible.EditDraft{
+		ExpectedVersion: r.ExpectedVersion,
+		Submitted:       r.toSubmitted(),
+	}
+}
+
+func (r addCollectibleRequest) toDraft() collectible.Draft {
+	return collectible.Draft{
+		SubmissionKey: r.SubmissionKey,
+		Submitted:     r.toSubmitted(),
+	}
+}
+
 type imageRefResponse struct {
 	ID           string `json:"id"`
 	RenditionURL string `json:"renditionUrl"`
@@ -56,7 +87,11 @@ type imageRefResponse struct {
 }
 
 type collectibleResponse struct {
-	ID            string            `json:"id"`
+	ID string `json:"id"`
+	// Version is sent back as expectedVersion when editing. It appears on every collectible the
+	// API returns, including in the gallery, because there is one projection rather than a
+	// separate detail shape to drift from it (FR-027a).
+	Version       int               `json:"version"`
 	Name          string            `json:"name"`
 	Status        string            `json:"collectionStatus"`
 	Character     *string           `json:"character"`
@@ -98,6 +133,7 @@ func toCollectibleResponse(row postgres.Row) collectibleResponse {
 	c := row.Collectible
 	out := collectibleResponse{
 		ID:           c.ID.String(),
+		Version:      c.Version,
 		Name:         c.Name,
 		Status:       string(c.Status),
 		Character:    c.Character,

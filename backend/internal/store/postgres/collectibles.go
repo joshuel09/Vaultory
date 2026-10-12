@@ -42,7 +42,7 @@ const collectibleColumns = `
 	c.id, c.collector_id, c.name, c.collection_status,
 	c."character", c.series, c.manufacturer, c.category, c.scale, c.edition,
 	c.purchase_price::text, c.purchase_date, c.release_date, c.notes,
-	c.image_id, i.rendition_key, c.created_at`
+	c.image_id, i.rendition_key, c.created_at, c.version`
 
 // Row is one collectible as stored, with just enough of its image to render a card. The rendition
 // arrives through a join in the same statement — there is no per-entry image lookup (no N+1).
@@ -64,7 +64,7 @@ func scanRow(s pgx.Row) (Row, error) {
 		&c.ID, &c.CollectorID, &c.Name, &c.Status,
 		&c.Character, &c.Series, &c.Manufacturer, &c.Category, &c.Scale, &c.Edition,
 		&priceText, &purchaseDate, &releaseDate, &c.Notes,
-		&c.ImageID, &renditionKey, &c.CreatedAt,
+		&c.ImageID, &renditionKey, &c.CreatedAt, &c.Version,
 	)
 	if err != nil {
 		return Row{}, err
@@ -212,6 +212,235 @@ func (s *Store) findBySubmissionKey(
 		return Row{}, false, fmt.Errorf("look up submission key: %w", err)
 	}
 	return row, true, nil
+}
+
+// Get reads one collectible belonging to this collector.
+//
+// collector_id is part of the WHERE clause rather than something checked afterwards, so there is
+// no moment at which this code holds another collector's row and has yet to decide what to do with
+// it. Absent and someone-else's are the same answer (FR-030, FR-031).
+func (s *Store) Get(ctx context.Context, collectorID, collectibleID uuid.UUID) (Row, error) {
+	row, err := scanRow(s.pool.QueryRow(ctx, `
+		SELECT `+collectibleColumns+`
+		FROM collectibles c
+		LEFT JOIN collectible_images i ON i.id = c.image_id AND i.collector_id = c.collector_id
+		WHERE c.id = $1 AND c.collector_id = $2`, collectibleID, collectorID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Row{}, ErrNotFound
+	}
+	if err != nil {
+		return Row{}, fmt.Errorf("get collectible: %w", err)
+	}
+	return row, nil
+}
+
+// releaseImage deletes an image row and queues its files for removal, inside the caller's
+// transaction.
+//
+// Deleting the row is what makes the image unfetchable, and it is the whole of the privacy
+// guarantee (FR-020). A rendition is authorized against collectible_images.collector_id on its
+// own — it has to be, because the upload preview fetches one before any collectible references it
+// — so merely unlinking an image would leave it readable by its owner indefinitely.
+//
+// The files are a separate matter. They are queued rather than deleted here because a transaction
+// cannot roll back a filesystem, and because a storage fault must never be able to stop a
+// collector deleting something (FR-020a, research.md Decisions 4 and 5).
+func releaseImage(ctx context.Context, tx pgx.Tx, collectorID, imageID uuid.UUID) error {
+	var originalKey, renditionKey string
+	err := tx.QueryRow(ctx, `
+		DELETE FROM collectible_images
+		WHERE id = $1 AND collector_id = $2
+		RETURNING original_key, rendition_key`, imageID, collectorID,
+	).Scan(&originalKey, &renditionKey)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Already gone. Nothing to queue, and nothing wrong — a concurrent edit may have released
+		// it first, and the end state is the one we wanted.
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("delete image row: %w", err)
+	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO pending_image_deletions (image_id, collector_id, original_key, rendition_key)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (image_id) DO NOTHING`,
+		imageID, collectorID, originalKey, renditionKey)
+	if err != nil {
+		return fmt.Errorf("queue image deletion: %w", err)
+	}
+	return nil
+}
+
+// VersionConflictError means the collectible changed after the collector opened it.
+//
+// It carries the collectible as it now stands, because the collector has to be shown what it
+// actually says, and making them fetch it again would open a second window in which it changes
+// (FR-027).
+type VersionConflictError struct {
+	Current Row
+}
+
+func (e *VersionConflictError) Error() string {
+	return fmt.Sprintf("collectible %s is at version %d",
+		e.Current.Collectible.ID, e.Current.Collectible.Version)
+}
+
+// Edit replaces every attribute of one collectible, if nobody has changed it in the meantime.
+//
+// The shape here is deliberate. The obvious implementation —
+//
+//	UPDATE collectibles SET … WHERE id = $1 AND collector_id = $2 AND version = $3
+//
+// reports zero rows affected for three different situations: no such collectible, somebody else's
+// collectible, and a version that has moved on. The first two must answer 404 and the third 409,
+// so collapsing them loses the distinction the requirements depend on (research.md Decision 6).
+//
+// SELECT … FOR UPDATE also serialises concurrent edits of the same row. Without it, two
+// transactions both read version 3, both find it current, and both write — one collector's work
+// disappearing with nobody told, which is the thing Principle IV forbids.
+func (s *Store) Edit(
+	ctx context.Context,
+	collectorID, collectibleID uuid.UUID,
+	v collectible.ValidatedEdit,
+) (Row, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Row{}, fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Lock the row and read what it currently holds. The image id comes back too, which is what
+	// tells us whether the photograph is being replaced or removed.
+	var (
+		currentVersion int
+		currentImageID *uuid.UUID
+	)
+	err = tx.QueryRow(ctx, `
+		SELECT version, image_id FROM collectibles
+		WHERE id = $1 AND collector_id = $2
+		FOR UPDATE`, collectibleID, collectorID).Scan(&currentVersion, &currentImageID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Absent, or another collector's. Deliberately the same answer (FR-031).
+		return Row{}, ErrNotFound
+	}
+	if err != nil {
+		return Row{}, fmt.Errorf("lock collectible: %w", err)
+	}
+
+	if currentVersion != v.ExpectedVersion {
+		// Read the current state through the same transaction so what the collector is shown is
+		// the row we just locked, not a third version that arrived in between.
+		current, readErr := scanRow(tx.QueryRow(ctx, `
+			SELECT `+collectibleColumns+`
+			FROM collectibles c
+			LEFT JOIN collectible_images i ON i.id = c.image_id AND i.collector_id = c.collector_id
+			WHERE c.id = $1 AND c.collector_id = $2`, collectibleID, collectorID))
+		if readErr != nil {
+			return Row{}, fmt.Errorf("read the current collectible: %w", readErr)
+		}
+		return Row{}, &VersionConflictError{Current: current}
+	}
+
+	var price *string
+	if v.PurchasePrice != nil {
+		text := v.PurchasePrice.String()
+		price = &text
+	}
+
+	_, err = tx.Exec(ctx, `
+		UPDATE collectibles SET
+			name = $3, collection_status = $4,
+			"character" = $5, series = $6, manufacturer = $7, category = $8,
+			scale = $9, edition = $10,
+			purchase_price = $11::numeric, purchase_date = $12, release_date = $13,
+			notes = $14, image_id = $15,
+			version = version + 1
+		WHERE id = $1 AND collector_id = $2`,
+		collectibleID, collectorID,
+		v.Name, string(v.Status),
+		v.Character, v.Series, v.Manufacturer, v.Category,
+		v.Scale, v.Edition,
+		price, v.PurchaseDate, v.ReleaseDate,
+		v.Notes, v.ImageID,
+	)
+	if err != nil {
+		// The composite foreign key refusing an image that is not this collector's. Reaches the
+		// collector as an unknown-image violation rather than an internal error (FR-021).
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+			return Row{}, ErrUnknownImage
+		}
+		return Row{}, fmt.Errorf("update collectible: %w", err)
+	}
+
+	// The photograph is gone from this collectible — replaced or removed. Deleting its row is what
+	// makes it unfetchable, and it happens here, inside the same transaction as the edit, so the
+	// two cannot disagree (FR-020).
+	if currentImageID != nil && (v.ImageID == nil || *v.ImageID != *currentImageID) {
+		if err := releaseImage(ctx, tx, collectorID, *currentImageID); err != nil {
+			return Row{}, err
+		}
+	}
+
+	row, err := scanRow(tx.QueryRow(ctx, `
+		SELECT `+collectibleColumns+`
+		FROM collectibles c
+		LEFT JOIN collectible_images i ON i.id = c.image_id AND i.collector_id = c.collector_id
+		WHERE c.id = $1 AND c.collector_id = $2`, collectibleID, collectorID))
+	if err != nil {
+		return Row{}, fmt.Errorf("read back collectible: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Row{}, fmt.Errorf("commit: %w", err)
+	}
+	return row, nil
+}
+
+// Delete removes one collectible permanently, and the photograph it referenced with it.
+//
+// Reports whether a row was actually removed. The caller does not vary its response on that —
+// deleting something absent is answered as a success either way (FR-025) — but it decides whether
+// a deletion is recorded, because a record of a deletion that did not happen is wrong in exactly
+// the situation the record exists to explain (FR-040).
+//
+// collector_id is in the WHERE clause, so there is no path by which this reaches another
+// collector's row (FR-030).
+func (s *Store) Delete(ctx context.Context, collectorID, collectibleID uuid.UUID) (bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return false, fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var imageID *uuid.UUID
+	err = tx.QueryRow(ctx, `
+		DELETE FROM collectibles
+		WHERE id = $1 AND collector_id = $2
+		RETURNING image_id`, collectibleID, collectorID).Scan(&imageID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Already gone, never existed, or someone else's. Nothing to do, and nothing to disclose.
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("delete collectible: %w", err)
+	}
+
+	// The photograph goes with it, in the same transaction. Nothing can observe a state in which
+	// the collectible is gone and its image is still fetchable (FR-020).
+	//
+	// collectible_submissions cascades on collectible_id, so a collectible added inside the
+	// idempotency window deletes cleanly rather than tripping over its own submission row.
+	if imageID != nil {
+		if err := releaseImage(ctx, tx, collectorID, *imageID); err != nil {
+			return false, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("commit: %w", err)
+	}
+	return true, nil
 }
 
 // Page is one page of a collection.

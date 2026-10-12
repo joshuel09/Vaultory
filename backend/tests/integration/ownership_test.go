@@ -33,7 +33,10 @@ func testJPEG(t *testing.T, w, h int) []byte {
 }
 
 func draft(key, name string) collectible.Draft {
-	return collectible.Draft{SubmissionKey: key, Name: name, Status: "owned"}
+	return collectible.Draft{
+		SubmissionKey: key,
+		Submitted:     collectible.Submitted{Name: name, Status: "owned"},
+	}
 }
 
 // FR-026: one collector's collection never contains another's collectibles.

@@ -4,11 +4,19 @@ import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { ApiError } from '@/lib/api/errors'
 import { describeObviousProblem, uploadImage } from '@/lib/api/images'
-import type { CollectibleImage } from '@/lib/api/types'
+import type { CollectibleImageRef } from '@/lib/api/types'
 
 interface Props {
-  image: CollectibleImage | null
-  onChange: (image: CollectibleImage | null) => void
+  image: CollectibleImageRef | null
+  onChange: (image: CollectibleImageRef | null) => void
+  /**
+   * Told whenever an upload starts or finishes.
+   *
+   * The form needs this to refuse a save while a photograph is in flight. Otherwise a collector
+   * who chooses a replacement and presses Save straight away submits the id the form still holds
+   * — their old photograph — and is told nothing about it.
+   */
+  onUploadingChange?: (uploading: boolean) => void
 }
 
 /**
@@ -18,7 +26,7 @@ interface Props {
  * form untouched: the collector fixes the photo or proceeds without one, and nothing they typed is
  * lost (FR-013).
  */
-export function ImagePicker({ image, onChange }: Props) {
+export function ImagePicker({ image, onChange, onUploadingChange }: Props) {
   const input = useRef<HTMLInputElement | null>(null)
   const [uploading, setUploading] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
@@ -36,6 +44,7 @@ export function ImagePicker({ image, onChange }: Props) {
     }
 
     setUploading(true)
+    onUploadingChange?.(true)
     try {
       onChange(await uploadImage(file))
     } catch (err) {
@@ -46,6 +55,7 @@ export function ImagePicker({ image, onChange }: Props) {
       if (input.current) input.current.value = ''
     } finally {
       setUploading(false)
+      onUploadingChange?.(false)
     }
   }
 
@@ -54,7 +64,11 @@ export function ImagePicker({ image, onChange }: Props) {
       <span className="block text-sm font-medium text-ink">Photograph</span>
 
       <div className="flex items-start gap-4">
-        <div className="h-28 w-[5.6rem] shrink-0 overflow-hidden rounded-lg border border-edge bg-surface-raised">
+        <div
+          data-testid="image-preview"
+          data-uploading={uploading ? 'true' : 'false'}
+          className="h-28 w-[5.6rem] shrink-0 overflow-hidden rounded-lg border border-edge bg-surface-raised"
+        >
           {image ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img

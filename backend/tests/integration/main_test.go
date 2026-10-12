@@ -91,6 +91,7 @@ func freshStore(t *testing.T) (*postgres.Store, *collection.Service) {
 	ctx := context.Background()
 	for _, stmt := range []string{
 		`DELETE FROM collectible_submissions`,
+		`DELETE FROM pending_image_deletions`,
 		`UPDATE collectibles SET image_id = NULL`,
 		`DELETE FROM collectible_images`,
 		`DELETE FROM collectibles`,

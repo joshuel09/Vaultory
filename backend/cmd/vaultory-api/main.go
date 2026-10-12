@@ -72,6 +72,20 @@ func run() error {
 	}
 
 	service := collection.NewService(postgres.NewStore(pool), images, cfg.IdempotencyWindow)
+
+	// Files belonging to images deleted before the last shutdown.
+	//
+	// The queue is normally worked by the edits and deletions that fill it, which covers a running
+	// service. A restart is the gap: entries left by a storage fault would otherwise wait for the
+	// next collector to delete something, which might be never (FR-020a).
+	//
+	// Deliberately not fatal and deliberately not in a goroutine. Nothing a collector can see
+	// depends on it — the images are already unreachable — so a failure here is worth recording and
+	// nothing more. It is bounded to one batch, so it cannot delay start-up for long.
+	if drained := service.DrainImageDeletions(ctx); drained > 0 {
+		slog.Info("removed image files left over from a previous run", "images", drained)
+	}
+
 	server := httpapi.NewServer(service, resolver)
 
 	srv := &http.Server{

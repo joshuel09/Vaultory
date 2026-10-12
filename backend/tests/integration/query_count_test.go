@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 // T082: a gallery page costs a fixed number of statements, whatever it contains.
@@ -62,4 +64,91 @@ func statementCount(t *testing.T) int64 {
 		t.Skipf("statement statistics unavailable: %v", err)
 	}
 	return n
+}
+
+// T075: an edit and a deletion each cost a bounded number of statements.
+//
+// Both drain the pending-image-deletion queue, which is the thing most likely to turn one
+// collector's operation into arbitrarily much work. The drain takes a bounded batch for exactly
+// that reason; this asserts the bound holds rather than trusting the constant.
+func TestEditAndDeleteCostDoesNotGrowWithTheQueue(t *testing.T) {
+	store, svc := freshStore(t)
+	ctx := context.Background()
+
+	measure := func(label string, work func()) int64 {
+		before := statementCount(t)
+		work()
+		after := statementCount(t) - before
+		t.Logf("%s cost %d statements", label, after)
+		return after
+	}
+
+	// A baseline edit and deletion with an empty queue.
+	first, _, err := svc.Add(ctx, collectorA, draft("qc-1", "Baseline"))
+	if err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	baselineEdit := measure("edit (empty queue)", func() {
+		e := edit(first.Row.Collectible, first.Row.Collectible.Version)
+		e.Name = "Baseline edited"
+		if _, v, err := svc.Edit(ctx, collectorA, first.Row.Collectible.ID, e); err != nil || len(v) > 0 {
+			t.Fatalf("edit: %v %+v", err, v)
+		}
+	})
+	baselineDelete := measure("delete (empty queue)", func() {
+		if err := svc.Delete(ctx, collectorA, first.Row.Collectible.ID); err != nil {
+			t.Fatalf("delete: %v", err)
+		}
+	})
+
+	// Now a queue far larger than one batch. Each entry names files that do not exist, which the
+	// image store treats as already deleted — so the work is real but the bytes are not.
+	for i := 0; i < 200; i++ {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO pending_image_deletions (image_id, collector_id, original_key, rendition_key)
+			VALUES ($1, $2, $3, $4)`,
+			uuid.New(), collectorA, fmt.Sprintf("orig/ghost-%d", i), fmt.Sprintf("rend/ghost-%d", i),
+		); err != nil {
+			t.Fatalf("seed the queue: %v", err)
+		}
+	}
+	_ = store
+
+	second, _, err := svc.Add(ctx, collectorA, draft("qc-2", "Loaded"))
+	if err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	loadedEdit := measure("edit (200 queued)", func() {
+		e := edit(second.Row.Collectible, second.Row.Collectible.Version)
+		e.Name = "Loaded edited"
+		if _, v, err := svc.Edit(ctx, collectorA, second.Row.Collectible.ID, e); err != nil || len(v) > 0 {
+			t.Fatalf("edit: %v %+v", err, v)
+		}
+	})
+
+	// The drain costs a statement per entry it handles, so the loaded case is dearer — but by a
+	// bounded amount, not by 200. Anything proportional to the queue means the batch is not
+	// holding.
+	const generousBound = 80
+	if loadedEdit-baselineEdit > generousBound {
+		t.Errorf("an edit cost %d extra statements with 200 entries queued (baseline %d); the "+
+			"drain is not bounded, so one collector's edit pays for every orphaned file",
+			loadedEdit-baselineEdit, baselineEdit)
+	}
+
+	loadedDelete := measure("delete (queue partly drained)", func() {
+		if err := svc.Delete(ctx, collectorA, second.Row.Collectible.ID); err != nil {
+			t.Fatalf("delete: %v", err)
+		}
+	})
+	if loadedDelete-baselineDelete > generousBound {
+		t.Errorf("a deletion cost %d extra statements with a loaded queue (baseline %d)",
+			loadedDelete-baselineDelete, baselineDelete)
+	}
+
+	// And the queue is actually being worked down rather than merely tolerated.
+	remaining := queueDepth(t)
+	if remaining >= 200 {
+		t.Errorf("the queue still holds %d entries after two operations; nothing is draining it", remaining)
+	}
 }

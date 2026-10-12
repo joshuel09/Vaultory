@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { addCollectible, gotoReady, signIn } from './support'
+import { addCollectible, gotoReady, openEditScreen, signIn } from './support'
 
 /**
  * FR-036, SC-010: legible and usable at desktop, tablet, and mobile widths, with no horizontal
@@ -88,4 +88,46 @@ test.describe('keyboard operation', () => {
     })
     expect(outlineVisible, 'an invisible focus ring is the same as none (FR-045)').toBe(true)
   })
+
+  // T074 — FR-039: the screens this feature adds, at every width.
+  for (const { name, width, height } of WIDTHS) {
+    test(`the edit screen holds at ${name} (${width}px)`, async ({ page }) => {
+      await page.setViewportSize({ width, height })
+      const collectible = `Responsive edit ${Date.now()}`
+      await addCollectible(page, collectible)
+      await openEditScreen(page, collectible)
+
+      // Nothing clipped and nothing overflowing: a form that scrolls sideways on a phone is a
+      // form a collector cannot fill in.
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      )
+      expect(overflow, `the edit screen scrolls horizontally at ${width}px`).toBeLessThanOrEqual(1)
+
+      await expect(page.getByLabel(/^name/i)).toBeVisible()
+      await expect(page.getByRole('button', { name: /save changes/i })).toBeVisible()
+      await expect(page.getByTestId('delete-collectible')).toBeVisible()
+    })
+
+    test(`the delete confirmation holds at ${name} (${width}px)`, async ({ page }) => {
+      await page.setViewportSize({ width, height })
+      const collectible = `Responsive dialog ${Date.now()}`
+      await addCollectible(page, collectible)
+      await openEditScreen(page, collectible)
+      await page.getByTestId('delete-collectible').click()
+
+      const dialog = page.getByTestId('delete-dialog')
+      await expect(dialog).toBeVisible()
+
+      // Both choices have to be reachable. A confirmation whose Cancel is off-screen on a phone
+      // offers the collector only the destructive one.
+      await expect(page.getByTestId('cancel-delete')).toBeInViewport()
+      await expect(page.getByTestId('confirm-delete')).toBeInViewport()
+
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      )
+      expect(overflow, `the dialog makes the page scroll sideways at ${width}px`).toBeLessThanOrEqual(1)
+    })
+  }
 })

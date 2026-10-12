@@ -38,10 +38,13 @@ const (
 	CodeTooLong      = "too_long"
 )
 
-// Draft is what a collector submitted, before validation. Optional values are pointers so that
-// "not recorded" is distinguishable from an empty string or a zero (FR-007).
-type Draft struct {
-	SubmissionKey string
+// Submitted is the attribute values a collector sent, before validation, and is the same whether
+// they are adding a collectible or editing one. Optional values are pointers so that "not
+// recorded" is distinguishable from an empty string or a zero (FR-007).
+//
+// Adding and editing share this type and the routine that validates it, so a rule cannot apply to
+// one and not the other (FR-010, SC-008).
+type Submitted struct {
 	Name          string
 	Status        string
 	Character     *string
@@ -55,6 +58,13 @@ type Draft struct {
 	ReleaseDate   *string
 	Notes         *string
 	ImageID       *string
+}
+
+// Draft is a submission to add a collectible: the shared values plus the key that separates a
+// retry from a deliberate second copy (FR-047).
+type Draft struct {
+	SubmissionKey string
+	Submitted
 }
 
 // Collectible is a validated entry in a collector's vault.
@@ -75,11 +85,14 @@ type Collectible struct {
 	Notes         *string
 	ImageID       *uuid.UUID
 	CreatedAt     time.Time
+	// Version changes on every change to this collectible. An edit presents the version it was
+	// based on, and one that is no longer current is refused rather than applied over the newer
+	// values (FR-027, FR-027a).
+	Version int
 }
 
-// Validated is a Draft that has passed every rule, ready to persist.
-type Validated struct {
-	SubmissionKey string
+// Values is every attribute of a collectible once it has passed every rule.
+type Values struct {
 	Name          string
 	Status        CollectionStatus
 	Character     *string
@@ -95,6 +108,12 @@ type Validated struct {
 	ImageID       *uuid.UUID
 }
 
+// Validated is a Draft that has passed every rule, ready to persist.
+type Validated struct {
+	SubmissionKey string
+	Values
+}
+
 // Validate checks every rule and returns all violations together, never stopping at the first
 // (FR-020). A collector who has three things wrong should be told three things, once.
 //
@@ -105,7 +124,9 @@ func (d Draft) Validate(today time.Time) (Validated, []Violation) {
 	var v []Violation
 	out := Validated{}
 
-	// FR-047: the submission key is what separates a retry from a deliberate second copy.
+	// FR-047: the submission key is what separates a retry from a deliberate second copy. It is
+	// the only rule that belongs to adding alone — an edit addresses a collectible that already
+	// exists, so there is nothing for a key to de-duplicate.
 	key := strings.TrimSpace(d.SubmissionKey)
 	switch {
 	case key == "":
@@ -115,6 +136,24 @@ func (d Draft) Validate(today time.Time) (Validated, []Violation) {
 	default:
 		out.SubmissionKey = key
 	}
+
+	values, shared := d.Submitted.validate(today)
+	v = append(v, shared...)
+	if len(v) > 0 {
+		return Validated{}, v
+	}
+	out.Values = values
+	return out, nil
+}
+
+// validate checks every rule that applies to a collectible's attributes, whether it is being added
+// or edited.
+//
+// This routine is the whole of SC-008: adding and editing do not merely happen to agree, they run
+// the same code, so a rule cannot be added to one path and forgotten on the other.
+func (d Submitted) validate(today time.Time) (Values, []Violation) {
+	var v []Violation
+	out := Values{}
 
 	// FR-002, FR-003: a name is required, and whitespace alone is not a name.
 	name := strings.TrimSpace(d.Name)
@@ -225,7 +264,7 @@ func (d Draft) Validate(today time.Time) (Validated, []Violation) {
 	}
 
 	if len(v) > 0 {
-		return Validated{}, v
+		return Values{}, v
 	}
 	return out, nil
 }

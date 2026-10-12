@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { StatusBadge } from './StatusBadge'
 import { ImagePlaceholder } from './ImagePlaceholder'
 import type { Collectible } from '@/lib/api/types'
@@ -9,10 +10,21 @@ import type { Collectible } from '@/lib/api/types'
  * rendition geometry exactly, so a panorama and a tall statue sit side by side without the
  * collector cropping either (FR-014, FR-030).
  */
-export function CollectibleCard({ collectible }: { collectible: Collectible }) {
-  const { name, collectionStatus, image, series, manufacturer } = collectible
+export function CollectibleCard({
+  collectible,
+  returnTo = '/collection',
+}: {
+  collectible: Collectible
+  /**
+   * Where editing should send the collector back to — the gallery as they are currently looking at
+   * it, status filter and all, so they are not dropped on an unfiltered one.
+   */
+  returnTo?: string
+}) {
+  const { id, name, collectionStatus, image, series, manufacturer } = collectible
   // Below the image, the most identifying detail a collector has recorded.
   const subtitle = series ?? manufacturer ?? null
+  const editHref = `/collection/${id}/edit?next=${encodeURIComponent(returnTo)}`
 
   return (
     <article
@@ -49,7 +61,25 @@ export function CollectibleCard({ collectible }: { collectible: Collectible }) {
           {name}
         </h3>
         {subtitle && <p className="line-clamp-1 text-xs text-ink-muted">{subtitle}</p>}
-        <StatusBadge status={collectionStatus} />
+        <div className="flex items-center justify-between gap-2">
+          <StatusBadge status={collectionStatus} />
+          {/*
+            * Editing is reached from the collectible's own entry (FR-001). Deleting is not offered
+            * here and must not be (FR-022a): a destructive action one stray click away in a
+            * browsing context is how a collection gets damaged by accident.
+            */}
+          <Link
+            href={editHref}
+            data-testid="edit-collectible"
+            // Named for a screen reader rather than with hidden text: a gallery of fifty cards
+            // otherwise offers fifty links all called "Edit". aria-label keeps that distinction out
+            // of the DOM's text, where it would duplicate the heading.
+            aria-label={`Edit ${name}`}
+            className="rounded px-1.5 py-0.5 text-xs text-ink-muted underline-offset-4 transition-colors hover:text-ink hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            Edit
+          </Link>
+        </div>
       </div>
     </article>
   )

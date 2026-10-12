@@ -45,6 +45,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/collectibles/{collectibleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description A collectible in the acting collector's vault. One that belongs to another collector is
+                 *     answered exactly as one that does not exist (FR-031).
+                 */
+                collectibleId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Read one collectible for editing
+         * @description Returns one collectible owned by the acting collector, with every stored value and its
+         *     current `version` (FR-001, FR-002). This is what the edit screen is filled from; attributes
+         *     the collector never supplied come back null rather than as invented defaults (FR-003).
+         *
+         *     The representation is identical to the one the gallery returns — one shape, so a detail view
+         *     and a list entry cannot drift apart.
+         */
+        get: operations["getCollectible"];
+        /**
+         * Change a collectible already in the vault
+         * @description Replaces every attribute of one collectible (FR-004). The same validation rules apply as
+         *     when adding, with none relaxed and none added (FR-010), and every problem is reported
+         *     together (FR-014).
+         *
+         *     **This is a full replacement, which matters most for `imageId`.** An omitted or null
+         *     `imageId` means *this collectible has no photograph* and removes the one it had (FR-017). A
+         *     client that is not changing the photograph MUST send the current image's id back (FR-018).
+         *
+         *     `expectedVersion` is the `version` the collector was shown when they opened the collectible.
+         *     If it is no longer current, the edit is refused with `409` and nothing is written — the
+         *     earlier change is never silently overwritten (FR-027).
+         *
+         *     Editing writes neither `createdAt` nor the collectible's identity, so it never moves the
+         *     collectible in the gallery (FR-028). It never creates a second collectible and never touches
+         *     any other entry, including identical ones (FR-007, FR-008).
+         */
+        put: operations["editCollectible"];
+        post?: never;
+        /**
+         * Delete a collectible permanently
+         * @description Deletes one collectible owned by the acting collector (FR-022). There is no undo, no trash,
+         *     and no restore.
+         *
+         *     **Idempotent.** A collectible that is not in the acting collector's vault — already deleted,
+         *     never existed, or belonging to someone else — is answered `204` just the same (FR-025). A
+         *     retry after a lost response therefore succeeds rather than confusing the collector with an
+         *     error about something they already removed, and the answer for another collector's
+         *     identifier is indistinguishable from the answer for a fictional one (FR-031).
+         *
+         *     No `404` is defined for this operation, deliberately. That is not an omission.
+         *
+         *     A deleted collectible's photograph stops being retrievable at once, by anyone including its
+         *     owner (FR-020).
+         */
+        delete: operations["deleteCollectible"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/images": {
         parameters: {
             query?: never;
@@ -186,6 +251,90 @@ export interface components {
              */
             imageId?: string | null;
         };
+        /**
+         * @description The complete set of values a collectible should have after the edit. `name` and
+         *     `collectionStatus` are required; every other attribute is optional and an omitted or null
+         *     field means the collector recorded nothing, which is distinct from an empty string
+         *     (FR-005).
+         *
+         *     A full replacement: whatever is not sent is cleared. For `imageId` in particular, omitting
+         *     it removes the photograph (FR-017), so an edit that leaves the photograph alone must send
+         *     the current image's id (FR-018).
+         * @example {
+         *       "expectedVersion": 3,
+         *       "name": "Kaiju Sentinel",
+         *       "collectionStatus": "owned",
+         *       "character": "Sentinel Prime",
+         *       "series": "Kaiju Wars",
+         *       "manufacturer": "Apex Studio",
+         *       "category": "Statue",
+         *       "scale": "1/4",
+         *       "edition": "Deluxe Exclusive",
+         *       "purchasePrice": "1180.00",
+         *       "purchaseDate": "2026-08-14",
+         *       "releaseDate": "2026-11-30",
+         *       "notes": "Box has a small dent on the lower left corner.",
+         *       "imageId": "6f9619ff-8b86-d011-b42d-00cf4fc964ff"
+         *     }
+         */
+        EditCollectibleRequest: {
+            /**
+             * @description The `version` carried by the collectible when the collector opened it. If it is no
+             *     longer current the edit is refused with `409` and nothing is written (FR-027).
+             */
+            expectedVersion: number;
+            /**
+             * @description Required. A value that is only whitespace counts as missing, exactly as when adding
+             *     (FR-011).
+             */
+            name: string;
+            collectionStatus: components["schemas"]["CollectionStatus"];
+            character?: string | null;
+            series?: string | null;
+            manufacturer?: string | null;
+            category?: string | null;
+            scale?: string | null;
+            edition?: string | null;
+            /**
+             * @description An exact decimal string. Reading an amount and saving it back unchanged must not alter
+             *     it (FR-013). Negative amounts are refused; `"0.00"` is a recorded amount (FR-012).
+             */
+            purchasePrice?: components["schemas"]["MonetaryAmount"] | null;
+            /**
+             * Format: date
+             * @description Not later than the collector's current date (FR-012).
+             */
+            purchaseDate?: string | null;
+            /**
+             * Format: date
+             * @description Past or future, in any combination with status and purchase date.
+             */
+            releaseDate?: string | null;
+            notes?: string | null;
+            /**
+             * Format: uuid
+             * @description The photograph this collectible should have *after* the edit. Null or omitted removes
+             *     it, and the designed placeholder is shown in its place (FR-017). Send the current id to
+             *     keep the existing photograph (FR-018); send a newly uploaded id to replace it, after
+             *     which the old photograph is no longer retrievable by anyone (FR-020).
+             *
+             *     An id that is not this collector's own is refused as an unknown image, in the same words
+             *     as one that never existed (FR-021, FR-031).
+             */
+            imageId?: string | null;
+        };
+        /**
+         * @description A refused edit, with the collectible as it actually stands. Distinct from `ErrorResponse`
+         *     because it carries that collectible; the error envelope itself is unchanged.
+         */
+        VersionConflictResponse: {
+            error: {
+                /** @enum {string} */
+                code: "version_conflict";
+                message: string;
+            };
+            current: components["schemas"]["Collectible"];
+        };
         /** @description One collectible in the acting collector's vault. */
         Collectible: {
             /** Format: uuid */
@@ -211,9 +360,16 @@ export interface components {
             image?: components["schemas"]["CollectibleImageRef"] | null;
             /**
              * Format: date-time
-             * @description When the collectible was added. The default gallery order (FR-034).
+             * @description When the collectible was added. The default gallery order (FR-034). Editing never
+             *     changes it, so an edit never moves a collectible in the gallery (FR-028).
              */
             createdAt: string;
+            /**
+             * @description Changes on every change to this collectible (FR-027a). Send it back as
+             *     `expectedVersion` when editing; an edit carrying a version that is no longer current is
+             *     refused rather than applied over the newer values (FR-027).
+             */
+            version: number;
         };
         /** @description How the gallery reaches a collectible's image. */
         CollectibleImageRef: {
@@ -334,6 +490,19 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
+        /**
+         * @description The collectible changed after the collector opened it, so the edit was refused and nothing
+         *     was written (FR-027). The body carries the collectible as it now stands, so the collector can
+         *     be shown what it actually says without a second request.
+         */
+        VersionConflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["VersionConflictResponse"];
+            };
+        };
         /** @description The request body's media type is not supported by this operation. */
         UnsupportedMediaType: {
             headers: {
@@ -422,6 +591,103 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
             415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getCollectible: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description A collectible in the acting collector's vault. One that belongs to another collector is
+                 *     answered exactly as one that does not exist (FR-031).
+                 */
+                collectibleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The collectible. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Collectible"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    editCollectible: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description A collectible in the acting collector's vault. One that belongs to another collector is
+                 *     answered exactly as one that does not exist (FR-031).
+                 */
+                collectibleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditCollectibleRequest"];
+            };
+        };
+        responses: {
+            /**
+             * @description The edit was applied. The body is the collectible as it now stands, carrying the
+             *     `version` a subsequent edit must present as `expectedVersion`.
+             */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Collectible"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["VersionConflict"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteCollectible: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description A collectible in the acting collector's vault. One that belongs to another collector is
+                 *     answered exactly as one that does not exist (FR-031).
+                 */
+                collectibleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /**
+             * @description The collectible is not in the acting collector's vault. Returned both when this request
+             *     deleted it and when it was already absent; the two are deliberately indistinguishable.
+             */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
             500: components["responses"]["InternalError"];
         };
     };
