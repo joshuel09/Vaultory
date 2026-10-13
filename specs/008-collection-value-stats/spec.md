@@ -12,6 +12,44 @@ Feature 006 completed the lifecycle of a single collectible — it can be added,
 
 This feature is deliberately scheduled after 006 rather than before it. A total computed over a collection that cannot be corrected is a liability: one mistyped price would have been permanent, and the headline figure would have been quietly wrong forever with no way to put it right. Now that a price can be fixed, an aggregate can be trusted to converge on the truth as a collector tidies their vault.
 
+## Clarifications
+
+### Session 2026-10-13
+
+- Q: Which collection statuses contribute to the headline "value" figure? (FR-012) → A: Owned only.
+  Preordered, Wishlist, and Sold each get their own clearly labelled figure alongside it, never
+  folded into it. Summing all four was rejected because the result describes nothing a collector can
+  act on: a wishlisted piece is aspiration, not expenditure, and a sold piece is money that came
+  back. Owned-plus-Preordered was rejected as the *headline* for a narrower reason — it reads as
+  "what my shelf is worth" while including pieces that have not arrived — but preordered value is
+  still shown, because money committed is a real thing a collector wants to see.
+- Q: Sold pieces record only what was paid, never what was received. Should they report a value at
+  all? (FR-019) → A: Yes, reported as what was *paid* and labelled in those words, kept out of the
+  headline. Hiding it would discard a figure the collector entered; presenting it unlabelled beside
+  owned value would invite reading recovered money as held value. The honest version names what the
+  number is. No sale price is invented to fill the gap — that would mean recording data this product
+  does not hold, and it is a different feature.
+- Q: What happens when a total exceeds what a single recorded amount can hold? (FR-013) → A: Totals
+  are not bound by the single-amount ceiling. A recorded amount is capped at 9,999,999,999.99 because
+  that is what the stored column holds; a total is a derived figure carried in the same exact
+  minor-unit representation, whose own ceiling is some seven orders of magnitude higher — a vault
+  would need millions of maximum-value pieces to approach it. The accumulation guards that ceiling
+  explicitly and fails with a named error if it is ever reached, rather than wrapping. Silent
+  overflow was ruled out in advance: a wrapped total is wrong in a way nobody would notice.
+- Q: Series and manufacturer are free text. Group by exact stored text, or by a normalised form?
+  (FR-027) → A: Normalised — surrounding whitespace trimmed and case folded, so that "Good Smile
+  Company", "good smile company", and " Good Smile Company " form one group. The group is displayed
+  using whichever spelling the collector used most often, so the view shows their own words back to
+  them rather than a lowercased form nobody typed. Exact matching was rejected because it splits
+  groups a collector considers identical, and a breakdown that does that looks broken rather than
+  strict. Deferring normalisation to a later issue was rejected because the first screenshot of a
+  real vault would already show the split.
+- Q: Does this live at its own route, or above the existing gallery? (FR-028) → A: Its own route, at
+  `/collection/stats`, reached by a named link from the gallery. This keeps the aggregate queries off
+  the page collectors open most, and gives the figures room to be legible at mobile width. A summary
+  strip above the gallery was rejected for adding a query to the most-visited page; doing both was
+  rejected as two surfaces to keep correct, legible, and accessible for one feature's worth of value.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - See what the collection holds and what it cost (Priority: P1)
@@ -99,8 +137,8 @@ A collector who has drifted toward one series or one manufacturer usually senses
 - **FR-009**: Collectibles with no recorded purchase price MUST be excluded from monetary totals and MUST NOT be treated as costing zero.
 - **FR-010**: The feature MUST report how many collectibles carry a recorded purchase price, so that every monetary total can be read against the number of pieces it actually covers.
 - **FR-011**: The view MUST state, in words a collector can act on, when some pieces are absent from a total because they carry no price.
-- **FR-012**: [NEEDS CLARIFICATION: which statuses contribute to the headline total — Owned only, Owned and Preordered, or all four? A wishlist is aspiration rather than expenditure, and a sold piece is money that came back, so a single "total value" across all four has no coherent meaning.]
-- **FR-013**: [NEEDS CLARIFICATION: what must happen when a total would exceed the maximum a single monetary amount can represent — refuse, saturate and say so, or widen the type for totals? Silent overflow is the one unacceptable answer.]
+- **FR-012**: The headline monetary figure MUST cover collectibles with the Owned status alone. Preordered, Wishlist, and Sold value MUST each be reported as its own figure, labelled for what it is, and MUST NOT be folded into the headline.
+- **FR-013**: A total MUST NOT be bound by the ceiling that applies to a single recorded amount, and MUST NOT overflow silently. The accumulation MUST guard its own representational limit explicitly and fail with a named error if it is ever reached, in preference to returning a wrapped or truncated figure.
 
 **The split by status**
 
@@ -109,7 +147,7 @@ A collector who has drifted toward one series or one manufacturer usually senses
 - **FR-016**: The feature MUST report the total of recorded purchase prices within each status.
 - **FR-017**: The per-status counts MUST sum exactly to the total count, and the per-status monetary totals MUST sum exactly to the total of all priced collectibles.
 - **FR-018**: The set of statuses MUST be defined in the contract between frontend and backend rather than restated in the presentation layer, so that adding a status cannot leave the view silently omitting it.
-- **FR-019**: [NEEDS CLARIFICATION: should Sold pieces report what was paid for them, given that no sale price is recorded anywhere? Reporting the purchase price of something no longer owned invites a reader to treat recovered money as held value.]
+- **FR-019**: Value reported for Sold collectibles MUST be described as what was paid for them, in those words, and MUST be kept out of the headline figure. No sale price, recovery, or profit figure may be shown, because none is recorded.
 
 **The breakdowns**
 
@@ -120,11 +158,12 @@ A collector who has drifted toward one series or one manufacturer usually senses
 - **FR-024**: Collectibles recording no value for the grouped field MUST be collected into a single clearly labelled group, and a field holding only whitespace MUST land in that same group as one holding nothing at all.
 - **FR-025**: The number of breakdown entries returned MUST be bounded, with everything beyond the bound represented as a single remainder group.
 - **FR-026**: Counts across all breakdown entries, including the unspecified group and the remainder group, MUST reconcile exactly with the total count.
-- **FR-027**: [NEEDS CLARIFICATION: are series and manufacturer grouped by their exact stored text, or by a normalised form that folds case and surrounding whitespace? Exact matching will split near-duplicates that a collector considers one group.]
+- **FR-027**: Grouping MUST be performed on a normalised form of the field — surrounding whitespace removed and case folded — so that entries differing only in case or padding form one group.
+- **FR-027a**: A group MUST be displayed using the spelling the collector used most often within it, so the view returns their own words rather than a normalised form nobody typed. Ties MUST resolve deterministically.
 
 **Reaching the figures, and tracing them back**
 
-- **FR-028**: [NEEDS CLARIFICATION: does this live at its own route, or as a summary above the existing gallery? The two give very different answers to "how often does a collector see it".]
+- **FR-028**: The statistics MUST live at their own route, separate from the gallery, so that no aggregate query is added to the page collectors open most often.
 - **FR-029**: The view MUST be reachable from the collection gallery by an affordance that names what it leads to.
 - **FR-030**: Selecting a status figure MUST take the collector to the gallery filtered to that status, so a number can always be traced back to the pieces behind it.
 - **FR-031**: Selecting a breakdown entry MUST take the collector to the gallery filtered to that group, with the same intent.
