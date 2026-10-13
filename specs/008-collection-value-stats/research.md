@@ -155,6 +155,16 @@ filter normalises identically, and an integration test asserts a group's count e
 collectibles its own link returns — because this is the kind of inconsistency that no unit test
 catches and every collector notices.
 
+**The unspecified group's link is the awkward one.** Its members are the rows where the field is
+`NULL`, `''`, or whitespace. A filter written as `manufacturer IS NULL` returns two of the three; a
+filter written as `manufacturer = ''` returns the other one. The predicate must be
+`coalesce(lower(btrim(manufacturer)), '') = $1` with an empty `$1`, which is the same expression the
+grouping uses — the point of Decision 6 restated on the read side. Naming it here because `IS NULL`
+is the obvious thing to reach for and is wrong by exactly the amount nobody checks.
+
+**No index for the filter either**, consistent with Decision 1: the predicate is evaluated over one
+collector's rows, which is the same set the grouping already scans.
+
 ---
 
 ## Decision 9 — Statistics are a fresh read on every visit
@@ -168,3 +178,34 @@ because the figures were computed when the page was requested.
 
 **Rejected**: client-side caching with revalidation. It would add a staleness window to a feature
 whose entire value is being correct about numbers, for a page that is not on the hot path.
+
+
+---
+
+## Decision 10 — The three statements share one read-only transaction
+
+**Decision**: the three aggregates run inside a single read-only transaction, so every figure in a
+response describes the same moment.
+
+**This was found by reading the test harness rather than by reasoning.**
+`backend/tests/integration/query_count_test.go` names its helper `statementCount`, but what it
+actually reads is `xact_commit + xact_rollback` from `pg_stat_database` — it counts **transactions**,
+not statements. Checking that before writing a test that asserts "three statements" turned up the
+real problem it would have missed.
+
+Three independent reads observe three independent snapshots. A collectible added between the status
+query and the series query is counted by one and not the other, and the response then violates FR-017
+and FR-026 — counts that must reconcile exactly, failing through no fault of the arithmetic. It is
+rare, it is silent, and it looks exactly like a bug in the aggregation when it finally shows up.
+
+One transaction makes the whole response a consistent snapshot. It costs nothing: these are reads of
+one collector's rows, held briefly, taking no locks that any writer waits on.
+
+**Consequence for the query-count test**: the correct assertion is that the cost is *constant*
+between a small vault and a large one, which is the N+1 property the budget exists to protect. The
+absolute number the helper reports is one transaction, not three statements, and the test should say
+so rather than repeating a figure that does not mean what its name suggests.
+
+**Rejected**: `REPEATABLE READ`. The default isolation already gives each statement a consistent
+snapshot, and a single transaction is what makes the three agree with each other; a stricter level
+buys nothing here and invites serialisation failures on a read-only path.

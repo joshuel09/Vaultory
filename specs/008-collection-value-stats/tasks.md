@@ -65,7 +65,7 @@ Web application: `backend/` (Go) and `frontend/` (Next.js), per [plan.md](./plan
 
 **Independent Test**: add collectibles with known prices; the count and total match to the cent.
 
-- [ ] T019 [US1] Create `backend/internal/store/postgres/statistics.go` with the status aggregate from data-model.md, predicated on `collector_id` (FR-002)
+- [ ] T019 [US1] Create `backend/internal/store/postgres/statistics.go` with the status aggregate from data-model.md, predicated on `collector_id`, inside a single **read-only transaction** shared by all three statements so every figure describes one moment (FR-002, FR-017a, research.md Decision 10)
 - [ ] T020 [US1] Scan `sum(purchase_price)` into a **string** and parse it; no `float64` anywhere in the path (FR-004, research.md Decision 2)
 - [ ] T021 [US1] Create `backend/internal/collection/statistics.go`, deriving the total piece count and the total of recorded prices from the four status rows in Go, never in the browser (FR-001, FR-007, FR-008)
 - [ ] T022 [US1] Create `backend/internal/transport/httpapi/statistics.go` and add the response shapes to `dto.go`
@@ -76,7 +76,7 @@ Web application: `backend/` (Go) and `frontend/` (Next.js), per [plan.md](./plan
 - [ ] T027 [P] [US1] Integration test: an empty vault returns zeros with success, not an error (SC-008)
 - [ ] T028 [P] [US1] Integration test: one collector's figures are unaffected by another collector's vault (FR-002, SC-006)
 - [ ] T029 [P] [US1] Contract test: the response matches the contract, with monetary fields as strings
-- [ ] T030 [US1] Extend `backend/tests/integration/query_count_test.go`: the view costs **three** statements, and the same three for a large vault (FR-006, SC-004)
+- [ ] T030 [US1] Extend `backend/tests/integration/query_count_test.go`: the cost does **not move** between a small vault and a large one (FR-006, SC-004). Note in the test that `statementCount` reads `xact_commit + xact_rollback` and so counts *transactions*, not statements — assert the property, not a number whose name misleads
 - [ ] T031 [US1] Create `frontend/lib/api/statistics.ts` using the generated types; hand-write no response shape
 - [ ] T032 [US1] Create `frontend/app/collection/stats/page.tsx` at its own route as an RSC forwarding cookies, computed per request so figures are never stale; no session redirects to sign-in rather than erroring (FR-028, FR-032, FR-039)
 - [ ] T033 [US1] Create `frontend/components/collection/CollectionSummary.tsx` — headline figures, displaying what the API returns and computing nothing (FR-001, FR-033)
@@ -99,7 +99,7 @@ Web application: `backend/` (Go) and `frontend/` (Next.js), per [plan.md](./plan
 - [ ] T039 [US2] Present Owned as the headline; show Preordered, Wishlist and Sold distinctly (FR-012)
 - [ ] T040 [US2] Label the Sold figure as what was **paid**, in those words, and keep it out of the headline (FR-019)
 - [ ] T041 [US2] Link each status figure to the gallery filtered to it (FR-030)
-- [ ] T042 [P] [US2] Integration test: per-status counts and totals reconcile exactly with the whole-vault figures (FR-017, SC-003)
+- [ ] T042 [P] [US2] Integration test: per-status counts and totals reconcile exactly with the whole-vault figures, and the three aggregates agree with each other because they share one transaction (FR-017, FR-017a, SC-003)
 - [ ] T043 [P] [US2] Integration test: a status holding nothing returns a zero entry rather than being omitted (SC-007)
 - [ ] T044 [P] [US2] Integration test: changing a collectible's status moves it between subtotals
 - [ ] T045 [P] [US2] Unit test: all four statuses render even when three are empty
@@ -116,17 +116,17 @@ Web application: `backend/` (Go) and `frontend/` (Next.js), per [plan.md](./plan
 **Independent Test**: groups match the collectibles behind them, and nothing is dropped.
 
 - [ ] T047 [US3] Add the series and manufacturer breakdown statements to `store/postgres/statistics.go`, grouping on `lower(btrim(…))` with `coalesce` **before** normalising, so `NULL`, `''` and `'   '` form one group (FR-020, FR-021, FR-024, FR-027, research.md Decision 6)
-- [ ] T048 [US3] Use `mode() WITHIN GROUP` for the display spelling, deterministic by sort order (FR-027a)
+- [ ] T048 [US3] Use `mode() WITHIN GROUP` for the display spelling; ties resolve alphabetically on the trimmed spelling, which the test asserts as *repeatable* rather than as the collector's preference (FR-027a)
 - [ ] T049 [US3] Fold the tail in SQL with `row_number()`, so the response is bounded in rows as well as statements (FR-025, research.md Decision 5)
 - [ ] T050 [US3] Map key `''` to `unspecified` and key `NULL` to `remainder` — verified distinct against PostgreSQL during planning, though `psql` renders both blank
-- [ ] T051 [US3] Add `series` and `manufacturer` filters to `Store.List` in `collectibles.go`, normalising **identically** to the grouping (research.md Decision 8)
+- [ ] T051 [US3] Add `series` and `manufacturer` filters to `Store.List` in `collectibles.go` as `coalesce(lower(btrim(col)), '') = $n`, normalising **identically** to the grouping; the unspecified group's link passes an empty value and must return the `NULL`, `''` and whitespace rows alike — `IS NULL` is the obvious choice and is wrong (research.md Decision 8)
 - [ ] T052 [US3] Accept the two filters in the list handler and thread them through the gallery
 - [ ] T053 [P] [US3] Integration test: near-duplicate spellings form one group, labelled with the most-used spelling
 - [ ] T054 [P] [US3] Integration test: `NULL`, empty and whitespace-only values land in **one** unspecified group, not two
 - [ ] T055 [P] [US3] Integration test: breakdown counts reconcile with the total, including unspecified and remainder (FR-026, SC-003)
 - [ ] T056 [P] [US3] Integration test: **a group's count equals the number of collectibles its own link returns** — the inconsistency no unit test catches (SC-010)
 - [ ] T057 [P] [US3] Integration test: a vault with more distinct series than the bound returns a bounded row count
-- [ ] T058 [P] [US3] Integration test: ordering is stable across repeated calls when groups tie (FR-023)
+- [ ] T058 [P] [US3] Integration test: ordering is stable across repeated calls when groups tie, and the unspecified and remainder groups sort below every named group however large they are (FR-022, FR-023)
 - [ ] T059 [US3] Create `frontend/components/collection/GroupBreakdown.tsx`, shared by both dimensions
 - [ ] T060 [US3] Link each group to its filtered gallery (FR-031)
 - [ ] T061 [P] [US3] Unit test: the unspecified and remainder groups are rendered from `kind`, never inferred from the label

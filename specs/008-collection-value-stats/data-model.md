@@ -110,15 +110,28 @@ SELECT CASE WHEN rn <= $2 THEN key     ELSE NULL END AS key,
        sum(n), sum(priced), sum(total)
 FROM ranked
 GROUP BY 1, 2
+ORDER BY (key IS NULL),      -- the remainder last
+         (key = ''),         -- the unspecified group next-to-last
+         sum(n) DESC,
+         key ASC
 ```
+
+The `ORDER BY` is part of the statement rather than something Go applies afterwards, so there is one
+place the ordering is defined and T047 and T049 cannot re-decide it. The first two keys are what
+FR-022 requires: both the unspecified group and the remainder sort below every named group whatever
+their own size.
 
 Three things are load-bearing:
 
 - **`coalesce` before normalising, not after.** `NULL`, `''` and `'   '` must become one group. Doing
   it the other way leaves two differently-named unspecified buckets, which is visible to a collector
   as a defect (research.md Decision 6).
-- **`mode() WITHIN GROUP`** returns the most frequent original spelling and breaks ties by the given
-  sort order rather than arbitrarily, which is what makes FR-027a's determinism satisfiable.
+- **`mode() WITHIN GROUP`** returns the most frequent original spelling. Where two spellings are
+  equally common it returns the first in the given sort order — which, because `btrim` preserves
+  case, means `Good Smile Company` beats `good smile company` alphabetically. That is deterministic
+  and repeatable, and FR-027a says so in those terms rather than claiming the result is the one the
+  collector preferred: a tie does not record a preference. `mode()` is an ordered-set aggregate and
+  takes a single sort expression, so a tiebreak column cannot be added to it.
 - **The outer `GROUP BY` folds the tail in SQL.** Everything past the bound collapses to one row with
   `NULL` keys, so the statement returns at most bound + 2 rows no matter how many distinct series a
   vault holds. Ranking in SQL and folding in Go would be simpler and would transfer eight hundred
@@ -142,6 +155,17 @@ it confirmed, and one it corrected:
   vault placed *Everything else* above the unspecified group. Both must sort below every named group
   regardless of count. The ordering is therefore by group kind first — named, then unspecified, then
   remainder — and by count within that, which is what FR-022 means by "a stated and stable measure".
+
+## One transaction, one moment
+
+The three statements run inside a single read-only transaction (research.md Decision 10). Three
+independent reads observe three independent snapshots, and a collectible added between two of them is
+counted by one and not the other — which breaks FR-017 and FR-026 silently, and looks like a bug in
+the arithmetic rather than in the sequencing.
+
+Note for anyone extending `query_count_test.go`: its `statementCount` helper reads
+`xact_commit + xact_rollback`, so it counts **transactions**, not statements, despite the name. The
+property worth asserting is that the cost does not move between a small vault and a large one.
 
 ## Exactness
 

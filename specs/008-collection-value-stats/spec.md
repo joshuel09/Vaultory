@@ -146,6 +146,7 @@ A collector who has drifted toward one series or one manufacturer usually senses
 - **FR-015**: A status holding no collectibles MUST be reported with a count of zero rather than omitted, so the set of statuses is always complete and always the same shape.
 - **FR-016**: The feature MUST report the total of recorded purchase prices within each status.
 - **FR-017**: The per-status counts MUST sum exactly to the total count, and the per-status monetary totals MUST sum exactly to the total of all priced collectibles.
+- **FR-017a**: All figures in one response MUST describe the same moment. Figures assembled from separate reads that observed different states could fail to reconcile through no fault of the arithmetic.
 - **FR-018**: The set of statuses MUST be defined in the contract between frontend and backend rather than restated in the presentation layer, so that adding a status cannot leave the view silently omitting it.
 - **FR-019**: Value reported for Sold collectibles MUST be described as what was paid for them, in those words, and MUST be kept out of the headline figure. No sale price, recovery, or profit figure may be shown, because none is recorded.
 
@@ -159,7 +160,7 @@ A collector who has drifted toward one series or one manufacturer usually senses
 - **FR-025**: The number of breakdown entries returned MUST be bounded, with everything beyond the bound represented as a single remainder group.
 - **FR-026**: Counts across all breakdown entries, including the unspecified group and the remainder group, MUST reconcile exactly with the total count.
 - **FR-027**: Grouping MUST be performed on a normalised form of the field — surrounding whitespace removed and case folded — so that entries differing only in case or padding form one group.
-- **FR-027a**: A group MUST be displayed using the spelling the collector used most often within it, so the view returns their own words rather than a normalised form nobody typed. Ties MUST resolve deterministically.
+- **FR-027a**: A group MUST be displayed using the spelling the collector used most often within it, so the view returns their own words rather than a normalised form nobody typed. Where no spelling is most common, the tie MUST resolve alphabetically on the trimmed spelling — deterministic and repeatable, rather than a claim about what the collector preferred, which a tie by definition does not record.
 
 **Reaching the figures, and tracing them back**
 
