@@ -153,7 +153,7 @@ A collector who has drifted toward one series or one manufacturer usually senses
 
 - **FR-020**: The feature MUST report a breakdown of the collection by series, each entry carrying a count and a monetary total.
 - **FR-021**: The feature MUST report a breakdown of the collection by manufacturer, each entry carrying a count and a monetary total.
-- **FR-022**: Breakdown entries MUST be ordered with the largest first, by a stated and stable measure.
+- **FR-022**: Breakdown entries MUST be ordered with named groups first, largest first by a stated measure; the unspecified group and the remainder group MUST sort below every named group regardless of their own size, so that "everything else" never appears above a real group.
 - **FR-023**: Ordering MUST be deterministic: entries that tie on the ordering measure MUST still come back in a stable, repeatable order, so that the view does not reshuffle between loads.
 - **FR-024**: Collectibles recording no value for the grouped field MUST be collected into a single clearly labelled group, and a field holding only whitespace MUST land in that same group as one holding nothing at all.
 - **FR-025**: The number of breakdown entries returned MUST be bounded, with everything beyond the bound represented as a single remainder group.
