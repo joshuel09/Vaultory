@@ -30,6 +30,9 @@ func (s *Server) Routes() http.Handler {
 	// way, so there is no detail shape that can drift from the list shape.
 	mux.Handle("POST /api/collectibles", s.requireCollector(s.handleAddCollectible))
 	mux.Handle("GET /api/collectibles", s.requireCollector(s.handleListCollectibles))
+	// Registered before the parameterised route for readability; Go's ServeMux prefers the more
+	// specific pattern regardless, so "statistics" is never taken for a collectible identifier.
+	mux.Handle("GET /api/collectibles/statistics", s.requireCollector(s.handleCollectionStatistics))
 	mux.Handle("GET /api/collectibles/{collectibleId}", s.requireCollector(s.handleGetCollectible))
 	mux.Handle("PUT /api/collectibles/{collectibleId}", s.requireCollector(s.handleEditCollectible))
 	mux.Handle("DELETE /api/collectibles/{collectibleId}", s.requireCollector(s.handleDeleteCollectible))

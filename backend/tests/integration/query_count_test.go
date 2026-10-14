@@ -152,3 +152,50 @@ func TestEditAndDeleteCostDoesNotGrowWithTheQueue(t *testing.T) {
 		t.Errorf("the queue still holds %d entries after two operations; nothing is draining it", remaining)
 	}
 }
+
+// T030: the statistics view costs the same whatever the collection holds.
+//
+// A note on what this actually measures, because the helper's name misleads: statementCount reads
+// xact_commit + xact_rollback, so it counts *transactions*, not statements. The statistics read runs
+// all three of its aggregates inside one read-only transaction, so the figure it reports is one.
+//
+// The number is not the point. The property is: the cost must not move between a small vault and a
+// large one, because that is what distinguishes an aggregate from a loop. Asserting the constant
+// would be asserting an implementation detail of the helper.
+func TestStatisticsCostDoesNotGrowWithCollection(t *testing.T) {
+	_, svc := freshStore(t)
+	ctx := context.Background()
+
+	measure := func() int64 {
+		before := statementCount(t)
+		if _, err := svc.Statistics(ctx, collectorA); err != nil {
+			t.Fatalf("statistics: %v", err)
+		}
+		return statementCount(t) - before
+	}
+
+	small := measure()
+
+	// Enough distinct series and manufacturers to push well past the breakdown bound, which is the
+	// shape most likely to turn one aggregate into per-group work.
+	for i := 0; i < 60; i++ {
+		d := priced(
+			fmt.Sprintf("qc-%d", i),
+			fmt.Sprintf("Piece %d", i),
+			"owned",
+			"12.34",
+			fmt.Sprintf("Series %d", i%25),
+			fmt.Sprintf("Maker %d", i%17),
+		)
+		if _, v, err := svc.Add(ctx, collectorA, d); err != nil || len(v) > 0 {
+			t.Fatalf("add %d: %v %+v", i, err, v)
+		}
+	}
+
+	large := measure()
+
+	if small != large {
+		t.Errorf("statistics cost %d for an empty vault and %d for a 60-item one across 25 series "+
+			"and 17 manufacturers; the cost must not grow with the collection (no N+1)", small, large)
+	}
+}

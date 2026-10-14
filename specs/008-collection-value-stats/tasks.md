@@ -65,18 +65,18 @@ Web application: `backend/` (Go) and `frontend/` (Next.js), per [plan.md](./plan
 
 **Independent Test**: add collectibles with known prices; the count and total match to the cent.
 
-- [ ] T019 [US1] Create `backend/internal/store/postgres/statistics.go` with the status aggregate from data-model.md, predicated on `collector_id`, inside a single **read-only transaction** shared by all three statements so every figure describes one moment (FR-002, FR-017a, research.md Decision 10)
-- [ ] T020 [US1] Scan `sum(purchase_price)` into a **string** and parse it; no `float64` anywhere in the path (FR-004, research.md Decision 2)
-- [ ] T021 [US1] Create `backend/internal/collection/statistics.go`, deriving the total piece count and the total of recorded prices from the four status rows in Go, never in the browser (FR-001, FR-007, FR-008)
-- [ ] T022 [US1] Create `backend/internal/transport/httpapi/statistics.go` and add the response shapes to `dto.go`
-- [ ] T023 [US1] Register `GET /api/collectibles/statistics` behind `requireCollector` in `server.go`
-- [ ] T024 [P] [US1] Integration test: counts and totals over a vault of known contents
-- [ ] T025 [P] [US1] Integration test: **exactness** — prices of `0.10`, `0.20`, `0.30` total exactly `0.60`, compared against a total assembled independently of the code under test (SC-002)
-- [ ] T026 [P] [US1] Integration test: collectibles without a price are excluded from totals and counted in `pricedCount` (FR-009, FR-010)
-- [ ] T027 [P] [US1] Integration test: an empty vault returns zeros with success, not an error (SC-008)
-- [ ] T028 [P] [US1] Integration test: one collector's figures are unaffected by another collector's vault (FR-002, SC-006)
-- [ ] T029 [P] [US1] Contract test: the response matches the contract, with monetary fields as strings
-- [ ] T030 [US1] Extend `backend/tests/integration/query_count_test.go`: the cost does **not move** between a small vault and a large one (FR-006, SC-004). Note in the test that `statementCount` reads `xact_commit + xact_rollback` and so counts *transactions*, not statements — assert the property, not a number whose name misleads
+- [X] T019 [US1] Create `backend/internal/store/postgres/statistics.go` with the status aggregate from data-model.md, predicated on `collector_id`, inside a single **read-only transaction** shared by all three statements so every figure describes one moment (FR-002, FR-017a, research.md Decision 10)
+- [X] T020 [US1] Scan `sum(purchase_price)` into a **string** and parse it; no `float64` anywhere in the path (FR-004, research.md Decision 2)
+- [X] T021 [US1] Create `backend/internal/collection/statistics.go`, deriving the total piece count and the total of recorded prices from the four status rows in Go, never in the browser (FR-001, FR-007, FR-008)
+- [X] T022 [US1] Create `backend/internal/transport/httpapi/statistics.go` and add the response shapes to `dto.go`
+- [X] T023 [US1] Register `GET /api/collectibles/statistics` behind `requireCollector` in `server.go`
+- [X] T024 [P] [US1] Integration test: counts and totals over a vault of known contents
+- [X] T025 [P] [US1] Integration test: **exactness** — prices of `0.10`, `0.20`, `0.30` total exactly `0.60`, compared against a total assembled independently of the code under test (SC-002)
+- [X] T026 [P] [US1] Integration test: collectibles without a price are excluded from totals and counted in `pricedCount` (FR-009, FR-010)
+- [X] T027 [P] [US1] Integration test: an empty vault returns zeros with success, not an error (SC-008)
+- [X] T028 [P] [US1] Integration test: one collector's figures are unaffected by another collector's vault (FR-002, SC-006)
+- [X] T029 [P] [US1] Contract test: the response matches the contract, with monetary fields as strings
+- [X] T030 [US1] Extend `backend/tests/integration/query_count_test.go`: the cost does **not move** between a small vault and a large one (FR-006, SC-004). Note in the test that `statementCount` reads `xact_commit + xact_rollback` and so counts *transactions*, not statements — assert the property, not a number whose name misleads
 - [ ] T031 [US1] Create `frontend/lib/api/statistics.ts` using the generated types; hand-write no response shape
 - [ ] T032 [US1] Create `frontend/app/collection/stats/page.tsx` at its own route as an RSC forwarding cookies, computed per request so figures are never stale; no session redirects to sign-in rather than erroring (FR-028, FR-032, FR-039)
 - [ ] T033 [US1] Create `frontend/components/collection/CollectionSummary.tsx` — headline figures, displaying what the API returns and computing nothing (FR-001, FR-033)
