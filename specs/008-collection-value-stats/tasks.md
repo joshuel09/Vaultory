@@ -77,12 +77,12 @@ Web application: `backend/` (Go) and `frontend/` (Next.js), per [plan.md](./plan
 - [X] T028 [P] [US1] Integration test: one collector's figures are unaffected by another collector's vault (FR-002, SC-006)
 - [X] T029 [P] [US1] Contract test: the response matches the contract, with monetary fields as strings
 - [X] T030 [US1] Extend `backend/tests/integration/query_count_test.go`: the cost does **not move** between a small vault and a large one (FR-006, SC-004). Note in the test that `statementCount` reads `xact_commit + xact_rollback` and so counts *transactions*, not statements — assert the property, not a number whose name misleads
-- [ ] T031 [US1] Create `frontend/lib/api/statistics.ts` using the generated types; hand-write no response shape
-- [ ] T032 [US1] Create `frontend/app/collection/stats/page.tsx` at its own route as an RSC forwarding cookies, computed per request so figures are never stale; no session redirects to sign-in rather than erroring (FR-028, FR-032, FR-039)
-- [ ] T033 [US1] Create `frontend/components/collection/CollectionSummary.tsx` — headline figures, displaying what the API returns and computing nothing (FR-001, FR-033)
-- [ ] T034 [US1] State how many pieces a total covers whenever some carry no price (FR-011)
-- [ ] T035 [P] [US1] Unit test: the summary renders the API's figures verbatim and derives nothing
-- [ ] T036 [P] [US1] Unit test: the "not all pieces are priced" statement appears only when it is true
+- [X] T031 [US1] Create `frontend/lib/api/statistics.ts` using the generated types; hand-write no response shape
+- [X] T032 [US1] Create `frontend/app/collection/stats/page.tsx` at its own route as an RSC forwarding cookies, computed per request so figures are never stale; no session redirects to sign-in rather than erroring (FR-028, FR-032, FR-039)
+- [X] T033 [US1] Create `frontend/components/collection/CollectionSummary.tsx` — headline figures, displaying what the API returns and computing nothing (FR-001, FR-033)
+- [X] T034 [US1] State how many pieces a total covers whenever some carry no price (FR-011)
+- [X] T035 [P] [US1] Unit test: the summary renders the API's figures verbatim and derives nothing
+- [X] T036 [P] [US1] Unit test: the "not all pieces are priced" statement appears only when it is true
 
 **Checkpoint**: US1 delivers alone — a collector learns what their vault cost.
 
@@ -138,9 +138,9 @@ Web application: `backend/` (Go) and `frontend/` (Next.js), per [plan.md](./plan
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [ ] T063 Create `frontend/app/collection/stats/loading.tsx` — a loading state, never a zero that will shortly change (FR-038)
+- [X] T063 Create `frontend/app/collection/stats/loading.tsx` — a loading state, never a zero that will shortly change (FR-038)
 - [ ] T064 Designed empty state for a vault with nothing in it, offering the route to adding a collectible (FR-034)
-- [ ] T065 Add the named link from the gallery to the statistics (FR-029)
+- [X] T065 Add the named link from the gallery to the statistics (FR-029)
 - [ ] T066 [P] E2E `frontend/tests/e2e/statistics.spec.ts`: the headline journey, desktop
 - [ ] T067 [P] E2E: a figure links to a gallery showing exactly the pieces it counted (SC-010)
 - [ ] T068 [P] E2E: the empty state, and the partially-priced statement

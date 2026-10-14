@@ -75,9 +75,22 @@ export default async function CollectionPage({
               : `${page.totalUnfiltered} ${page.totalUnfiltered === 1 ? 'collectible' : 'collectibles'}`}
           </p>
         </div>
-        <Link href="/collection/new" className={buttonClasses()}>
-          Add a collectible
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Only offered once there is something to summarise; a statistics link on an empty vault
+              leads to a designed apology (FR-029). */}
+          {!isEmptyVault && (
+            <Link
+              href="/collection/stats"
+              data-testid="statistics-link"
+              className="text-sm font-medium text-ink-muted underline-offset-4 hover:text-ink hover:underline"
+            >
+              What your collection holds
+            </Link>
+          )}
+          <Link href="/collection/new" className={buttonClasses()}>
+            Add a collectible
+          </Link>
+        </div>
       </header>
 
       {/* The filter is pointless on an empty vault, and showing it would imply there is something

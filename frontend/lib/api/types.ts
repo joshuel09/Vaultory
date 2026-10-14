@@ -22,6 +22,10 @@ export type CollectibleImage = components['schemas']['CollectibleImage']
  * straight to the form — but the two are not interchangeable in the other direction.
  */
 export type CollectibleImageRef = components['schemas']['CollectibleImageRef']
+export type CollectionStatistics = components['schemas']['CollectionStatistics']
+export type StatusSummary = components['schemas']['StatusSummary']
+export type GroupSummary = components['schemas']['GroupSummary']
+export type GroupKind = components['schemas']['GroupKind']
 export type ErrorResponse = components['schemas']['ErrorResponse']
 export type FieldError = NonNullable<ErrorResponse['error']['fields']>[number]
 
