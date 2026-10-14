@@ -24,7 +24,7 @@ reviewable change rather than a scavenger hunt.
 ## Regenerating the frontend types
 
 ```bash
-cd frontend && npm run generate:types
+cd frontend && npm run generate:api
 ```
 
 Hand-writing a response shape in TypeScript is forbidden by the constitution: the contract is the

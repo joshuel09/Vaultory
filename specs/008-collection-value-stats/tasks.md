@@ -27,13 +27,13 @@ Web application: `backend/` (Go) and `frontend/` (Next.js), per [plan.md](./plan
 
 ## Phase 1: Setup — the contract first, because everything is generated from it
 
-- [ ] T001 Bump `specs/001-add-browse-collectibles/contracts/openapi.yaml` to **0.3.0**
-- [ ] T002 Add `GET /api/collectibles/statistics` to the contract — no parameters of any kind, so that FR-003 is satisfied by the endpoint's shape rather than by a check
-- [ ] T003 Add `CollectionStatistics`, `StatusSummary` and `GroupSummary` schemas; every monetary field is a decimal **string**, never a number (FR-005, FR-040)
-- [ ] T004 Add the `kind` enum (`named`, `unspecified`, `remainder`) to `GroupSummary`, so the view never infers a group's nature from its label
-- [ ] T005 Add optional `series` and `manufacturer` query parameters to `GET /api/collectibles` (FR-030, FR-031 — research.md Decision 8)
-- [ ] T006 Declare the four collection statuses in the contract so the frontend cannot hand-write them (FR-018)
-- [ ] T007 Regenerate `frontend/lib/types/api.ts` with `npm run generate:types`; confirm the diff contains nothing hand-edited
+- [X] T001 Bump `specs/001-add-browse-collectibles/contracts/openapi.yaml` to **0.3.0**
+- [X] T002 Add `GET /api/collectibles/statistics` to the contract — no parameters of any kind, so that FR-003 is satisfied by the endpoint's shape rather than by a check
+- [X] T003 Add `CollectionStatistics`, `StatusSummary` and `GroupSummary` schemas; every monetary field is a decimal **string**, never a number (FR-005, FR-040)
+- [X] T004 Add the `kind` enum (`named`, `unspecified`, `remainder`) to `GroupSummary`, so the view never infers a group's nature from its label
+- [X] T005 Add optional `series` and `manufacturer` query parameters to `GET /api/collectibles` (FR-030, FR-031 — research.md Decision 8)
+- [X] T006 Declare the four collection statuses in the contract so the frontend cannot hand-write them (FR-018) — already present as `CollectionStatus` since 0.1.0; verified rather than re-added
+- [X] T007 Regenerate `frontend/lib/types/api.ts` with `npm run generate:api` (the script is `generate:api`, not `generate:types` as first written here); +163 lines, all generated
 
 **Checkpoint**: the contract describes the feature, and the frontend's types come from it.
 
@@ -43,17 +43,17 @@ Web application: `backend/` (Go) and `frontend/` (Next.js), per [plan.md](./plan
 
 **⚠️ BLOCKING**: no story may begin until a total can be represented and parsed safely.
 
-- [ ] T008 Extend `backend/internal/domain/collectible/money.go` with a parse taking an explicit maximum; keep `ParseMoney` bound to `maxMoneyUnits` (the column's limit) unchanged
-- [ ] T009 Add a totals parse bound by the representation rather than the column, with a **named** error — `ErrTotalTooLarge` or equivalent (FR-013, research.md Decision 3)
-- [ ] T010 [P] Unit test: a total above a single amount's ceiling parses successfully, proving totals are not bound by the column's limit
-- [ ] T011 [P] Unit test: a total above the *representation's* ceiling returns the named error rather than a wrapped or negative figure — provoked deliberately, because no realistic input reaches it
-- [ ] T012 [P] Unit test: exact decimal round-trip through the totals parse, including values with trailing zeros
-- [ ] T013 Create `backend/internal/domain/collectible/statistics.go` with `CollectionStatistics`, `StatusSummary`, `GroupSummary` and the `GroupKind` enum
-- [ ] T014 Implement the folding rule in the domain: four statuses always present, absent ones filled with zeros (FR-015)
-- [ ] T015 Implement the ordering rule: named groups first by size, then the unspecified group, then the remainder — both below every named group whatever their own size (FR-022, corrected during planning after a real run put *everything else* above *unspecified*)
-- [ ] T016 [P] Unit test: a vault using two statuses still yields four `StatusSummary` entries
-- [ ] T017 [P] Unit test: ordering puts a large remainder below a small named group
-- [ ] T018 [P] Unit test: `pricedCount` distinguishes "no priced items" from "items that cost nothing"
+- [X] T008 Extend `backend/internal/domain/collectible/money.go` with a parse taking an explicit maximum; keep `ParseMoney` bound to `maxMoneyUnits` (the column's limit) unchanged
+- [X] T009 Add a totals parse bound by the representation rather than the column, with a **named** error — `ErrTotalTooLarge` or equivalent (FR-013, research.md Decision 3)
+- [X] T010 [P] Unit test: a total above a single amount's ceiling parses successfully, proving totals are not bound by the column's limit
+- [X] T011 [P] Unit test: a total above the *representation's* ceiling returns the named error rather than a wrapped or negative figure — provoked deliberately, because no realistic input reaches it
+- [X] T012 [P] Unit test: exact decimal round-trip through the totals parse, including values with trailing zeros
+- [X] T013 Create `backend/internal/domain/collectible/statistics.go` with `CollectionStatistics`, `StatusSummary`, `GroupSummary` and the `GroupKind` enum
+- [X] T014 Implement the folding rule in the domain: four statuses always present, absent ones filled with zeros (FR-015)
+- [X] T015 Implement the ordering rule: named groups first by size, then the unspecified group, then the remainder — both below every named group whatever their own size (FR-022, corrected during planning after a real run put *everything else* above *unspecified*)
+- [X] T016 [P] Unit test: a vault using two statuses still yields four `StatusSummary` entries
+- [X] T017 [P] Unit test: ordering puts a large remainder below a small named group
+- [X] T018 [P] Unit test: `pricedCount` distinguishes "no priced items" from "items that cost nothing"
 
 **Checkpoint**: money and shapes are provably safe; nothing yet reads the database.
 
