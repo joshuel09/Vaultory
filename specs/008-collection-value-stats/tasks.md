@@ -139,17 +139,17 @@ Web application: `backend/` (Go) and `frontend/` (Next.js), per [plan.md](./plan
 ## Phase 6: Polish & Cross-Cutting
 
 - [X] T063 Create `frontend/app/collection/stats/loading.tsx` — a loading state, never a zero that will shortly change (FR-038)
-- [ ] T064 Designed empty state for a vault with nothing in it, offering the route to adding a collectible (FR-034)
+- [X] T064 Designed empty state for a vault with nothing in it, offering the route to adding a collectible (FR-034)
 - [X] T065 Add the named link from the gallery to the statistics (FR-029)
-- [ ] T066 [P] E2E `frontend/tests/e2e/statistics.spec.ts`: the headline journey, desktop
-- [ ] T067 [P] E2E: a figure links to a gallery showing exactly the pieces it counted (SC-010)
-- [ ] T068 [P] E2E: the empty state, and the partially-priced statement
-- [ ] T069 [P] Extend `frontend/tests/e2e/appearance.spec.ts` — the statistics view in both appearances (FR-035, SC-009)
-- [ ] T070 [P] Extend `frontend/tests/e2e/accessibility.spec.ts` — keyboard reachable, every control named, at all three viewports (FR-036, SC-009)
-- [ ] T071 [P] Extend `frontend/tests/e2e/responsive.spec.ts` — three viewports, no horizontal scroll (FR-037, SC-009)
-- [ ] T072 Confirm no migration was added, and that `git status` shows nothing under `backend/migrations/` (FR-041, research.md Decision 1)
-- [ ] T073 Confirm no figure derives from a field the product does not record — no market value, no sale price (FR-042)
-- [ ] T074 Update `CLAUDE.md`: add feature 008, and mark 006 complete
+- [X] T066 [P] E2E `frontend/tests/e2e/statistics.spec.ts`: the headline journey, desktop
+- [X] T067 [P] E2E: a figure links to a gallery showing exactly the pieces it counted (SC-010)
+- [X] T068 [P] E2E: the empty state, and the partially-priced statement
+- [X] T069 [P] Extend `frontend/tests/e2e/appearance.spec.ts` — the statistics view in both appearances (FR-035, SC-009)
+- [X] T070 [P] Extend `frontend/tests/e2e/accessibility.spec.ts` — keyboard reachable, every control named, at all three viewports (FR-036, SC-009)
+- [X] T071 [P] Extend `frontend/tests/e2e/responsive.spec.ts` — three viewports, no horizontal scroll (FR-037, SC-009)
+- [X] T072 Confirm no migration was added — `git diff --stat main...HEAD -- backend/migrations/` is empty; the directory still ends at `000010` (FR-041, research.md Decision 1)
+- [X] T073 Confirm no figure derives from a field the product does not record — a grep for market value, sale price, profit and resale across `backend/internal` and the frontend returns one hit, in the generated contract types, and it is the sentence saying no such figure exists (FR-042)
+- [X] T074 Update `CLAUDE.md`: add feature 008, and mark 006 complete
 - [ ] T075 Run `quickstart.md` end to end, including each of its four deliberate failure checks
 
 ---

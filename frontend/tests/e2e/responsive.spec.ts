@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { addCollectible, gotoReady, openEditScreen, signIn } from './support'
+import { addCollectible, addDetailedCollectible, gotoReady, openEditScreen, signIn } from './support'
 
 /**
  * FR-036, SC-010: legible and usable at desktop, tablet, and mobile widths, with no horizontal
@@ -107,6 +107,35 @@ test.describe('keyboard operation', () => {
       await expect(page.getByLabel(/^name/i)).toBeVisible()
       await expect(page.getByRole('button', { name: /save changes/i })).toBeVisible()
       await expect(page.getByTestId('delete-collectible')).toBeVisible()
+    })
+
+    // T071 — FR-037, SC-009: the statistics view at every width, with nothing cut off.
+    //
+    // This is the screen most at risk: it is a page of long numbers in a grid, and a figure that
+    // overflows its card is unreadable exactly where it matters most.
+    test(`the statistics view holds at ${name} (${width}px)`, async ({ page }) => {
+      await page.setViewportSize({ width, height })
+      await addDetailedCollectible(page, {
+        name: `Responsive stats ${Date.now()}`,
+        status: 'owned',
+        price: '9999999.99',
+        series: 'A series with a deliberately long name for wrapping',
+      })
+      await gotoReady(page, '/collection/stats')
+
+      await expect(page.getByTestId('collection-summary')).toBeVisible()
+      await expect(page.getByTestId('status-breakdown')).toBeVisible()
+
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      )
+      expect(overflow, `the statistics view scrolls horizontally at ${width}px`).toBeLessThanOrEqual(1)
+
+      // The headline figure, in full, inside the viewport.
+      const box = await page.getByTestId('owned-total').boundingBox()
+      expect(box).not.toBeNull()
+      expect(box!.x).toBeGreaterThanOrEqual(0)
+      expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1)
     })
 
     test(`the delete confirmation holds at ${name} (${width}px)`, async ({ page }) => {

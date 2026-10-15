@@ -72,6 +72,42 @@ export async function addCollectible(
   await page.waitForLoadState('networkidle')
 }
 
+/**
+ * Add a collectible with the fields the statistics aggregate over.
+ *
+ * The plain addCollectible above fills only a name and a status, which is everything the gallery
+ * needs and nothing the statistics do: with no price every total is zero, and with no series every
+ * piece lands in the unspecified group. A statistics journey driven by that helper would pass
+ * against a view that showed nothing at all.
+ */
+export async function addDetailedCollectible(
+  page: Page,
+  fields: {
+    name: string
+    status?: 'owned' | 'preordered' | 'wishlist' | 'sold'
+    price?: string
+    series?: string
+    manufacturer?: string
+  },
+) {
+  await gotoReady(page, '/collection/new')
+  await page.getByLabel(/^name/i).fill(fields.name)
+  await page.getByLabel(/collection status/i).selectOption(fields.status ?? 'owned')
+  if (fields.series !== undefined) {
+    await page.getByLabel(/series or franchise/i).fill(fields.series)
+  }
+  if (fields.manufacturer !== undefined) {
+    await page.getByLabel(/^manufacturer/i).fill(fields.manufacturer)
+  }
+  if (fields.price !== undefined) {
+    await page.getByLabel(/purchase price/i).fill(fields.price)
+  }
+  await expect(page.getByLabel(/^name/i)).toHaveValue(fields.name)
+  await page.getByRole('button', { name: /add to my vault/i }).click()
+  await expect(page.getByTestId('add-success')).toBeVisible()
+  await page.waitForLoadState('networkidle')
+}
+
 /** A PNG of the given size, built in the browser, for upload tests. */
 export const oversizedFile = {
   name: 'too-big.jpg',

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { addCollectible, gotoReady, openEditScreen, signIn } from './support'
+import { addCollectible, addDetailedCollectible, gotoReady, openEditScreen, signIn } from './support'
 
 /**
  * T079, FR-044, FR-045, SC-011.
@@ -191,5 +191,68 @@ test.describe('accessibility', () => {
     // role=alert, so a screen reader is told the save did not land rather than being left to
     // wonder why nothing happened.
     await expect(page.getByTestId('version-conflict')).toHaveAttribute('role', 'alert')
+  })
+})
+
+/**
+ * T070 — FR-036, SC-009: the statistics view by keyboard alone, at every viewport.
+ *
+ * It runs under all three Playwright projects rather than desktop only, because the screen reflows
+ * between them and a control that is reachable in a four-column grid is not automatically reachable
+ * in a one-column one.
+ */
+test.describe('the statistics view by keyboard', () => {
+  test.beforeEach(async ({ page }) => signIn(page))
+
+  test('every figure is reachable by keyboard and says what it leads to', async ({ page }) => {
+    await addDetailedCollectible(page, {
+      name: `A11y stats ${Date.now()}`,
+      status: 'owned',
+      price: '60.00',
+      series: 'Kaiju Wars',
+      manufacturer: 'Apex Studio',
+    })
+    await gotoReady(page, '/collection/stats')
+
+    // Every link has an accessible name. "3" alone tells a screen-reader user nothing about what
+    // following it would do.
+    const links = page.locator('main a, body a')
+    const count = await links.count()
+    expect(count).toBeGreaterThan(0)
+    for (let i = 0; i < count; i++) {
+      const name = (await links.nth(i).textContent())?.trim() ?? ''
+      const label = await links.nth(i).getAttribute('aria-label')
+      expect(name.length > 0 || (label ?? '').length > 0, `link ${i} has no accessible name`).toBe(true)
+    }
+
+    // Each section is a landmark with a heading rather than an unlabelled block of numbers.
+    for (const testid of ['collection-summary', 'status-breakdown', 'breakdown-series', 'breakdown-manufacturer']) {
+      await expect(page.getByTestId(testid)).toHaveAttribute('aria-labelledby', /.+/)
+    }
+
+    // And a status figure can actually be operated from the keyboard, not merely focused.
+    await page.getByTestId('status-owned').focus()
+    await expect(page.getByTestId('status-owned')).toBeFocused()
+    await page.keyboard.press('Enter')
+    await page.waitForURL(/status=owned/)
+  })
+
+  test('the remainder is not presented as something to follow', async ({ page }) => {
+    // Nine distinct series exceeds the bound of eight, so a remainder group appears. It has no
+    // filter that reproduces it, and offering it as a link would promise a gallery that cannot be
+    // built.
+    const stamp = Date.now()
+    for (let i = 0; i < 9; i++) {
+      await addDetailedCollectible(page, {
+        name: `Rem ${i} ${stamp}`, status: 'owned', price: '1.00', series: `Series ${i}`,
+      })
+    }
+    await gotoReady(page, '/collection/stats')
+
+    const remainder = page.getByTestId('breakdown-series').getByText(/everything else/i).first()
+    await expect(remainder).toBeVisible()
+    await expect(
+      page.getByTestId('breakdown-series').getByRole('link', { name: /everything else/i }),
+    ).toHaveCount(0)
   })
 })
