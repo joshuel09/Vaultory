@@ -61,8 +61,13 @@ and one no unit test catches.
 make test
 ```
 
-`TestStatisticsCostDoesNotGrowWithCollection` asserts the view costs three statements for a vault of
-one and three for a vault of hundreds. A number that moves means an aggregate became a loop.
+`TestStatisticsCostDoesNotGrowWithCollection` asserts the cost is the *same* for a vault of one and
+for a vault of sixty across twenty-five series. A number that moves means an aggregate became a loop.
+
+It asserts equality rather than a constant, deliberately. The helper it uses reads
+`xact_commit + xact_rollback`, so it counts transactions, not statements — and the view runs all
+three of its aggregates inside one read-only transaction, so the figure is one. Asserting "three
+statements" would be asserting a detail of the helper rather than the property that matters.
 
 ### The privacy one
 

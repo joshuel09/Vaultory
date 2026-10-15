@@ -12,7 +12,8 @@ test.describe('what your collection holds', () => {
   // T066 — the headline journey. Desktop only: this is about the figures, and the other two
   // viewports are covered by the responsive spec.
   test.describe('the headline', () => {
-    test.skip((_, info) => info.project.name !== 'desktop', 'the figures, once, on desktop')
+    // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructuring pattern here
+    test.skip(({}, info) => info.project.name !== 'desktop', 'the figures, once, on desktop')
 
     test('shows what the vault holds and what was paid for the owned pieces', async ({ page }) => {
       await signIn(page)
