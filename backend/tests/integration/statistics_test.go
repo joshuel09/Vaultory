@@ -213,3 +213,164 @@ func TestStatisticsAreIsolatedBetweenCollectors(t *testing.T) {
 		t.Error("A's breakdown names B's series; every statement must carry collector_id")
 	}
 }
+
+// T042 — FR-017, FR-017a, SC-003: every figure in one response describes the same vault.
+//
+// Three properties, which fail together if the aggregates ever drift apart: the per-status counts
+// sum to the total, the per-status totals sum to the total paid, and both breakdowns account for
+// every collectible too.
+//
+// The single-snapshot requirement (FR-017a) is structural rather than observable: the three
+// aggregates run inside one read-only transaction, so there is no interleaving for a test to
+// provoke. What is testable is the consequence — that the figures reconcile — and that is what this
+// asserts. A future change that split the reads would not fail here deterministically; it would fail
+// here *sometimes*, which is the reason the transaction exists.
+func TestEveryAggregateAccountsForTheWholeVault(t *testing.T) {
+	_, svc := freshStore(t)
+	ctx := context.Background()
+
+	rows := []struct {
+		status, price, series, manufacturer string
+	}{
+		{"owned", "10.00", "Alpha", "Maker One"},
+		{"owned", "20.50", "Alpha", "Maker Two"},
+		{"owned", "", "Beta", ""},
+		{"preordered", "5.25", "Beta", "Maker One"},
+		{"wishlist", "100.00", "", "Maker Two"},
+		{"sold", "7.75", "Alpha", ""},
+		{"sold", "", "", ""},
+	}
+	for i, r := range rows {
+		d := priced(fmt.Sprintf("rec-%d", i), fmt.Sprintf("Piece %d", i), r.status, r.price, r.series, r.manufacturer)
+		if _, v, err := svc.Add(ctx, collectorA, d); err != nil || len(v) > 0 {
+			t.Fatalf("add %d: %v %+v", i, err, v)
+		}
+	}
+
+	stats, err := svc.Statistics(ctx, collectorA)
+	if err != nil {
+		t.Fatalf("statistics: %v", err)
+	}
+
+	count, priced, total, err := collectible.Totals(stats.ByStatus)
+	if err != nil {
+		t.Fatalf("sum the status summaries: %v", err)
+	}
+	if count != stats.TotalCount {
+		t.Errorf("the four status counts sum to %d but the vault reports %d", count, stats.TotalCount)
+	}
+	if priced != stats.PricedCount {
+		t.Errorf("the four priced counts sum to %d but the vault reports %d", priced, stats.PricedCount)
+	}
+	// 10.00 + 20.50 + 5.25 + 100.00 + 7.75, stated rather than recomputed: a test that derives the
+	// expected value the same way the code does agrees with the code even when both are wrong.
+	if got, want := total.String(), "143.50"; got != want {
+		t.Errorf("the status totals sum to %s, want %s", got, want)
+	}
+
+	for _, breakdown := range []struct {
+		name   string
+		groups []collectible.GroupSummary
+	}{
+		{"series", stats.BySeries},
+		{"manufacturer", stats.ByManufacturer},
+	} {
+		var n, p int
+		for _, g := range breakdown.groups {
+			n += g.Count
+			p += g.PricedCount
+		}
+		if n != stats.TotalCount {
+			t.Errorf("the %s groups account for %d collectibles but the vault holds %d (FR-026)",
+				breakdown.name, n, stats.TotalCount)
+		}
+		if p != stats.PricedCount {
+			t.Errorf("the %s groups account for %d priced collectibles but the vault has %d",
+				breakdown.name, p, stats.PricedCount)
+		}
+	}
+}
+
+// T043 — SC-007, FR-015: a status holding nothing is reported as zero, not omitted.
+//
+// The empty-vault case is covered elsewhere. This is the harder one: a vault with plenty in it where
+// three statuses happen to be empty. The database returns no row for them, and a client that had to
+// infer "absent means zero" would be deriving a figure it was never told.
+func TestAStatusHoldingNothingIsReportedAsZero(t *testing.T) {
+	_, svc := freshStore(t)
+	ctx := context.Background()
+
+	for i := 0; i < 3; i++ {
+		d := priced(fmt.Sprintf("z-%d", i), fmt.Sprintf("Owned %d", i), "owned", "9.99", "Alpha", "Maker One")
+		if _, v, err := svc.Add(ctx, collectorA, d); err != nil || len(v) > 0 {
+			t.Fatalf("add %d: %v %+v", i, err, v)
+		}
+	}
+
+	stats, err := svc.Statistics(ctx, collectorA)
+	if err != nil {
+		t.Fatalf("statistics: %v", err)
+	}
+	if len(stats.ByStatus) != 4 {
+		t.Fatalf("got %d status summaries, want 4 — always four, whatever the vault holds", len(stats.ByStatus))
+	}
+
+	for _, status := range []collectible.CollectionStatus{"preordered", "wishlist", "sold"} {
+		row := statusOf(t, stats, status)
+		if row.Count != 0 || row.PricedCount != 0 || row.Total.String() != "0.00" {
+			t.Errorf("%s holds nothing but reports count=%d priced=%d total=%s",
+				status, row.Count, row.PricedCount, row.Total)
+		}
+	}
+	if owned := statusOf(t, stats, "owned"); owned.Count != 3 || owned.Total.String() != "29.97" {
+		t.Errorf("owned reports count=%d total=%s, want 3 and 29.97", owned.Count, owned.Total)
+	}
+}
+
+// T044: a collectible that changes status moves between subtotals, and takes its money with it.
+//
+// This is the property a cached or precomputed total would break. Nothing here is stored; the
+// figures are read from the collectibles themselves each time, so an edit is reflected immediately
+// (FR-039).
+func TestChangingStatusMovesACollectibleBetweenSubtotals(t *testing.T) {
+	_, svc := freshStore(t)
+	ctx := context.Background()
+
+	added, v, err := svc.Add(ctx, collectorA, priced("mv-1", "Moves", "preordered", "250.00", "Alpha", "Maker One"))
+	if err != nil || len(v) > 0 {
+		t.Fatalf("add: %v %+v", err, v)
+	}
+
+	before, err := svc.Statistics(ctx, collectorA)
+	if err != nil {
+		t.Fatalf("statistics before: %v", err)
+	}
+	if got := statusOf(t, before, "preordered"); got.Count != 1 || got.Total.String() != "250.00" {
+		t.Fatalf("preordered before the edit: count=%d total=%s, want 1 and 250.00", got.Count, got.Total)
+	}
+	if got := statusOf(t, before, "owned"); got.Count != 0 || got.Total.String() != "0.00" {
+		t.Fatalf("owned before the edit: count=%d total=%s, want 0 and 0.00", got.Count, got.Total)
+	}
+
+	e := edit(added.Row.Collectible, added.Row.Collectible.Version)
+	e.Status = "owned"
+	if _, v, err := svc.Edit(ctx, collectorA, added.Row.Collectible.ID, e); err != nil || len(v) > 0 {
+		t.Fatalf("edit: %v %+v", err, v)
+	}
+
+	after, err := svc.Statistics(ctx, collectorA)
+	if err != nil {
+		t.Fatalf("statistics after: %v", err)
+	}
+	if got := statusOf(t, after, "preordered"); got.Count != 0 || got.Total.String() != "0.00" {
+		t.Errorf("preordered after the edit: count=%d total=%s, want 0 and 0.00 — the piece left",
+			got.Count, got.Total)
+	}
+	if got := statusOf(t, after, "owned"); got.Count != 1 || got.Total.String() != "250.00" {
+		t.Errorf("owned after the edit: count=%d total=%s, want 1 and 250.00 — the money moved with it",
+			got.Count, got.Total)
+	}
+	if after.TotalCount != 1 {
+		t.Errorf("the vault holds %d pieces after a status change, want 1", after.TotalCount)
+	}
+}

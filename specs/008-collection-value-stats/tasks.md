@@ -94,16 +94,16 @@ Web application: `backend/` (Go) and `frontend/` (Next.js), per [plan.md](./plan
 
 **Independent Test**: collectibles across all four statuses report the right counts and subtotals, including statuses holding nothing.
 
-- [ ] T037 [US2] Return all four `StatusSummary` entries from the service with their counts and monetary totals, zeros included (FR-014, FR-015, FR-016)
-- [ ] T038 [US2] Create `frontend/components/collection/StatusBreakdown.tsx`
-- [ ] T039 [US2] Present Owned as the headline; show Preordered, Wishlist and Sold distinctly (FR-012)
-- [ ] T040 [US2] Label the Sold figure as what was **paid**, in those words, and keep it out of the headline (FR-019)
-- [ ] T041 [US2] Link each status figure to the gallery filtered to it (FR-030)
-- [ ] T042 [P] [US2] Integration test: per-status counts and totals reconcile exactly with the whole-vault figures, and the three aggregates agree with each other because they share one transaction (FR-017, FR-017a, SC-003)
-- [ ] T043 [P] [US2] Integration test: a status holding nothing returns a zero entry rather than being omitted (SC-007)
-- [ ] T044 [P] [US2] Integration test: changing a collectible's status moves it between subtotals
-- [ ] T045 [P] [US2] Unit test: all four statuses render even when three are empty
-- [ ] T046 [P] [US2] Unit test: the Sold figure carries its "paid" wording — asserted, because it is a requirement and not copy
+- [X] T037 [US2] Return all four `StatusSummary` entries from the service with their counts and monetary totals, zeros included (FR-014, FR-015, FR-016)
+- [X] T038 [US2] Create `frontend/components/collection/StatusBreakdown.tsx`
+- [X] T039 [US2] Present Owned as the headline; show Preordered, Wishlist and Sold distinctly (FR-012)
+- [X] T040 [US2] Label the Sold figure as what was **paid**, in those words, and keep it out of the headline (FR-019)
+- [X] T041 [US2] Link each status figure to the gallery filtered to it (FR-030)
+- [X] T042 [P] [US2] Integration test: per-status counts and totals reconcile exactly with the whole-vault figures, and the three aggregates agree with each other because they share one transaction (FR-017, FR-017a, SC-003)
+- [X] T043 [P] [US2] Integration test: a status holding nothing returns a zero entry rather than being omitted (SC-007)
+- [X] T044 [P] [US2] Integration test: changing a collectible's status moves it between subtotals
+- [X] T045 [P] [US2] Unit test: all four statuses render even when three are empty
+- [X] T046 [P] [US2] Unit test: the Sold figure carries its "paid" wording — asserted, because it is a requirement and not copy
 
 **Checkpoint**: US1 and US2 both stand alone.
 
@@ -115,10 +115,10 @@ Web application: `backend/` (Go) and `frontend/` (Next.js), per [plan.md](./plan
 
 **Independent Test**: groups match the collectibles behind them, and nothing is dropped.
 
-- [ ] T047 [US3] Add the series and manufacturer breakdown statements to `store/postgres/statistics.go`, grouping on `lower(btrim(…))` with `coalesce` **before** normalising, so `NULL`, `''` and `'   '` form one group (FR-020, FR-021, FR-024, FR-027, research.md Decision 6)
-- [ ] T048 [US3] Use `mode() WITHIN GROUP` for the display spelling; ties resolve alphabetically on the trimmed spelling, which the test asserts as *repeatable* rather than as the collector's preference (FR-027a)
-- [ ] T049 [US3] Fold the tail in SQL with `row_number()`, so the response is bounded in rows as well as statements (FR-025, research.md Decision 5)
-- [ ] T050 [US3] Map key `''` to `unspecified` and key `NULL` to `remainder` — verified distinct against PostgreSQL during planning, though `psql` renders both blank
+- [X] T047 [US3] Add the series and manufacturer breakdown statements to `store/postgres/statistics.go`, grouping on `lower(btrim(…))` with `coalesce` **before** normalising, so `NULL`, `''` and `'   '` form one group (FR-020, FR-021, FR-024, FR-027, research.md Decision 6)
+- [X] T048 [US3] Use `mode() WITHIN GROUP` for the display spelling; ties resolve alphabetically on the trimmed spelling, which the test asserts as *repeatable* rather than as the collector's preference (FR-027a)
+- [X] T049 [US3] Fold the tail in SQL with `row_number()`, so the response is bounded in rows as well as statements (FR-025, research.md Decision 5)
+- [X] T050 [US3] Map key `''` to `unspecified` and key `NULL` to `remainder` — verified distinct against PostgreSQL during planning, though `psql` renders both blank
 - [ ] T051 [US3] Add `series` and `manufacturer` filters to `Store.List` in `collectibles.go` as `coalesce(lower(btrim(col)), '') = $n`, normalising **identically** to the grouping; the unspecified group's link passes an empty value and must return the `NULL`, `''` and whitespace rows alike — `IS NULL` is the obvious choice and is wrong (research.md Decision 8)
 - [ ] T052 [US3] Accept the two filters in the list handler and thread them through the gallery
 - [ ] T053 [P] [US3] Integration test: near-duplicate spellings form one group, labelled with the most-used spelling

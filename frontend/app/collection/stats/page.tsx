@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { CollectionSummary } from '@/components/collection/CollectionSummary'
+import { StatusBreakdown } from '@/components/collection/StatusBreakdown'
 import { buttonClasses } from '@/components/ui/button'
 import type { CollectionStatistics } from '@/lib/api/types'
 
@@ -80,7 +81,10 @@ export default async function CollectionStatisticsPage() {
           </Link>
         </section>
       ) : (
-        <CollectionSummary stats={stats} />
+        <div className="space-y-12">
+          <CollectionSummary stats={stats} />
+          <StatusBreakdown byStatus={stats.byStatus} />
+        </div>
       )}
     </div>
   )

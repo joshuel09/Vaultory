@@ -130,6 +130,13 @@ var breakdownColumns = map[string]string{
 //   - the outer GROUP BY folds everything past the bound into a single remainder row, so the result
 //     is at most bound + 2 rows however many distinct series a vault holds. Ranking here and folding
 //     in Go would transfer eight hundred rows to display eight.
+//   - the PARTITION BY on the window takes the unspecified group out of the competition for those
+//     slots, by giving it a partition of its own in which it is always first.
+//     Without it the unspecified group is ranked among the named ones, and both ways round are
+//     wrong: a large unspecified group wins a slot a real series should have had, and a small one
+//     ranks past the bound and is folded into the remainder, so it disappears from a breakdown that
+//     is required to report it. Nine series of two with one unnamed piece reproduces the second case
+//     against PostgreSQL — the unspecified group vanished and the remainder silently grew by one.
 //
 // The unspecified group comes back with key ” and the remainder with key NULL. They do not collide,
 // though psql renders both as blank, which makes it look as though they do.
@@ -153,7 +160,8 @@ func breakdown(
 		    GROUP BY 1
 		),
 		ranked AS (
-		    SELECT *, row_number() OVER (ORDER BY n DESC, key ASC) AS rn FROM grouped
+		    SELECT *, row_number() OVER (PARTITION BY (key = '') ORDER BY n DESC, key ASC) AS rn
+		    FROM grouped
 		)
 		SELECT CASE WHEN rn <= $2 THEN key     ELSE NULL END AS key,
 		       CASE WHEN rn <= $2 THEN display ELSE NULL END AS display,
