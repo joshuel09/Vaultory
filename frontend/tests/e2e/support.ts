@@ -91,7 +91,24 @@ export async function addDetailedCollectible(
   },
 ) {
   await gotoReady(page, '/collection/new')
-  await page.getByLabel(/^name/i).fill(fields.name)
+
+  /*
+   * Gate on hydration before filling anything else.
+   *
+   * networkidle does not mean React has attached. Text typed before it does lives only in the DOM
+   * and is discarded by the next render, and this helper fills up to five fields, so it has a wider
+   * window for that than the two-field one above — which is how it showed up: the name field came
+   * back empty at one viewport while passing at five others in the same run.
+   *
+   * Retrying the fill until the value sticks is the fix rather than a longer wait, because what is
+   * being waited for is an event with no deadline.
+   */
+  const name = page.getByLabel(/^name/i)
+  await expect(async () => {
+    await name.fill(fields.name)
+    await expect(name).toHaveValue(fields.name, { timeout: 500 })
+  }).toPass({ timeout: 15_000 })
+
   await page.getByLabel(/collection status/i).selectOption(fields.status ?? 'owned')
   if (fields.series !== undefined) {
     await page.getByLabel(/series or franchise/i).fill(fields.series)
