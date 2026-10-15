@@ -150,22 +150,22 @@ Web application: `backend/` (Go) and `frontend/` (Next.js), per [plan.md](./plan
 - [X] T072 Confirm no migration was added — `git diff --stat main...HEAD -- backend/migrations/` is empty; the directory still ends at `000010` (FR-041, research.md Decision 1)
 - [X] T073 Confirm no figure derives from a field the product does not record — a grep for market value, sale price, profit and resale across `backend/internal` and the frontend returns one hit, in the generated contract types, and it is the sentence saying no such figure exists (FR-042)
 - [X] T074 Update `CLAUDE.md`: add feature 008, and mark 006 complete
-- [ ] T075 Run `quickstart.md` end to end, including each of its four deliberate failure checks
+- [X] T075 Run `quickstart.md` end to end, including each of its four deliberate failure checks
 
 ---
 
 ## Phase 7: Verification — every gate run, every number recorded as measured
 
-- [ ] T076 `cd backend && go vet ./... && go build ./...` — check the **exit status**, not the output of a pipeline whose last command is `head`
-- [ ] T077 `go vet -tags integration ./...` — type-check the tagged suites
-- [ ] T078 Backend unit suite
-- [ ] T079 `make test` — integration and contract against a real database, confirmed **by test name**, because a missing `VAULTORY_TEST_DATABASE_URL` makes `TestMain` exit 0 with nothing run
-- [ ] T080 Frontend lint, typecheck, unit, build
-- [ ] T081 `make test-e2e` full suite — with **nothing else touching Docker**, because a contended run has twice produced failures that were mine and not the product's
-- [ ] T082 Feature 008 browser tests alone on desktop, one worker, for a clean signal
-- [ ] T083 `make prod-build`; record the frontend image size, which this feature moves again (issue #29) — record it, do not fix it
-- [ ] T084 Measure the statistics view against a vault an order of magnitude larger than typical and record the render time against the budget the gallery already meets (SC-005) — a gap found by the analyze pass, which had no task covering it
-- [ ] T085 Record every result in this file as measured, including flakes, rather than rounded away
+- [X] T076 `cd backend && go vet ./... && go build ./...` — check the **exit status**, not the output of a pipeline whose last command is `head`
+- [X] T077 `go vet -tags integration ./...` — type-check the tagged suites
+- [X] T078 Backend unit suite
+- [X] T079 `make test` — integration and contract against a real database, confirmed **by test name**, because a missing `VAULTORY_TEST_DATABASE_URL` makes `TestMain` exit 0 with nothing run
+- [X] T080 Frontend lint, typecheck, unit, build
+- [X] T081 `make test-e2e` full suite — with **nothing else touching Docker**, because a contended run has twice produced failures that were mine and not the product's
+- [X] T082 Feature 008 browser tests alone on desktop, one worker, for a clean signal
+- [X] T083 `make prod-build`; record the frontend image size, which this feature moves again (issue #29) — record it, do not fix it
+- [X] T084 Measure the statistics view against a vault an order of magnitude larger than typical and record the render time against the budget the gallery already meets (SC-005) — a gap found by the analyze pass, which had no task covering it
+- [X] T085 Record every result in this file as measured, including flakes, rather than rounded away
 
 ---
 
@@ -202,3 +202,72 @@ Then US2, then US3. Each adds a dimension without changing what came before.
   code does — the latter proves only that the code agrees with itself.
 - Where a test is asserted to pass, mutate the thing it checks and confirm it fails. A test that
   cannot fail is not evidence.
+
+---
+
+## Results — measured 2026-10-15, recorded as run
+
+| Gate | Result |
+|---|---|
+| T076 `go vet ./...` / `go build ./...` | exit 0 / exit 0 |
+| T077 `go vet -tags integration ./...` | exit 0 |
+| T078 backend unit | **53 passed** |
+| T079 `make test` | **90 passed, 0 failed, 0 skipped**; all 21 feature-008 tests confirmed by name |
+| T080 frontend lint / typecheck / unit / build | exit 0 / exit 0 / **111 passed, 17 files** / exit 0 |
+| T081 `make test-e2e` | **370 passed, 13 failed, 20 flaky, 8 skipped, 27.8 min** — see below |
+| T082 feature 008, desktop, one worker | **4 passed, 23.8 s** |
+| T083 `make prod-build` | exit 0 — frontend **461 MB**, backend **20.6 MB** |
+| T084 statistics over 5,000 collectibles | SQL **2.46 + 3.99 + 3.34 ms**; page **0.16–0.25 s** warm |
+
+### T081, in full
+
+Of the 13 failures, **one** was this feature's: `the statistics view holds at phone (390px)` on the
+tablet project, which failed on `page.goto` with "Connection terminated unexpectedly" while passing
+at five other widths in the same run. Chasing it found a real weakness in the seeding helper — it
+filled the name field on networkidle, which does not mean React has attached — and gating on
+hydration fixed it. Every statistics browser test across all three projects then ran **28 passed, 0
+flaky, 1.8 min**.
+
+The other 12 are in `recovery-hardening.spec.ts`, `reset-password.spec.ts` and `verify-email.spec.ts`.
+They are **not this feature's**, and that was established rather than assumed: checking out `main`
+at `d7508dd`, restarting the dev stack, and running `reset-password.spec.ts --project=mobile
+--workers=1` gives the same three failures with none of this feature's code present. Filed as
+issue #41 rather than left to be rediscovered as "the suite is flaky".
+
+The 8 skipped are the four `statistics.spec.ts` journeys on tablet and mobile, which are desktop-only
+by design: they assert figures, and the other two projects cover the layout.
+
+The 20 flaky all passed on retry. They cluster on the tablet project and on the same hydration race
+described above, which the shared `addCollectible` helper still has; that is pre-existing and was not
+changed here.
+
+### T084, against the budget
+
+SC-004 of feature 001 budgets 2 seconds for a 500-collectible gallery to become browsable. This was
+measured at **5,000** — ten times that — for one collector, across 40 series and 20 manufacturers,
+with roughly one in seven unpriced and one in seventeen recording no series:
+
+- the three aggregate statements, by `EXPLAIN ANALYZE`: **2.46 ms**, **3.99 ms**, **3.34 ms**
+- `/collection/stats` end to end: **0.90 s** on the first request, then **0.16 s, 0.25 s, 0.16 s,
+  0.17 s**. The first is the dev server compiling the route, not a product figure.
+- `/collection` for the same vault, for comparison: **0.09–0.12 s**
+
+SC-005 is met with a wide margin: at ten times the gallery's benchmark size the view renders in about
+a quarter of a second, of which the aggregation is ten milliseconds. The seeded rows were deleted
+afterwards.
+
+### T083, recorded not fixed
+
+The frontend production image is **461 MB** against feature 002's SC-006 criterion of 150 MB. That
+criterion was already missed at 458.6 MB; this feature adds about 2.4 MB. Issue #29, unchanged.
+
+### T075, the quickstart's failure checks, run against the live stack
+
+| Check | Result |
+|---|---|
+| Exactness — `0.10 + 0.20 + 0.30 + 1.00` | **`1.60`** exactly |
+| Near-duplicate — four spellings of one manufacturer | **one group of 4**, labelled `Good Smile Company`, the majority spelling |
+| Traceability — named group | claimed 4, its link returned **4** |
+| Traceability — unspecified group | claimed 4, its link returned **4**; `?manufacturer=` returned **0**, so the empty filter is a filter and not a no-op |
+| N+1 | `TestStatisticsCostDoesNotGrowWithCollection` passed |
+| Privacy | a second collector sees `totalCount: 0`; no session answers **401**; the endpoint takes no parameters at all |
