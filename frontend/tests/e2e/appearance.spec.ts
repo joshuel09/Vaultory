@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { addCollectible, gotoReady, openEditScreen, signIn } from './support'
+import { addCollectible, addDetailedCollectible, gotoReady, openEditScreen, signIn } from './support'
 
 /**
  * FR-046, SC-015: every screen and every interface state is legible in both appearances.
@@ -87,6 +87,30 @@ for (const scheme of ['dark', 'light'] as const) {
       await addCollectible(page, `Filtered ${scheme} ${Date.now()}`, 'owned')
       await gotoReady(page, '/collection?status=sold')
       await expect(page.getByTestId('no-results')).toBeVisible()
+    })
+
+    // T069 — FR-035, SC-009: the statistics view in both appearances.
+    //
+    // The figures are the whole point of the screen, so this checks they are painted rather than
+    // merely present: text the same colour as its ground is visible to Playwright and invisible to
+    // a collector.
+    test('the statistics view is legible', async ({ page }) => {
+      await addDetailedCollectible(page, {
+        name: `Stats ${scheme} ${Date.now()}`,
+        status: 'owned',
+        price: '125.00',
+        series: 'Kaiju Wars',
+      })
+      await gotoReady(page, '/collection/stats')
+
+      await expect(page.getByTestId('collection-summary')).toBeVisible()
+      await expect(page.getByTestId('status-breakdown')).toBeVisible()
+      await expect(page.getByTestId('breakdown-series')).toBeVisible()
+
+      const ground = await bodyBackground(page)
+      const headline = await page.getByTestId('owned-total').evaluate((el) => getComputedStyle(el).color)
+      expect(headline, 'the headline figure is the same colour as the page').not.toBe(ground)
+      expect(headline).not.toBe('rgba(0, 0, 0, 0)')
     })
 
     /*

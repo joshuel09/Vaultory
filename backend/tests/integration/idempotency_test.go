@@ -6,6 +6,8 @@ import (
 	"context"
 	"sync"
 	"testing"
+
+	"github.com/joshuel09/vaultory/backend/internal/store/postgres"
 )
 
 // FR-047, SC-016: replaying a submission key returns the collectible it already created.
@@ -38,7 +40,7 @@ func TestReplayedSubmissionKeyReturnsTheSameCollectible(t *testing.T) {
 			first.Row.Collectible.ID, second.Row.Collectible.ID)
 	}
 
-	page, err := svc.List(ctx, collectorA, nil, "", 50)
+	page, err := svc.List(ctx, collectorA, postgres.ListFilter{}, "", 50)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -92,7 +94,7 @@ func TestConcurrentSubmissionsWithOneKeyCreateOneCollectible(t *testing.T) {
 		t.Fatalf("%d distinct collectibles were created from one submission key, want 1: %v", len(ids), ids)
 	}
 
-	page, err := svc.List(ctx, collectorA, nil, "", 50)
+	page, err := svc.List(ctx, collectorA, postgres.ListFilter{}, "", 50)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}

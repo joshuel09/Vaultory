@@ -45,6 +45,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/collectibles/statistics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Summarise the acting collector's whole vault
+         * @description Returns counts and monetary totals over every collectible the acting collector owns: the
+         *     whole-vault figures, a summary for each of the four collection statuses, and bounded
+         *     breakdowns by series and by manufacturer.
+         *
+         *     **This operation takes no parameters of any kind.** There is therefore no way to express a
+         *     request for another collector's figures — the privacy requirement is satisfied by the shape
+         *     of the operation rather than by a check inside it (FR-003).
+         *
+         *     Every figure is computed server-side. Clients display what they receive and derive nothing
+         *     from it (FR-001).
+         *
+         *     All figures in one response describe the same moment: they are read inside a single
+         *     transaction, so counts that are required to reconcile cannot disagree because two reads
+         *     observed different states (FR-017a).
+         *
+         *     Monetary totals are exact decimal strings and are **not** bounded by the limit that applies to
+         *     a single recorded amount — see `MonetaryTotal` (FR-013).
+         */
+        get: operations["getCollectionStatistics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/collectibles/{collectibleId}": {
         parameters: {
             query?: never;
@@ -183,6 +219,96 @@ export interface components {
          * @example 1250.00
          */
         MonetaryAmount: string;
+        /**
+         * @description An exact decimal **total**, as a string, with at most two fractional digits.
+         *
+         *     Deliberately not `MonetaryAmount`. That schema bounds a single *stored* amount to ten integer
+         *     digits, which is what the database column holds. A total is derived, is never stored, and is
+         *     bounded instead by the exact representation used to accumulate it — some seven orders of
+         *     magnitude higher (FR-013). Reusing `MonetaryAmount` here would make a legitimate total fail
+         *     validation on a vault large enough to produce one.
+         *
+         *     Carried as a string, never a JSON number, for the same reason every other amount is: a JSON
+         *     number invites a floating-point conversion on the other side, and this is the figure where
+         *     such a conversion would be least visible and most damaging (Principle IV).
+         * @example 0.00
+         * @example 1250.00
+         * @example 48392.17
+         */
+        MonetaryTotal: string;
+        /**
+         * @description What a breakdown entry represents.
+         *
+         *     `named` is a group the collector actually recorded. `unspecified` collects the collectibles
+         *     that record no value for the grouped field. `remainder` is everything beyond the bound on how
+         *     many entries are returned.
+         *
+         *     This exists so a client never has to infer a group's nature from its label — an `unspecified`
+         *     group whose label happened to read "Unspecified" would otherwise be indistinguishable from a
+         *     collector who typed that word as a manufacturer.
+         * @enum {string}
+         */
+        GroupKind: "named" | "unspecified" | "remainder";
+        /** @description The collectibles holding one collection status, and what was paid for them. */
+        StatusSummary: {
+            status: components["schemas"]["CollectionStatus"];
+            /** @description Collectibles with this status. */
+            count: number;
+            /**
+             * @description How many of those carry a recorded purchase price. `total` covers exactly these, so this
+             *     is what distinguishes a total of `"0.00"` over nothing priced from a genuine zero
+             *     (FR-010).
+             */
+            pricedCount: number;
+            total: components["schemas"]["MonetaryTotal"];
+        };
+        /** @description One entry in a breakdown — a series, a manufacturer, the unspecified group, or the remainder. */
+        GroupSummary: {
+            /**
+             * @description What to display. For a `named` group this is the spelling the collector used most often
+             *     within it, so the view returns their own words rather than a normalised form nobody typed.
+             *     Where no spelling is most common the tie resolves alphabetically, which is repeatable but
+             *     is not a claim about what the collector preferred (FR-027a).
+             */
+            label: string;
+            kind: components["schemas"]["GroupKind"];
+            count: number;
+            pricedCount: number;
+            total: components["schemas"]["MonetaryTotal"];
+        };
+        /**
+         * @description Counts and totals over one collector's whole vault.
+         *
+         *     There is deliberately no "headline value" field. The four status summaries are returned as
+         *     peers, and which of them a collector sees largest is a presentation decision; putting it here
+         *     would make a change of emphasis a change to this contract.
+         *
+         *     No figure here derives from a field the product does not record. In particular there is no
+         *     market value and no sale price, so the total reported against `sold` is what was *paid* for
+         *     those collectibles and must be labelled in those words (FR-019, FR-042).
+         */
+        CollectionStatistics: {
+            /** @description Every collectible in the vault (FR-007). */
+            totalCount: number;
+            /**
+             * @description How many carry a recorded purchase price. A collectible without one is excluded from every
+             *     monetary total and is not treated as having cost nothing (FR-009).
+             */
+            pricedCount: number;
+            /**
+             * @description Exactly four entries, one per collection status, always present and always in the same
+             *     order. A status holding nothing is returned with zeros rather than omitted, so a client
+             *     never has to decide what an absent status means (FR-015).
+             */
+            byStatus: components["schemas"]["StatusSummary"][];
+            /**
+             * @description Bounded breakdown by series. Named groups first, largest first; the unspecified group and
+             *     the remainder sort below every named group whatever their own size (FR-022).
+             */
+            bySeries: components["schemas"]["GroupSummary"][];
+            /** @description Bounded breakdown by manufacturer, with exactly the semantics of `bySeries`. */
+            byManufacturer: components["schemas"]["GroupSummary"][];
+        };
         /**
          * @description Values for a new collectible. `name` and `collectionStatus` are required; everything else is
          *     optional (FR-005, FR-006). An omitted field means the collector recorded nothing, which is
@@ -534,6 +660,18 @@ export interface operations {
             query?: {
                 /** @description Narrow to one collection status. Omit for all statuses (FR-038). */
                 status?: components["schemas"]["CollectionStatus"];
+                /**
+                 * @description Narrow to one series (FR-030, FR-031 of 008). Matched on the same normalised form the
+                 *     statistics group by — surrounding whitespace removed and case folded — so that a group
+                 *     shown in the statistics and the gallery it links to always contain the same collectibles.
+                 *
+                 *     An empty value selects the collectibles recording no series at all, which is the group the
+                 *     statistics label as unspecified. That group holds rows where the field is null, empty, or
+                 *     whitespace alike, so the filter cannot be expressed as "is null".
+                 */
+                series?: string;
+                /** @description Narrow to one manufacturer, with exactly the semantics of `series` above. */
+                manufacturer?: string;
                 /** @description Opaque cursor from a previous response's `nextCursor`. Omit for the first page. */
                 cursor?: string;
                 /** @description Maximum entries to return in this page. */
@@ -591,6 +729,31 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
             415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getCollectionStatistics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /**
+             * @description The summary. An empty vault is a success carrying zeros, never a 404: a collector with
+             *     nothing in their vault has a vault, and it is empty.
+             */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionStatistics"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
             500: components["responses"]["InternalError"];
         };
     };

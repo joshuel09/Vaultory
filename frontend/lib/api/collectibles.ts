@@ -16,6 +16,17 @@ const API = '/api'
 
 export interface ListParams {
   status?: CollectionStatus
+  /**
+   * A series to narrow to, or the empty string for the pieces recording none.
+   *
+   * `undefined` and `''` are different requests, and `if (params.series)` cannot tell them apart.
+   * The empty string is the filter behind the statistics' unspecified group; dropping it sends that
+   * group's link to the whole vault, which looks like a working page with the wrong contents
+   * (008 FR-031, SC-010).
+   */
+  series?: string
+  /** A manufacturer, with exactly the semantics of `series` above. */
+  manufacturer?: string
   cursor?: string
   limit?: number
 }
@@ -26,6 +37,8 @@ export async function listCollectibles(
 ): Promise<CollectionPage> {
   const query = new URLSearchParams()
   if (params.status) query.set('status', params.status)
+  if (params.series !== undefined) query.set('series', params.series)
+  if (params.manufacturer !== undefined) query.set('manufacturer', params.manufacturer)
   if (params.cursor) query.set('cursor', params.cursor)
   if (params.limit) query.set('limit', String(params.limit))
 

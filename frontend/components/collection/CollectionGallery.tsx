@@ -4,12 +4,18 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { CollectibleCard } from './CollectibleCard'
 import { Button } from '@/components/ui/button'
 import { listCollectibles } from '@/lib/api/collectibles'
-import type { Collectible, CollectionStatus } from '@/lib/api/types'
+import type { Collectible } from '@/lib/api/types'
+import { galleryHref, type GalleryFilter } from '@/lib/gallery-link'
 
 interface Props {
   initialItems: Collectible[]
   initialCursor: string | null
-  status: CollectionStatus | null
+  /**
+   * The filter this gallery is showing. It rides on every further page: a second page fetched
+   * without it silently widens the gallery halfway down, which looks like the filter leaking
+   * rather than like a bug.
+   */
+  filter: GalleryFilter
 }
 
 /**
@@ -23,10 +29,10 @@ interface Props {
  * remounts this component with a new `key` rather than having it sync props into state in an
  * effect, which would cascade an extra render and risk showing the old filter's items briefly.
  */
-export function CollectionGallery({ initialItems, initialCursor, status }: Props) {
+export function CollectionGallery({ initialItems, initialCursor, filter }: Props) {
   // The gallery as the collector is currently looking at it, so an edit returns them to the same
   // filtered view rather than to an unfiltered one.
-  const returnTo = status ? `/collection?status=${status}` : '/collection'
+  const returnTo = galleryHref(filter)
 
   const [items, setItems] = useState(initialItems)
   const [cursor, setCursor] = useState(initialCursor)
@@ -39,7 +45,14 @@ export function CollectionGallery({ initialItems, initialCursor, status }: Props
     setLoading(true)
     setError(null)
     try {
-      const page = await listCollectibles({ cursor, status: status ?? undefined })
+      const page = await listCollectibles({
+        cursor,
+        // ?? undefined, never || undefined: an empty series is a filter, and losing it here would
+        // widen page two to the whole vault.
+        status: filter.status ?? undefined,
+        series: filter.series ?? undefined,
+        manufacturer: filter.manufacturer ?? undefined,
+      })
       setItems((prev) => [...prev, ...page.items])
       setCursor(page.nextCursor ?? null)
     } catch {
@@ -48,7 +61,7 @@ export function CollectionGallery({ initialItems, initialCursor, status }: Props
     } finally {
       setLoading(false)
     }
-  }, [cursor, loading, status])
+  }, [cursor, loading, filter])
 
   // Load the next page as the end of the grid comes into view, with a button as the fallback for
   // anyone who is not scrolling — keyboard users included (FR-045).

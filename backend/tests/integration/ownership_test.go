@@ -51,7 +51,7 @@ func TestCollectionsAreIsolatedBetweenCollectors(t *testing.T) {
 		t.Fatalf("add for B: %v %+v", err, v)
 	}
 
-	pageA, err := svc.List(ctx, collectorA, nil, "", 50)
+	pageA, err := svc.List(ctx, collectorA, postgres.ListFilter{}, "", 50)
 	if err != nil {
 		t.Fatalf("list A: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestCollectionsAreIsolatedBetweenCollectors(t *testing.T) {
 		t.Errorf("A's total = %d, want 1 — the count must be scoped too", pageA.TotalUnfiltered)
 	}
 
-	pageB, err := svc.List(ctx, collectorB, nil, "", 50)
+	pageB, err := svc.List(ctx, collectorB, postgres.ListFilter{}, "", 50)
 	if err != nil {
 		t.Fatalf("list B: %v", err)
 	}

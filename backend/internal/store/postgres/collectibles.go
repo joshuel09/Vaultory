@@ -450,15 +450,34 @@ type Page struct {
 	TotalUnfiltered int
 }
 
-// List returns one page in creation order, newest first, optionally narrowed to one status.
+// ListFilter narrows a page of a collection. A nil field is not a filter.
+//
+// Series and Manufacturer are pointers for a reason that is easy to miss: nil and a pointer to the
+// empty string mean different things. nil is "every series"; empty is "the collectibles recording no
+// series at all", which is the group the statistics label unspecified. Collapsing the two — which is
+// what a plain string does, because Go cannot tell an absent query parameter from a blank one —
+// makes the unspecified group's link return the whole vault (008 FR-031, research.md Decision 8).
+type ListFilter struct {
+	Status       *collectible.CollectionStatus
+	Series       *string
+	Manufacturer *string
+}
+
+// List returns one page in creation order, newest first, optionally narrowed.
 //
 // Keyset pagination on (created_at, id): page cost stays constant as a collection grows, and the
 // id tiebreaker makes the order total, so entries created in the same instant cannot be skipped or
 // repeated across pages (research.md Decision 7).
+//
+// The series and manufacturer predicates normalise both sides through PostgreSQL, in exactly the
+// form the statistics breakdown groups by: coalesce first, then btrim, then lower. Normalising the
+// parameter in Go instead would be a second implementation of the same rule, and Go's ToLower and
+// PostgreSQL's collation-dependent lower() do not have to agree on every input. When they disagree,
+// a breakdown group and the gallery it links to hold different collectibles (008 SC-010).
 func (s *Store) List(
 	ctx context.Context,
 	collectorID uuid.UUID,
-	status *collectible.CollectionStatus,
+	filter ListFilter,
 	cursor string,
 	limit int,
 ) (Page, error) {
@@ -475,8 +494,8 @@ func (s *Store) List(
 	}
 
 	var statusArg *string
-	if status != nil {
-		v := string(*status)
+	if filter.Status != nil {
+		v := string(*filter.Status)
 		statusArg = &v
 	}
 
@@ -488,9 +507,12 @@ func (s *Store) List(
 		WHERE c.collector_id = $1
 		  AND ($2::text IS NULL OR c.collection_status = $2)
 		  AND ($3::timestamptz IS NULL OR (c.created_at, c.id) < ($3, $4))
+		  AND ($6::text IS NULL OR lower(btrim(coalesce(c.series, ''))) = lower(btrim($6)))
+		  AND ($7::text IS NULL OR lower(btrim(coalesce(c.manufacturer, ''))) = lower(btrim($7)))
 		ORDER BY c.created_at DESC, c.id DESC
 		LIMIT $5`,
-		collectorID, statusArg, afterTime, afterID, limit+1)
+		collectorID, statusArg, afterTime, afterID, limit+1,
+		filter.Series, filter.Manufacturer)
 	if err != nil {
 		return Page{}, fmt.Errorf("list collectibles: %w", err)
 	}

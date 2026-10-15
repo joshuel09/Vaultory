@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"testing"
+
+	"github.com/joshuel09/vaultory/backend/internal/store/postgres"
 )
 
 // FR-034, FR-035: pages tile the collection newest-first, with nothing repeated or skipped.
@@ -25,7 +27,7 @@ func TestKeysetPaginationTilesTheCollection(t *testing.T) {
 	cursor := ""
 	pages := 0
 	for {
-		page, err := svc.List(ctx, collectorA, nil, cursor, 10)
+		page, err := svc.List(ctx, collectorA, postgres.ListFilter{}, cursor, 10)
 		if err != nil {
 			t.Fatalf("page %d: %v", pages, err)
 		}
@@ -82,7 +84,7 @@ func TestPaginationIsStableAcrossIdenticalTimestamps(t *testing.T) {
 	seen := map[string]int{}
 	cursor := ""
 	for {
-		page, err := svc.List(ctx, collectorA, nil, cursor, 3)
+		page, err := svc.List(ctx, collectorA, postgres.ListFilter{}, cursor, 3)
 		if err != nil {
 			t.Fatalf("list: %v", err)
 		}
@@ -108,7 +110,7 @@ func TestPaginationIsStableAcrossIdenticalTimestamps(t *testing.T) {
 // A cursor the client invented or corrupted is a client error, not a server failure.
 func TestMalformedCursorIsRejected(t *testing.T) {
 	_, svc := freshStore(t)
-	if _, err := svc.List(context.Background(), collectorA, nil, "not-a-cursor", 10); err == nil {
+	if _, err := svc.List(context.Background(), collectorA, postgres.ListFilter{}, "not-a-cursor", 10); err == nil {
 		t.Error("a malformed cursor should be rejected")
 	}
 }

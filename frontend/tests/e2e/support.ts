@@ -72,6 +72,96 @@ export async function addCollectible(
   await page.waitForLoadState('networkidle')
 }
 
+/**
+ * Add a collectible with the fields the statistics aggregate over.
+ *
+ * The plain addCollectible above fills only a name and a status, which is everything the gallery
+ * needs and nothing the statistics do: with no price every total is zero, and with no series every
+ * piece lands in the unspecified group. A statistics journey driven by that helper would pass
+ * against a view that showed nothing at all.
+ */
+export async function addDetailedCollectible(
+  page: Page,
+  fields: {
+    name: string
+    status?: 'owned' | 'preordered' | 'wishlist' | 'sold'
+    price?: string
+    series?: string
+    manufacturer?: string
+  },
+) {
+  await gotoReady(page, '/collection/new')
+
+  /*
+   * Gate on hydration before filling anything else.
+   *
+   * networkidle does not mean React has attached. Text typed before it does lives only in the DOM
+   * and is discarded by the next render, and this helper fills up to five fields, so it has a wider
+   * window for that than the two-field one above — which is how it showed up: the name field came
+   * back empty at one viewport while passing at five others in the same run.
+   *
+   * Retrying the fill until the value sticks is the fix rather than a longer wait, because what is
+   * being waited for is an event with no deadline.
+   */
+  const name = page.getByLabel(/^name/i)
+  await expect(async () => {
+    await name.fill(fields.name)
+    await expect(name).toHaveValue(fields.name, { timeout: 500 })
+  }).toPass({ timeout: 15_000 })
+
+  await page.getByLabel(/collection status/i).selectOption(fields.status ?? 'owned')
+  if (fields.series !== undefined) {
+    await page.getByLabel(/series or franchise/i).fill(fields.series)
+  }
+  if (fields.manufacturer !== undefined) {
+    await page.getByLabel(/^manufacturer/i).fill(fields.manufacturer)
+  }
+  if (fields.price !== undefined) {
+    await page.getByLabel(/purchase price/i).fill(fields.price)
+  }
+  await expect(page.getByLabel(/^name/i)).toHaveValue(fields.name)
+  await page.getByRole('button', { name: /add to my vault/i }).click()
+  await expect(page.getByTestId('add-success')).toBeVisible()
+  await page.waitForLoadState('networkidle')
+}
+
+/**
+ * Put a collectible straight into the vault through the API.
+ *
+ * For tests that need a *shape* of collection rather than the act of adding one. Nine pieces added
+ * through the form is nine full page loads, nine hydrations and nine submissions, which on the
+ * mobile project under three parallel workers runs past the timeout — a failure about the add form
+ * in a test about the breakdown. The form path is covered by its own spec and by the journeys above.
+ *
+ * It goes through the same /api rewrite a browser uses, carrying the session cookie this context
+ * already holds, so it is the real endpoint with the real authorization.
+ */
+export async function seedCollectible(
+  page: Page,
+  fields: {
+    name: string
+    status?: 'owned' | 'preordered' | 'wishlist' | 'sold'
+    price?: string
+    series?: string
+    manufacturer?: string
+  },
+) {
+  const response = await page.request.post('/api/collectibles', {
+    data: {
+      submissionKey: `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      name: fields.name,
+      collectionStatus: fields.status ?? 'owned',
+      ...(fields.price !== undefined ? { purchasePrice: fields.price } : {}),
+      ...(fields.series !== undefined ? { series: fields.series } : {}),
+      ...(fields.manufacturer !== undefined ? { manufacturer: fields.manufacturer } : {}),
+    },
+  })
+  if (!response.ok()) {
+    const body = await response.text().catch(() => '<unreadable>')
+    throw new Error(`seeding ${fields.name} failed with ${response.status()}: ${body.slice(0, 300)}`)
+  }
+}
+
 /** A PNG of the given size, built in the browser, for upload tests. */
 export const oversizedFile = {
   name: 'too-big.jpg',
