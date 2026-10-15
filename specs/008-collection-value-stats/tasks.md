@@ -127,10 +127,10 @@ Web application: `backend/` (Go) and `frontend/` (Next.js), per [plan.md](./plan
 - [X] T056 [P] [US3] Integration test: **a group's count equals the number of collectibles its own link returns** — the inconsistency no unit test catches (SC-010)
 - [X] T057 [P] [US3] Integration test: a vault with more distinct series than the bound returns a bounded row count
 - [X] T058 [P] [US3] Integration test: ordering is stable across repeated calls when groups tie, and the unspecified and remainder groups sort below every named group however large they are (FR-022, FR-023)
-- [ ] T059 [US3] Create `frontend/components/collection/GroupBreakdown.tsx`, shared by both dimensions
-- [ ] T060 [US3] Link each group to its filtered gallery (FR-031)
-- [ ] T061 [P] [US3] Unit test: the unspecified and remainder groups are rendered from `kind`, never inferred from the label
-- [ ] T062 [P] [US3] Unit test: a group's link carries the filter that reproduces it
+- [X] T059 [US3] Create `frontend/components/collection/GroupBreakdown.tsx`, shared by both dimensions
+- [X] T060 [US3] Link each group to its filtered gallery (FR-031)
+- [X] T061 [P] [US3] Unit test: the unspecified and remainder groups are rendered from `kind`, never inferred from the label
+- [X] T062 [P] [US3] Unit test: a group's link carries the filter that reproduces it
 
 **Checkpoint**: all three stories independently functional.
 

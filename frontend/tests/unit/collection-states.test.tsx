@@ -25,7 +25,7 @@ describe('the collection view states', () => {
 
   // FR-040: a filter matching nothing is not the same as an empty vault, and must not say it is.
   it('the no-results state is distinct from the empty state', () => {
-    render(<NoResults status="sold" total={9} />)
+    render(<NoResults filter={{ status: 'sold' }} total={9} />)
     expect(screen.getByTestId('no-results')).toBeInTheDocument()
     expect(screen.getByText(/nothing marked sold/i)).toBeInTheDocument()
     // The decisive assertion: it must not claim the vault is empty when it holds nine.
@@ -34,7 +34,7 @@ describe('the collection view states', () => {
   })
 
   it('the no-results state names the status that matched nothing', () => {
-    render(<NoResults status="preordered" total={3} />)
+    render(<NoResults filter={{ status: 'preordered' }} total={3} />)
     expect(screen.getByText(/nothing marked preordered/i)).toBeInTheDocument()
   })
 

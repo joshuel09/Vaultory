@@ -6,7 +6,8 @@ import { StatusFilter } from '@/components/collection/StatusFilter'
 import { EmptyCollection } from '@/components/collection/EmptyCollection'
 import { NoResults } from '@/components/collection/NoResults'
 import { buttonClasses } from '@/components/ui/button'
-import { isCollectionStatus, type CollectionPage, type CollectionStatus } from '@/lib/api/types'
+import { isCollectionStatus, type CollectionPage } from '@/lib/api/types'
+import { galleryHref, isFiltered, type GalleryFilter } from '@/lib/gallery-link'
 
 /**
  * The collection view. A Server Component: the first page is rendered on the server, and only the
@@ -19,13 +20,18 @@ export const dynamic = 'force-dynamic'
 
 const BACKEND = process.env.VAULTORY_BACKEND_ORIGIN ?? 'http://127.0.0.1:8080'
 
-async function fetchFirstPage(status: CollectionStatus | null): Promise<CollectionPage> {
+async function fetchFirstPage(filter: GalleryFilter): Promise<CollectionPage> {
   // Server-side, the rewrite is not in play, so this goes to the backend directly — and must
   // forward the collector's cookie itself, or the request arrives with no identity and is refused
   // (FR-029). Browser-side requests carry it automatically via the same-origin rewrite.
   const cookieHeader = (await cookies()).toString()
   const url = new URL('/api/collectibles', BACKEND)
-  if (status) url.searchParams.set('status', status)
+  // Null means no filter; the empty string is a filter — the pieces recording no series at all.
+  // Truthiness cannot tell the two apart, and getting it wrong here makes the statistics'
+  // unspecified group link to the whole vault (008 FR-031).
+  if (filter.status != null) url.searchParams.set('status', filter.status)
+  if (filter.series != null) url.searchParams.set('series', filter.series)
+  if (filter.manufacturer != null) url.searchParams.set('manufacturer', filter.manufacturer)
 
   const response = await fetch(url, {
     headers: cookieHeader ? { cookie: cookieHeader } : {},
@@ -60,9 +66,17 @@ export default async function CollectionPage({
   const raw = typeof params.status === 'string' ? params.status : ''
   const status = isCollectionStatus(raw) ? raw : null
 
-  const page = await fetchFirstPage(status)
+  // typeof === 'string', not truthiness: `?series=` arrives as '' and is a real filter, while an
+  // absent parameter arrives as undefined and is not.
+  const filter: GalleryFilter = {
+    status,
+    series: typeof params.series === 'string' ? params.series : null,
+    manufacturer: typeof params.manufacturer === 'string' ? params.manufacturer : null,
+  }
+
+  const page = await fetchFirstPage(filter)
   const isEmptyVault = page.totalUnfiltered === 0
-  const filterMatchedNothing = !isEmptyVault && page.items.length === 0 && status !== null
+  const filterMatchedNothing = !isEmptyVault && page.items.length === 0 && isFiltered(filter)
 
   return (
     <main className="mx-auto w-full max-w-[110rem] px-4 py-8 sm:px-6 lg:px-10">
@@ -104,15 +118,16 @@ export default async function CollectionPage({
       {isEmptyVault ? (
         <EmptyCollection />
       ) : filterMatchedNothing ? (
-        <NoResults status={status} total={page.totalUnfiltered} />
+        <NoResults filter={filter} total={page.totalUnfiltered} />
       ) : (
         <CollectionGallery
           // A new filter is a new collection: remount rather than reconcile, so no item from the
-          // previous filter can survive into this one.
-          key={status ?? 'all'}
+          // previous filter can survive into this one. The key covers every filter, not just the
+          // status — keying on one of three means switching series reconciles into stale items.
+          key={galleryHref(filter)}
           initialItems={page.items}
           initialCursor={page.nextCursor ?? null}
-          status={status}
+          filter={filter}
         />
       )}
     </main>

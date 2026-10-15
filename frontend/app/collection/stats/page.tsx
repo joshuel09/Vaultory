@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { CollectionSummary } from '@/components/collection/CollectionSummary'
 import { StatusBreakdown } from '@/components/collection/StatusBreakdown'
+import { GroupBreakdown } from '@/components/collection/GroupBreakdown'
 import { buttonClasses } from '@/components/ui/button'
 import type { CollectionStatistics } from '@/lib/api/types'
 
@@ -84,6 +85,18 @@ export default async function CollectionStatisticsPage() {
         <div className="space-y-12">
           <CollectionSummary stats={stats} />
           <StatusBreakdown byStatus={stats.byStatus} />
+          <GroupBreakdown
+            dimension="series"
+            groups={stats.bySeries}
+            heading="Series you collect most"
+            emptyNote="None of your pieces records a series yet."
+          />
+          <GroupBreakdown
+            dimension="manufacturer"
+            groups={stats.byManufacturer}
+            heading="Manufacturers you buy from most"
+            emptyNote="None of your pieces records a manufacturer yet."
+          />
         </div>
       )}
     </div>
