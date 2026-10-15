@@ -108,6 +108,43 @@ export async function addDetailedCollectible(
   await page.waitForLoadState('networkidle')
 }
 
+/**
+ * Put a collectible straight into the vault through the API.
+ *
+ * For tests that need a *shape* of collection rather than the act of adding one. Nine pieces added
+ * through the form is nine full page loads, nine hydrations and nine submissions, which on the
+ * mobile project under three parallel workers runs past the timeout — a failure about the add form
+ * in a test about the breakdown. The form path is covered by its own spec and by the journeys above.
+ *
+ * It goes through the same /api rewrite a browser uses, carrying the session cookie this context
+ * already holds, so it is the real endpoint with the real authorization.
+ */
+export async function seedCollectible(
+  page: Page,
+  fields: {
+    name: string
+    status?: 'owned' | 'preordered' | 'wishlist' | 'sold'
+    price?: string
+    series?: string
+    manufacturer?: string
+  },
+) {
+  const response = await page.request.post('/api/collectibles', {
+    data: {
+      submissionKey: `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      name: fields.name,
+      collectionStatus: fields.status ?? 'owned',
+      ...(fields.price !== undefined ? { purchasePrice: fields.price } : {}),
+      ...(fields.series !== undefined ? { series: fields.series } : {}),
+      ...(fields.manufacturer !== undefined ? { manufacturer: fields.manufacturer } : {}),
+    },
+  })
+  if (!response.ok()) {
+    const body = await response.text().catch(() => '<unreadable>')
+    throw new Error(`seeding ${fields.name} failed with ${response.status()}: ${body.slice(0, 300)}`)
+  }
+}
+
 /** A PNG of the given size, built in the browser, for upload tests. */
 export const oversizedFile = {
   name: 'too-big.jpg',

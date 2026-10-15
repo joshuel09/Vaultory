@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -155,7 +156,12 @@ func groupFilter(q url.Values, name string) (*string, *FieldError) {
 		return nil, nil
 	}
 	v := q.Get(name)
-	if len(v) > maxGroupFilterLength {
+	// Runes, not bytes. The domain bounds these fields with len([]rune(...)), and the contract's
+	// maxLength counts code points, so byte length refuses values the product stores happily: a
+	// 100-character Japanese series name is 300 bytes. That group appears in the statistics, its
+	// link carries the label, and the collector following it would get an error from a link the
+	// product offered them (SC-010).
+	if utf8.RuneCountInString(v) > maxGroupFilterLength {
 		return nil, &FieldError{
 			Field:   name,
 			Code:    FieldTooLong,
@@ -166,7 +172,7 @@ func groupFilter(q url.Values, name string) (*string, *FieldError) {
 }
 
 // maxGroupFilterLength matches the contract's maxLength for the series and manufacturer parameters,
-// which in turn matches what those fields accept.
+// which in turn matches MaxSeriesLength and MaxManufacturerLength — all three counted in characters.
 const maxGroupFilterLength = 200
 
 // handleGetCollectible reads one of the acting collector's collectibles, which is what the edit

@@ -103,6 +103,15 @@ and the response size becomes a constant.
 most frequent value and resolves ties by the given sort order rather than arbitrarily. That is what
 makes FR-027a's determinism requirement satisfiable without a second pass.
 
+**As built, the window carries `PARTITION BY (key = '')`** — added during implementation, not
+planned here, because running the planned statement against PostgreSQL showed the unspecified group
+competing with the named ones for the bounded slots. Both outcomes are wrong: a large unspecified
+group takes a slot a real series should have had, and a small one ranks past the bound and is folded
+into the remainder, disappearing from a breakdown FR-021 requires it to appear in. Nine series of two
+with one unnamed piece reproduces the second case. Partitioning gives the unspecified group a
+partition of its own in which it is always first, so the result is the bound plus two rows that this
+decision already claimed. `TestBreakdownCountsReconcileIncludingUnspecifiedAndRemainder` holds it.
+
 ---
 
 ## Decision 6 — Normalisation is `lower(btrim(…))`, and `NULL` and `''` are the same group
@@ -158,9 +167,22 @@ catches and every collector notices.
 **The unspecified group's link is the awkward one.** Its members are the rows where the field is
 `NULL`, `''`, or whitespace. A filter written as `manufacturer IS NULL` returns two of the three; a
 filter written as `manufacturer = ''` returns the other one. The predicate must be
-`coalesce(lower(btrim(manufacturer)), '') = $1` with an empty `$1`, which is the same expression the
-grouping uses — the point of Decision 6 restated on the read side. Naming it here because `IS NULL`
-is the obvious thing to reach for and is wrong by exactly the amount nobody checks.
+`lower(btrim(coalesce(manufacturer, ''))) = lower(btrim($1))` with an empty `$1`, which is the same
+expression the grouping uses — the point of Decision 6 restated on the read side. Naming it here
+because `IS NULL` is the obvious thing to reach for and is wrong by exactly the amount nobody checks.
+
+**Both sides go through PostgreSQL's `lower`, as built.** This decision originally wrote `= $1`,
+assuming the parameter arrives already normalised. It does not, and should not: the link carries the
+label the collector sees, which `mode()` returns trimmed but with its case intact. Normalising it in
+Go would be a second implementation of the same rule, and `strings.ToLower` and PostgreSQL's
+collation-dependent `lower()` need not agree on every input — and where they disagree, a group and
+the gallery it links to hold different collectibles.
+
+**The bound on the parameter counts characters, not bytes.** `maxLength: 200` in the contract counts
+code points, and the domain bounds these fields with `len([]rune(...))`. A handler counting bytes
+refuses a 100-character Japanese series name that the product stored happily, so a link the product
+itself offered answers 400. Found in review, after the first version of the test — which used ASCII —
+passed.
 
 **No index for the filter either**, consistent with Decision 1: the predicate is evaluated over one
 collector's rows, which is the same set the grouping already scans.

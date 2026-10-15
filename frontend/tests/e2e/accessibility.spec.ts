@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { addCollectible, addDetailedCollectible, gotoReady, openEditScreen, signIn } from './support'
+import { addCollectible, addDetailedCollectible, gotoReady, openEditScreen, seedCollectible, signIn } from './support'
 
 /**
  * T079, FR-044, FR-045, SC-011.
@@ -243,7 +243,7 @@ test.describe('the statistics view by keyboard', () => {
     // built.
     const stamp = Date.now()
     for (let i = 0; i < 9; i++) {
-      await addDetailedCollectible(page, {
+      await seedCollectible(page, {
         name: `Rem ${i} ${stamp}`, status: 'owned', price: '1.00', series: `Series ${i}`,
       })
     }

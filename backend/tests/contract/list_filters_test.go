@@ -5,7 +5,9 @@ package contract
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"testing"
+	"unicode/utf8"
 )
 
 // listWith issues GET /api/collectibles with a raw query string and returns the decoded page.
@@ -117,8 +119,24 @@ func TestAnOverlongGroupFilterIsRefused(t *testing.T) {
 	h := newHarness(t)
 	cookie := h.sessionFor(t, "")
 
+	// 200 characters of Japanese — 600 bytes — is a series name the product stores happily, so the
+	// filter that reproduces its group must be accepted. Counting bytes here refuses it, and the
+	// collector following a link the product offered them gets an error page (SC-010).
+	wide := ""
+	for utf8.RuneCountInString(wide) < 200 {
+		wide += "\u3042"
+	}
+	okReq, err := http.NewRequest(http.MethodGet, h.server.URL+"/api/collectibles?series="+url.QueryEscape(wide), nil)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	if resp := h.do(t, okReq, cookie); resp.StatusCode != http.StatusOK {
+		t.Errorf("a 200-character, %d-byte series filter answered %d, want 200 — the bound counts "+
+			"characters, as the contract and the domain both do", len(wide), resp.StatusCode)
+	}
+
 	long := ""
-	for len(long) <= 200 {
+	for utf8.RuneCountInString(long) <= 200 {
 		long += "a"
 	}
 	req, err := http.NewRequest(http.MethodGet, h.server.URL+"/api/collectibles?series="+long, nil)
@@ -129,7 +147,7 @@ func TestAnOverlongGroupFilterIsRefused(t *testing.T) {
 	// status filter and the limit both do. Consistency here matters more than the choice.
 	resp := h.do(t, req, cookie)
 	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("a %d-character series filter answered %d, want 400", len(long), resp.StatusCode)
+		t.Fatalf("a %d-character series filter answered %d, want 400", utf8.RuneCountInString(long), resp.StatusCode)
 	}
 
 	body := decode(t, resp)

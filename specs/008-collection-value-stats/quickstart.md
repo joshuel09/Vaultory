@@ -44,7 +44,13 @@ They must appear as **one group of three**, labelled with the spelling used twic
 normalisation is missing or is being applied in the wrong place.
 
 Then add one with manufacturer left blank and one with only spaces. Both must land in the **same**
-unspecified group. Two unspecified-looking groups means `coalesce` is being applied after
+unspecified group.
+
+Through the form, that check cannot fail: the domain trims optional text and records a blank value as
+absent, so both arrive as `NULL` before the grouping ever sees them. The rows that make the check
+meaningful are the ones a migration or a direct correction leaves behind, and they have to be written
+with SQL. `TestNullEmptyAndWhitespaceFormOneUnspecifiedGroup` does exactly that, updating the column
+underneath the domain. Two unspecified-looking groups there means `coalesce` is being applied after
 normalisation rather than before.
 
 ### The traceability one

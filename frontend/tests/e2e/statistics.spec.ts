@@ -12,11 +12,15 @@ test.describe('what your collection holds', () => {
   // T066 — the headline journey. Desktop only: this is about the figures, and the other two
   // viewports are covered by the responsive spec.
   test.describe('the headline', () => {
-    // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructuring pattern here
-    test.skip(({}, info) => info.project.name !== 'desktop', 'the figures, once, on desktop')
+    // The figures are the same at every width, and the other two projects cover the layout. A
+    // describe-level test.skip callback is handed fixtures only — not testInfo — so the project is
+    // read here, in beforeEach, which does receive it.
+    test.beforeEach(async ({ page }, info) => {
+      test.skip(info.project.name !== 'desktop', 'the figures, once, on desktop')
+      await signIn(page)
+    })
 
     test('shows what the vault holds and what was paid for the owned pieces', async ({ page }) => {
-      await signIn(page)
       const stamp = Date.now()
 
       await addDetailedCollectible(page, {
@@ -62,7 +66,6 @@ test.describe('what your collection holds', () => {
     // The whole feature rests on this. A number a collector can follow and find disagrees with is
     // worse than no number, and nothing below this level can catch the two sides drifting apart.
     test('every figure links to exactly the pieces it counted', async ({ page }) => {
-      await signIn(page)
       const stamp = Date.now()
 
       await addDetailedCollectible(page, { name: `Sw A ${stamp}`, status: 'owned', price: '10.00', series: 'Sword Saga' })
@@ -100,8 +103,6 @@ test.describe('what your collection holds', () => {
 
     // T068 — FR-034, FR-011: the two states that are true but useless if shown as bare zeros.
     test('an empty vault gets a designed state, not a grid of zeros', async ({ page }) => {
-      await signIn(page)
-
       // The link is not offered at all when there is nothing to summarise (FR-029).
       await gotoReady(page, '/collection')
       await expect(page.getByTestId('statistics-link')).toHaveCount(0)
@@ -114,7 +115,6 @@ test.describe('what your collection holds', () => {
     })
 
     test('says how much of the collection a total covers when some pieces have no price', async ({ page }) => {
-      await signIn(page)
       const stamp = Date.now()
 
       await addDetailedCollectible(page, { name: `Priced ${stamp}`, status: 'owned', price: '20.00' })
