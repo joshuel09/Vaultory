@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/joshuel09/vaultory/backend/internal/store/postgres"
 )
 
 // T081, SC-004: a 500-collectible collection becomes browsable within 2 seconds.
@@ -28,7 +30,7 @@ func TestLargeCollectionIsBrowsableQuickly(t *testing.T) {
 	}
 
 	start := time.Now()
-	page, err := svc.List(ctx, collectorA, nil, "", 24)
+	page, err := svc.List(ctx, collectorA, postgres.ListFilter{}, "", 24)
 	elapsed := time.Since(start)
 	if err != nil {
 		t.Fatalf("list: %v", err)
@@ -51,7 +53,7 @@ func TestLargeCollectionIsBrowsableQuickly(t *testing.T) {
 	// the property keyset pagination buys over offset.
 	cursor := page.NextCursor
 	for i := 0; i < 15 && cursor != ""; i++ {
-		p, err := svc.List(ctx, collectorA, nil, cursor, 24)
+		p, err := svc.List(ctx, collectorA, postgres.ListFilter{}, cursor, 24)
 		if err != nil {
 			t.Fatalf("page %d: %v", i, err)
 		}
@@ -61,7 +63,7 @@ func TestLargeCollectionIsBrowsableQuickly(t *testing.T) {
 		t.Skip("collection exhausted before a deep page could be measured")
 	}
 	start = time.Now()
-	if _, err := svc.List(ctx, collectorA, nil, cursor, 24); err != nil {
+	if _, err := svc.List(ctx, collectorA, postgres.ListFilter{}, cursor, 24); err != nil {
 		t.Fatalf("deep page: %v", err)
 	}
 	deep := time.Since(start)

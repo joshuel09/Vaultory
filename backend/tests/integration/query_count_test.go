@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+
+	"github.com/joshuel09/vaultory/backend/internal/store/postgres"
 )
 
 // T082: a gallery page costs a fixed number of statements, whatever it contains.
@@ -20,7 +22,7 @@ func TestGalleryPageCostDoesNotGrowWithItems(t *testing.T) {
 
 	statementsFor := func(items int) int64 {
 		before := statementCount(t)
-		if _, err := svc.List(ctx, collectorA, nil, "", 48); err != nil {
+		if _, err := svc.List(ctx, collectorA, postgres.ListFilter{}, "", 48); err != nil {
 			t.Fatalf("list with %d items: %v", items, err)
 		}
 		return statementCount(t) - before

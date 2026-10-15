@@ -5,6 +5,8 @@ package integration
 import (
 	"context"
 	"testing"
+
+	"github.com/joshuel09/vaultory/backend/internal/store/postgres"
 )
 
 // T038 — FR-028: editing never moves a collectible in the gallery.
@@ -27,7 +29,7 @@ func TestEditingDoesNotMoveACollectible(t *testing.T) {
 		ids = append(ids, added.Row.Collectible.ID.String())
 	}
 
-	before, err := svc.List(ctx, collectorA, nil, "", 50)
+	before, err := svc.List(ctx, collectorA, postgres.ListFilter{}, "", 50)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -48,7 +50,7 @@ func TestEditingDoesNotMoveACollectible(t *testing.T) {
 		t.Fatalf("edit: %v %+v", err, v)
 	}
 
-	after, err := svc.List(ctx, collectorA, nil, "", 50)
+	after, err := svc.List(ctx, collectorA, postgres.ListFilter{}, "", 50)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}

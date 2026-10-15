@@ -100,7 +100,7 @@ func TestEditChangesExactlyOneCollectible(t *testing.T) {
 	}
 
 	// FR-008: no new collectible.
-	page, err := svc.List(ctx, collectorA, nil, "", 50)
+	page, err := svc.List(ctx, collectorA, postgres.ListFilter{}, "", 50)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}

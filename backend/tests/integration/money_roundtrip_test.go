@@ -5,6 +5,8 @@ package integration
 import (
 	"context"
 	"testing"
+
+	"github.com/joshuel09/vaultory/backend/internal/store/postgres"
 )
 
 // FR-016, SC-009: an amount comes back exactly as it went in.
@@ -37,7 +39,7 @@ func TestPurchasePriceRoundTripsExactly(t *testing.T) {
 		_ = i
 	}
 
-	page, err := svc.List(ctx, collectorA, nil, "", 50)
+	page, err := svc.List(ctx, collectorA, postgres.ListFilter{}, "", 50)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -74,7 +76,7 @@ func TestAbsentPriceIsNotZero(t *testing.T) {
 		t.Fatalf("add without price: %v", err)
 	}
 
-	page, err := svc.List(ctx, collectorA, nil, "", 50)
+	page, err := svc.List(ctx, collectorA, postgres.ListFilter{}, "", 50)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}

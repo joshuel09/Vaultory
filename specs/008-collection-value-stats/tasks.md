@@ -119,14 +119,14 @@ Web application: `backend/` (Go) and `frontend/` (Next.js), per [plan.md](./plan
 - [X] T048 [US3] Use `mode() WITHIN GROUP` for the display spelling; ties resolve alphabetically on the trimmed spelling, which the test asserts as *repeatable* rather than as the collector's preference (FR-027a)
 - [X] T049 [US3] Fold the tail in SQL with `row_number()`, so the response is bounded in rows as well as statements (FR-025, research.md Decision 5)
 - [X] T050 [US3] Map key `''` to `unspecified` and key `NULL` to `remainder` — verified distinct against PostgreSQL during planning, though `psql` renders both blank
-- [ ] T051 [US3] Add `series` and `manufacturer` filters to `Store.List` in `collectibles.go` as `coalesce(lower(btrim(col)), '') = $n`, normalising **identically** to the grouping; the unspecified group's link passes an empty value and must return the `NULL`, `''` and whitespace rows alike — `IS NULL` is the obvious choice and is wrong (research.md Decision 8)
-- [ ] T052 [US3] Accept the two filters in the list handler and thread them through the gallery
-- [ ] T053 [P] [US3] Integration test: near-duplicate spellings form one group, labelled with the most-used spelling
-- [ ] T054 [P] [US3] Integration test: `NULL`, empty and whitespace-only values land in **one** unspecified group, not two
-- [ ] T055 [P] [US3] Integration test: breakdown counts reconcile with the total, including unspecified and remainder (FR-026, SC-003)
-- [ ] T056 [P] [US3] Integration test: **a group's count equals the number of collectibles its own link returns** — the inconsistency no unit test catches (SC-010)
-- [ ] T057 [P] [US3] Integration test: a vault with more distinct series than the bound returns a bounded row count
-- [ ] T058 [P] [US3] Integration test: ordering is stable across repeated calls when groups tie, and the unspecified and remainder groups sort below every named group however large they are (FR-022, FR-023)
+- [X] T051 [US3] Add `series` and `manufacturer` filters to `Store.List` in `collectibles.go` as `coalesce(lower(btrim(col)), '') = $n`, normalising **identically** to the grouping; the unspecified group's link passes an empty value and must return the `NULL`, `''` and whitespace rows alike — `IS NULL` is the obvious choice and is wrong (research.md Decision 8)
+- [X] T052 [US3] Accept the two filters in the list handler and thread them through the gallery
+- [X] T053 [P] [US3] Integration test: near-duplicate spellings form one group, labelled with the most-used spelling
+- [X] T054 [P] [US3] Integration test: `NULL`, empty and whitespace-only values land in **one** unspecified group, not two
+- [X] T055 [P] [US3] Integration test: breakdown counts reconcile with the total, including unspecified and remainder (FR-026, SC-003)
+- [X] T056 [P] [US3] Integration test: **a group's count equals the number of collectibles its own link returns** — the inconsistency no unit test catches (SC-010)
+- [X] T057 [P] [US3] Integration test: a vault with more distinct series than the bound returns a bounded row count
+- [X] T058 [P] [US3] Integration test: ordering is stable across repeated calls when groups tie, and the unspecified and remainder groups sort below every named group however large they are (FR-022, FR-023)
 - [ ] T059 [US3] Create `frontend/components/collection/GroupBreakdown.tsx`, shared by both dimensions
 - [ ] T060 [US3] Link each group to its filtered gallery (FR-031)
 - [ ] T061 [P] [US3] Unit test: the unspecified and remainder groups are rendered from `kind`, never inferred from the label

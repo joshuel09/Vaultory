@@ -13,6 +13,8 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/joshuel09/vaultory/backend/internal/domain/collectible"
+
+	"github.com/joshuel09/vaultory/backend/internal/store/postgres"
 )
 
 // T053 — FR-024, FR-026: deleting removes exactly the one entry and nothing else.
@@ -41,7 +43,7 @@ func TestDeleteRemovesExactlyOneCollectible(t *testing.T) {
 	}
 
 	// Gone from the gallery.
-	page, err := svc.List(ctx, collectorA, nil, "", 50)
+	page, err := svc.List(ctx, collectorA, postgres.ListFilter{}, "", 50)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -61,7 +63,7 @@ func TestDeleteRemovesExactlyOneCollectible(t *testing.T) {
 
 	// And gone from every status filter, not merely from the unfiltered view.
 	sold, _ := collectible.ParseCollectionStatus("sold")
-	filtered, err := svc.List(ctx, collectorA, &sold, "", 50)
+	filtered, err := svc.List(ctx, collectorA, postgres.ListFilter{Status: &sold}, "", 50)
 	if err != nil {
 		t.Fatalf("filtered list: %v", err)
 	}

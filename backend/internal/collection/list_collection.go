@@ -5,7 +5,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/joshuel09/vaultory/backend/internal/domain/collectible"
 	"github.com/joshuel09/vaultory/backend/internal/store/postgres"
 )
 
@@ -16,15 +15,14 @@ const (
 	MaxPageLimit     = 48
 )
 
-// List returns one page of the collector's own collection, newest first, optionally narrowed to a
-// single status.
+// List returns one page of the collector's own collection, newest first, optionally narrowed.
 //
 // It never returns another collector's collectibles: the collector is a predicate in the query,
 // not a filter applied afterwards (FR-026).
 func (s *Service) List(
 	ctx context.Context,
 	collectorID uuid.UUID,
-	status *collectible.CollectionStatus,
+	filter postgres.ListFilter,
 	cursor string,
 	limit int,
 ) (postgres.Page, error) {
@@ -34,5 +32,5 @@ func (s *Service) List(
 	case limit > MaxPageLimit:
 		limit = MaxPageLimit
 	}
-	return s.store.List(ctx, collectorID, status, cursor, limit)
+	return s.store.List(ctx, collectorID, filter, cursor, limit)
 }

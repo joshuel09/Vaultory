@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -86,6 +87,23 @@ func (s *Server) handleListCollectibles(w http.ResponseWriter, r *http.Request, 
 		status = &parsed
 	}
 
+	// 008 FR-031: the filters behind a breakdown group's link.
+	//
+	// q.Has, not q.Get. An absent parameter and a blank one are different requests here: absent is
+	// every series, blank is the collectibles recording no series at all — the unspecified group.
+	// q.Get returns "" for both, so reading these the obvious way makes that group's link quietly
+	// return the entire vault.
+	series, bad := groupFilter(q, "series")
+	if bad != nil {
+		WriteValidationFailed(w, []FieldError{*bad})
+		return
+	}
+	manufacturer, bad := groupFilter(q, "manufacturer")
+	if bad != nil {
+		WriteValidationFailed(w, []FieldError{*bad})
+		return
+	}
+
 	limit := 0
 	if raw := q.Get("limit"); raw != "" {
 		n, err := strconv.Atoi(raw)
@@ -100,7 +118,8 @@ func (s *Server) handleListCollectibles(w http.ResponseWriter, r *http.Request, 
 		limit = n
 	}
 
-	page, err := s.service.List(r.Context(), collector, status, q.Get("cursor"), limit)
+	filter := postgres.ListFilter{Status: status, Series: series, Manufacturer: manufacturer}
+	page, err := s.service.List(r.Context(), collector, filter, q.Get("cursor"), limit)
 	if err != nil {
 		// A malformed cursor is the client's mistake, not a server failure.
 		if strings.Contains(err.Error(), "cursor is not valid") {
@@ -125,6 +144,30 @@ func (s *Server) handleListCollectibles(w http.ResponseWriter, r *http.Request, 
 	}
 	WriteJSON(w, http.StatusOK, resp)
 }
+
+// groupFilter reads one of the breakdown filters, preserving the difference between absent and
+// blank.
+//
+// The length bound is the contract's, and matches the column: a longer value cannot match anything,
+// so refusing it says so rather than returning an empty gallery that looks like an empty vault.
+func groupFilter(q url.Values, name string) (*string, *FieldError) {
+	if !q.Has(name) {
+		return nil, nil
+	}
+	v := q.Get(name)
+	if len(v) > maxGroupFilterLength {
+		return nil, &FieldError{
+			Field:   name,
+			Code:    FieldTooLong,
+			Message: "That filter is longer than any value a collectible can hold.",
+		}
+	}
+	return &v, nil
+}
+
+// maxGroupFilterLength matches the contract's maxLength for the series and manufacturer parameters,
+// which in turn matches what those fields accept.
+const maxGroupFilterLength = 200
 
 // handleGetCollectible reads one of the acting collector's collectibles, which is what the edit
 // screen is filled from (FR-001, FR-002).

@@ -6,6 +6,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/joshuel09/vaultory/backend/internal/store/postgres"
 )
 
 // T083: text arrives back exactly as entered, whatever script it is in.
@@ -31,7 +33,7 @@ func TestTextFidelityThroughStorage(t *testing.T) {
 		}
 	}
 
-	page, err := svc.List(ctx, collectorA, nil, "", 50)
+	page, err := svc.List(ctx, collectorA, postgres.ListFilter{}, "", 50)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -55,7 +57,7 @@ func TestErrorsDoNotLeakInternals(t *testing.T) {
 	ctx := context.Background()
 
 	// A malformed cursor is the closest thing to an internal failure a client can provoke here.
-	_, err := svc.List(ctx, collectorA, nil, "!!!not-base64!!!", 10)
+	_, err := svc.List(ctx, collectorA, postgres.ListFilter{}, "!!!not-base64!!!", 10)
 	if err == nil {
 		t.Fatal("a malformed cursor should fail")
 	}

@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/joshuel09/vaultory/backend/internal/domain/collectible"
+
+	"github.com/joshuel09/vaultory/backend/internal/store/postgres"
 )
 
 // FR-037, FR-040: each status returns only its own entries, and totalUnfiltered stays independent
@@ -36,7 +38,7 @@ func TestStatusFilter(t *testing.T) {
 		if err != nil {
 			t.Fatalf("parse %s: %v", status, err)
 		}
-		page, err := svc.List(ctx, collectorA, &parsed, "", 50)
+		page, err := svc.List(ctx, collectorA, postgres.ListFilter{Status: &parsed}, "", 50)
 		if err != nil {
 			t.Fatalf("list %s: %v", status, err)
 		}
@@ -59,7 +61,7 @@ func TestStatusFilter(t *testing.T) {
 	// Sold matched nothing while the vault holds nine collectibles: the exact situation the
 	// no-results state exists for.
 	sold, _ := collectible.ParseCollectionStatus("sold")
-	page, err := svc.List(ctx, collectorA, &sold, "", 50)
+	page, err := svc.List(ctx, collectorA, postgres.ListFilter{Status: &sold}, "", 50)
 	if err != nil {
 		t.Fatalf("list sold: %v", err)
 	}

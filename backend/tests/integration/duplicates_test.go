@@ -5,6 +5,8 @@ package integration
 import (
 	"context"
 	"testing"
+
+	"github.com/joshuel09/vaultory/backend/internal/store/postgres"
 )
 
 // FR-023, FR-024: two deliberate copies of the same collectible stay independent. They are never
@@ -41,7 +43,7 @@ func TestDeliberateDuplicatesStayIndependent(t *testing.T) {
 		t.Fatalf("third add: %v %+v", err, v)
 	}
 
-	page, err := svc.List(ctx, collectorA, nil, "", 50)
+	page, err := svc.List(ctx, collectorA, postgres.ListFilter{}, "", 50)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
