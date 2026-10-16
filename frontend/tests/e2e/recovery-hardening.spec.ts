@@ -33,8 +33,8 @@ function tokenFrom(link: string): string {
 async function register(page: Page) {
   const email = `hard-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.test`
   await gotoReady(page, '/register')
-  await page.getByLabel(/^email/i).fill(email)
-  await page.getByLabel(/^password/i).fill(OLD)
+  await fillWhenReady(page.getByLabel(/^email/i), email)
+  await fillWhenReady(page.getByLabel(/^password/i), OLD)
   await page.getByRole('button', { name: /create my vault/i }).click()
   await page.waitForURL('**/collection')
   return email
@@ -49,7 +49,7 @@ async function resetLinkFor(page: Page, request: APIRequestContext, email: strin
   await gotoReady(page, '/')
   await page.context().clearCookies()
   await gotoReady(page, '/forgot-password')
-  await page.getByLabel(/^email/i).fill(email)
+  await fillWhenReady(page.getByLabel(/^email/i), email)
   await page.getByRole('button', { name: /send me a link/i }).click()
   await expect(page.getByTestId('reset-requested')).toBeVisible()
   return linkIn((await latestMessageTo(request, email)).text)
@@ -93,8 +93,8 @@ test('a reset signs out every other device', async ({ page, request, browser }) 
   const other = await browser.newContext({ baseURL: ORIGIN })
   const otherPage = await other.newPage()
   await gotoReady(otherPage, '/sign-in')
-  await otherPage.getByLabel(/^email/i).fill(email)
-  await otherPage.getByLabel(/^password/i).fill(OLD)
+  await fillWhenReady(otherPage.getByLabel(/^email/i), email)
+  await fillWhenReady(otherPage.getByLabel(/^password/i), OLD)
   await otherPage.getByRole('button', { name: /^sign in$/i }).click()
   await otherPage.waitForURL('**/collection')
 

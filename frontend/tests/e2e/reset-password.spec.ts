@@ -8,8 +8,8 @@ const NEW = 'a-brand-new-password-x'
 async function register(page: Page) {
   const email = `reset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.test`
   await gotoReady(page, '/register')
-  await page.getByLabel(/^email/i).fill(email)
-  await page.getByLabel(/^password/i).fill(OLD)
+  await fillWhenReady(page.getByLabel(/^email/i), email)
+  await fillWhenReady(page.getByLabel(/^password/i), OLD)
   await page.getByRole('button', { name: /create my vault/i }).click()
   await page.waitForURL('**/collection')
   /*
@@ -44,7 +44,7 @@ async function requestReset(page: Page, email: string) {
   await gotoReady(page, '/')
   await page.context().clearCookies()
   await gotoReady(page, '/forgot-password')
-  await page.getByLabel(/^email/i).fill(email)
+  await fillWhenReady(page.getByLabel(/^email/i), email)
   await page.getByRole('button', { name: /send me a link/i }).click()
   await expect(page.getByTestId('reset-requested')).toBeVisible()
 }
@@ -97,12 +97,12 @@ test.describe('resetting a forgotten password', () => {
     await page.getByTestId('sign-out').click()
     await page.waitForURL(/\/$/)
     await gotoReady(page, '/sign-in')
-    await page.getByLabel(/^email/i).fill(email)
-    await page.getByLabel(/^password/i).fill(OLD)
+    await fillWhenReady(page.getByLabel(/^email/i), email)
+    await fillWhenReady(page.getByLabel(/^password/i), OLD)
     await page.getByRole('button', { name: /^sign in$/i }).click()
     await expect(page.getByTestId('form-error')).toBeVisible()
 
-    await page.getByLabel(/^password/i).fill(NEW)
+    await fillWhenReady(page.getByLabel(/^password/i), NEW)
     await page.getByRole('button', { name: /^sign in$/i }).click()
     await page.waitForURL('**/collection')
   })
@@ -161,7 +161,7 @@ test.describe('resetting a forgotten password', () => {
     const seen: string[] = []
     for (const address of [known, `nobody-${Date.now()}@example.test`]) {
       await gotoReady(page, '/forgot-password')
-      await page.getByLabel(/^email/i).fill(address)
+      await fillWhenReady(page.getByLabel(/^email/i), address)
       await page.getByRole('button', { name: /send me a link/i }).click()
       await expect(page.getByTestId('reset-requested')).toBeVisible()
       seen.push((await page.getByTestId('reset-requested').innerText()).trim())
@@ -216,8 +216,8 @@ test.describe('when the sign-in after a reset is refused', () => {
 
     // And it really did change: the new password works once the refusal is lifted.
     await page.unroute('**/api/auth/sign-in/email')
-    await page.getByLabel(/^email/i).fill(email)
-    await page.getByLabel(/^password/i).fill(NEW)
+    await fillWhenReady(page.getByLabel(/^email/i), email)
+    await fillWhenReady(page.getByLabel(/^password/i), NEW)
     await page.getByRole('button', { name: /sign in/i }).click()
     await page.waitForURL('**/collection')
     await expect(page.getByTestId('sign-out')).toBeVisible()
