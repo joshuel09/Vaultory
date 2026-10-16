@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { gotoReady } from './support'
+import { fillWhenReady, gotoReady } from './support'
 import { latestMessageTo, linkIn } from './mailpit'
 
 const OLD = 'a-long-enough-password'
@@ -73,7 +73,7 @@ test.describe('resetting a forgotten password', () => {
     await page.goto(linkIn(message.text))
 
     // FR-013: too short is refused without spending the link.
-    await page.getByLabel(/new password/i).fill('short')
+    await fillWhenReady(page.getByLabel(/new password/i), 'short')
     await page.getByRole('button', { name: /set my new password/i }).click()
     // Scoped to the announced error, not the page: the same words appear in the page's lead, and
     // matching either would let this pass without the refusal ever happening.
@@ -81,7 +81,7 @@ test.describe('resetting a forgotten password', () => {
 
     // FR-014: the link still works, and completing it lands them in their collection rather
     // than on a sign-in form — Better Auth signs nobody in, so this is ours.
-    await page.getByLabel(/new password/i).fill(NEW)
+    await fillWhenReady(page.getByLabel(/new password/i), NEW)
     await page.getByRole('button', { name: /set my new password/i }).click()
     await page.waitForURL('**/collection')
     await expect(page.getByTestId('sign-out')).toBeVisible()
@@ -131,7 +131,7 @@ test.describe('resetting a forgotten password', () => {
 
     // And the newest one still works.
     await page.goto(second)
-    await page.getByLabel(/new password/i).fill(NEW)
+    await fillWhenReady(page.getByLabel(/new password/i), NEW)
     await page.getByRole('button', { name: /set my new password/i }).click()
     await page.waitForURL('**/collection')
   })
@@ -143,7 +143,7 @@ test.describe('resetting a forgotten password', () => {
     const link = linkIn((await latestMessageTo(request, email)).text)
 
     await page.goto(link)
-    await page.getByLabel(/new password/i).fill(NEW)
+    await fillWhenReady(page.getByLabel(/new password/i), NEW)
     await page.getByRole('button', { name: /set my new password/i }).click()
     await page.waitForURL('**/collection')
 
@@ -204,7 +204,7 @@ test.describe('when the sign-in after a reset is refused', () => {
       }),
     )
 
-    await page.getByLabel(/new password/i).fill(NEW)
+    await fillWhenReady(page.getByLabel(/new password/i), NEW)
     await page.getByRole('button', { name: /set my new password/i }).click()
 
     await page.waitForURL(/\/sign-in/)

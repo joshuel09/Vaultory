@@ -1,5 +1,5 @@
 import { expect, test, type Page, type APIRequestContext } from '@playwright/test'
-import { gotoReady } from './support'
+import { fillWhenReady, gotoReady } from './support'
 import { latestMessageTo, linkIn } from './mailpit'
 
 const OLD = 'a-long-enough-password'
@@ -72,7 +72,7 @@ test('the stored token is not the token, and does not work as one', async ({ pag
 
   // And the genuine token still works, so the test above is not passing because everything fails.
   await page.goto(link)
-  await page.getByLabel(/new password/i).fill(NEW)
+  await fillWhenReady(page.getByLabel(/new password/i), NEW)
   await page.getByRole('button', { name: /set my new password/i }).click()
   await page.waitForURL('**/collection')
 })
@@ -94,7 +94,7 @@ test('a reset signs out every other device', async ({ page, request, browser }) 
 
   const link = await resetLinkFor(page, request, email)
   await page.goto(link)
-  await page.getByLabel(/new password/i).fill(NEW)
+  await fillWhenReady(page.getByLabel(/new password/i), NEW)
   await page.getByRole('button', { name: /set my new password/i }).click()
   await page.waitForURL('**/collection')
 
@@ -120,7 +120,7 @@ test('expired, spent, altered and foreign tokens are refused indistinguishably',
 
   // Spend one.
   await page.goto(link)
-  await page.getByLabel(/new password/i).fill(NEW)
+  await fillWhenReady(page.getByLabel(/new password/i), NEW)
   await page.getByRole('button', { name: /set my new password/i }).click()
   await page.waitForURL('**/collection')
 
@@ -159,7 +159,7 @@ test('recovery introduces no route to a session the backend does not verify', as
   const email = await register(page)
   const link = await resetLinkFor(page, request, email)
   await page.goto(link)
-  await page.getByLabel(/new password/i).fill(NEW)
+  await fillWhenReady(page.getByLabel(/new password/i), NEW)
   await page.getByRole('button', { name: /set my new password/i }).click()
   await page.waitForURL('**/collection')
 
