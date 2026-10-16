@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 
 /**
  * These journeys need the whole stack running: PostgreSQL with migrations applied, the Go service,
@@ -50,6 +50,40 @@ export async function signIn(page: Page, collector: 'primary' | 'second' = 'prim
 export async function gotoReady(page: Page, path: string) {
   await page.goto(path)
   await page.waitForLoadState('networkidle')
+}
+
+/**
+ * Fill a field, and keep filling it until the value sticks.
+ *
+ * React-controlled inputs discard anything typed before hydration: the text reaches the DOM, React
+ * state never sees it, and the next render throws it away. `page.goto` resolves on `load`, which is
+ * well before that, so a fill immediately after following a link is a race — and a lost one shows
+ * up as a *validation* failure ("passwords must be at least 12 characters" over an empty field),
+ * which blames the form rather than the timing.
+ *
+ * Retrying until the value holds is the fix rather than a longer wait, because what is being waited
+ * for is an event with no deadline. Emulated mobile is slower than desktop, so this surfaced at one
+ * viewport and not another and read as a viewport-specific defect (issue #41).
+ */
+export async function fillWhenReady(field: Locator, value: string) {
+  const page = field.page()
+  await page.waitForLoadState('networkidle')
+
+  await expect(async () => {
+    await field.fill(value)
+    /*
+     * Give a pending hydration render time to land before believing the value.
+     *
+     * Checking once is not enough, and that is the subtlety that makes this bug durable: a fill
+     * that happens before React attaches *does* put the text in the DOM, so an immediate
+     * toHaveValue passes — and the first render then resets the input to its state and throws the
+     * text away. The check has to outlive a render, and there is no event to await for one that
+     * may or may not be pending. If the value is gone, toPass fills again, and by then React is
+     * attached and the fill goes through its onChange.
+     */
+    await page.waitForTimeout(150)
+    await expect(field).toHaveValue(value, { timeout: 500 })
+  }).toPass({ timeout: 15_000 })
 }
 
 /** Add a collectible through the form, as a collector would. */

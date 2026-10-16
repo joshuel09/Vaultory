@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { gotoReady } from './support'
+import { fillWhenReady, gotoReady } from './support'
 import { latestMessageTo, linkIn } from './mailpit'
 
 const OLD = 'a-long-enough-password'
@@ -8,17 +8,43 @@ const NEW = 'a-brand-new-password-x'
 async function register(page: Page) {
   const email = `reset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.test`
   await gotoReady(page, '/register')
-  await page.getByLabel(/^email/i).fill(email)
-  await page.getByLabel(/^password/i).fill(OLD)
+  await fillWhenReady(page.getByLabel(/^email/i), email)
+  await fillWhenReady(page.getByLabel(/^password/i), OLD)
   await page.getByRole('button', { name: /create my vault/i }).click()
   await page.waitForURL('**/collection')
+  /*
+   * Let the registration settle before returning.
+   *
+   * AuthForm calls router.push then router.refresh, and the refresh refetches /collection's RSC
+   * payload. waitForURL returns before that lands, so the caller's clearCookies can fall between
+   * the two — and the refetch then arrives without a cookie, is redirected by the middleware, and
+   * that redirect pre-empts whatever navigation the next step started. It surfaced as
+   * "goto /forgot-password interrupted by another navigation to /sign-in?next=/collection",
+   * which names neither the cause nor the test that caused it.
+   */
+  await page.waitForLoadState('networkidle')
   return email
 }
 
 async function requestReset(page: Page, email: string) {
+  /*
+   * Leave the vault before dropping the session.
+   *
+   * AuthForm calls router.push then router.refresh, and the refresh refetches /collection's RSC
+   * payload. Clearing cookies while that is in flight makes it arrive unauthenticated; the
+   * middleware redirects it, and the client follows that redirect as a navigation, which pre-empts
+   * whatever this function does next. It surfaced as "goto /forgot-password interrupted by another
+   * navigation to /sign-in?next=/collection" — an error naming neither the cause nor the step that
+   * caused it.
+   *
+   * Navigating to the landing page first both cancels that fetch and leaves the browser somewhere
+   * the middleware does not guard, so there is nothing left to redirect when the cookies go.
+   * Waiting on networkidle alone was not enough: the refresh can start after the idle window.
+   */
+  await gotoReady(page, '/')
   await page.context().clearCookies()
   await gotoReady(page, '/forgot-password')
-  await page.getByLabel(/^email/i).fill(email)
+  await fillWhenReady(page.getByLabel(/^email/i), email)
   await page.getByRole('button', { name: /send me a link/i }).click()
   await expect(page.getByTestId('reset-requested')).toBeVisible()
 }
@@ -47,7 +73,7 @@ test.describe('resetting a forgotten password', () => {
     await page.goto(linkIn(message.text))
 
     // FR-013: too short is refused without spending the link.
-    await page.getByLabel(/new password/i).fill('short')
+    await fillWhenReady(page.getByLabel(/new password/i), 'short')
     await page.getByRole('button', { name: /set my new password/i }).click()
     // Scoped to the announced error, not the page: the same words appear in the page's lead, and
     // matching either would let this pass without the refusal ever happening.
@@ -55,7 +81,7 @@ test.describe('resetting a forgotten password', () => {
 
     // FR-014: the link still works, and completing it lands them in their collection rather
     // than on a sign-in form — Better Auth signs nobody in, so this is ours.
-    await page.getByLabel(/new password/i).fill(NEW)
+    await fillWhenReady(page.getByLabel(/new password/i), NEW)
     await page.getByRole('button', { name: /set my new password/i }).click()
     await page.waitForURL('**/collection')
     await expect(page.getByTestId('sign-out')).toBeVisible()
@@ -71,12 +97,12 @@ test.describe('resetting a forgotten password', () => {
     await page.getByTestId('sign-out').click()
     await page.waitForURL(/\/$/)
     await gotoReady(page, '/sign-in')
-    await page.getByLabel(/^email/i).fill(email)
-    await page.getByLabel(/^password/i).fill(OLD)
+    await fillWhenReady(page.getByLabel(/^email/i), email)
+    await fillWhenReady(page.getByLabel(/^password/i), OLD)
     await page.getByRole('button', { name: /^sign in$/i }).click()
     await expect(page.getByTestId('form-error')).toBeVisible()
 
-    await page.getByLabel(/^password/i).fill(NEW)
+    await fillWhenReady(page.getByLabel(/^password/i), NEW)
     await page.getByRole('button', { name: /^sign in$/i }).click()
     await page.waitForURL('**/collection')
   })
@@ -105,7 +131,7 @@ test.describe('resetting a forgotten password', () => {
 
     // And the newest one still works.
     await page.goto(second)
-    await page.getByLabel(/new password/i).fill(NEW)
+    await fillWhenReady(page.getByLabel(/new password/i), NEW)
     await page.getByRole('button', { name: /set my new password/i }).click()
     await page.waitForURL('**/collection')
   })
@@ -117,7 +143,7 @@ test.describe('resetting a forgotten password', () => {
     const link = linkIn((await latestMessageTo(request, email)).text)
 
     await page.goto(link)
-    await page.getByLabel(/new password/i).fill(NEW)
+    await fillWhenReady(page.getByLabel(/new password/i), NEW)
     await page.getByRole('button', { name: /set my new password/i }).click()
     await page.waitForURL('**/collection')
 
@@ -135,11 +161,65 @@ test.describe('resetting a forgotten password', () => {
     const seen: string[] = []
     for (const address of [known, `nobody-${Date.now()}@example.test`]) {
       await gotoReady(page, '/forgot-password')
-      await page.getByLabel(/^email/i).fill(address)
+      await fillWhenReady(page.getByLabel(/^email/i), address)
       await page.getByRole('button', { name: /send me a link/i }).click()
       await expect(page.getByTestId('reset-requested')).toBeVisible()
       seen.push((await page.getByTestId('reset-requested').innerText()).trim())
     }
     expect(seen[0]).toBe(seen[1])
+  })
+})
+
+/*
+ * Issue #41 — the reset succeeded, the sign-in after it did not, and the collector was told
+ * nothing.
+ *
+ * Driven by intercepting the sign-in call rather than by exhausting the real rate limiter. The
+ * limiter is per address with a fifteen-minute window and is shared by every test in the run, so
+ * provoking it for real would be slow, would leak into unrelated tests, and would still only
+ * reproduce one of the several ways this request can fail. What is under test is what the product
+ * does when it fails, which is the same either way.
+ *
+ * The cause was confirmed against the running stack separately: setting the sign-in limiter over
+ * its ceiling and running the journey above reproduces exactly the observed failure, landing on
+ * /sign-in?next=/collection with nothing said.
+ */
+test.describe('when the sign-in after a reset is refused', () => {
+  test('the collector is told the password was changed, rather than silently bounced', async ({
+    page,
+    request,
+  }) => {
+    const email = await register(page)
+    await requestReset(page, email)
+    const message = await latestMessageTo(request, email)
+    await page.goto(linkIn(message.text))
+
+    // Refuse the sign-in that follows the reset, the way the rate limiter does. The reset itself
+    // is left alone: it must still succeed, because that is what makes the silence damaging.
+    await page.route('**/api/auth/sign-in/email', (route) =>
+      route.fulfill({
+        status: 429,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Too many requests' }),
+      }),
+    )
+
+    await fillWhenReady(page.getByLabel(/new password/i), NEW)
+    await page.getByRole('button', { name: /set my new password/i }).click()
+
+    await page.waitForURL(/\/sign-in/)
+    const notice = page.getByTestId('reset-complete')
+    await expect(notice).toBeVisible()
+    // The part that matters: they must not conclude the reset failed and go back to a spent link.
+    await expect(notice).toContainText(/password has been changed/i)
+    await expect(notice).toContainText(/wait a few minutes/i)
+
+    // And it really did change: the new password works once the refusal is lifted.
+    await page.unroute('**/api/auth/sign-in/email')
+    await fillWhenReady(page.getByLabel(/^email/i), email)
+    await fillWhenReady(page.getByLabel(/^password/i), NEW)
+    await page.getByRole('button', { name: /sign in/i }).click()
+    await page.waitForURL('**/collection')
+    await expect(page.getByTestId('sign-out')).toBeVisible()
   })
 })

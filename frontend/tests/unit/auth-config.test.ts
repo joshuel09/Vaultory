@@ -41,6 +41,26 @@ describe('the authentication configuration', () => {
     expect(source).toMatch(/storage:\s*'database'/)
   })
 
+  /*
+   * Issue #41: the limits the browser suite exhausts must be configurable.
+   *
+   * Sign-in, sign-up and recovery were already overridable because the suite runs from one
+   * address. Following a link was not, and sixty an hour across a whole-hour window is what the
+   * recovery specs actually exhaust — which failed late tests and not early ones, so it read as a
+   * timing flake rather than as a limit. The production defaults are asserted alongside, because
+   * the point is that development is looser, not that the rule is gone.
+   */
+  it('makes every limit the browser suite can exhaust configurable, with production defaults intact', () => {
+    for (const path of ['/reset-password', '/verify-email']) {
+      expect(source).toMatch(
+        new RegExp(`'${path}':\\s*\\{[\\s\\S]*?BETTER_AUTH_FOLLOW_LINK_MAX \\?\\? 60`),
+      )
+    }
+    expect(source).toMatch(/'\/sign-in\/email':\s*\{[\s\S]*?BETTER_AUTH_SIGNIN_MAX \?\? 10/)
+    expect(source).toMatch(/'\/sign-up\/email':\s*\{[\s\S]*?BETTER_AUTH_SIGNUP_MAX \?\? 20/)
+    expect(source).toMatch(/'\/request-password-reset':\s*\{[\s\S]*?BETTER_AUTH_RECOVERY_MAX \?\? 3/)
+  })
+
   // FR-027 is the per-account sign-in rule. The global ceiling is abuse protection and must stay
   // well clear of it, or ordinary use behind a shared address trips the wrong limit first.
   it('limits sign-in attempts per account, without throttling ordinary use', () => {

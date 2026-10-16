@@ -56,8 +56,31 @@ export function ResetPasswordForm({ token, email }: { token: string; email: stri
            * a recovery flow must not establish access by any route the backend does not check.
            */
           if (email) {
-            await authClient.signIn.email({ email, password })
-            router.push('/collection')
+            const signedIn = await authClient.signIn.email({ email, password })
+            if (signedIn?.error) {
+              /*
+               * The password *was* changed — resetPassword returned without an error above, and
+               * the link is spent. Only the convenience sign-in failed.
+               *
+               * Checking this is not defensive tidiness. The result used to be discarded, and
+               * pushing to /collection without a session sends the collector through the
+               * middleware to /sign-in?next=/collection, where they are shown a sign-in form and
+               * told nothing at all — immediately after successfully resetting their password.
+               * The likeliest cause is the sign-in rate limit, which is ten per address per
+               * fifteen minutes: somebody who mistyped their old password a few times before
+               * giving up and resetting it arrives here with that budget already spent. Confirmed
+               * against the running stack by exhausting the limiter (issue #41).
+               *
+               * Reported as throttling or not, because the two need different things from the
+               * collector: one is "sign in", the other is "wait, then sign in". Telling somebody
+               * to sign in when the next attempt will also be refused is worse than saying
+               * nothing.
+               */
+              const throttled = signedIn.error.status === 429
+              router.push(`/sign-in?reset=${throttled ? 'throttled' : 'done'}`)
+            } else {
+              router.push('/collection')
+            }
           } else {
             // No address to sign in as — the link was hand-assembled rather than followed from a
             // message. Say what happened rather than dropping them somewhere with no session.
