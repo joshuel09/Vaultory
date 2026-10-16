@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { AuthShell } from '@/components/auth/AuthShell'
 import { SignInForm } from '@/components/auth/SignInForm'
+import { ResetCompleteNotice } from '@/components/auth/ResetCompleteNotice'
 import { safeRedirect } from '@/lib/safe-redirect'
 import { currentCollector } from '@/lib/session'
 
@@ -15,6 +16,12 @@ export default async function SignInPage({
   const params = await searchParams
   const raw = typeof params.next === 'string' ? params.next : null
   const destination = safeRedirect(raw)
+
+  // Set by the reset screen when the password was changed but the sign-in after it was refused.
+  // Without this the collector arrives at a bare sign-in form with no idea whether the reset
+  // worked, which is the whole of issue #41.
+  const reset = typeof params.reset === 'string' ? params.reset : null
+  const resetComplete = reset === 'done' || reset === 'throttled'
 
   // Already signed in? There is nothing here for you. Offering a sign-in form to someone who is
   // signed in invites them to authenticate twice and leaves them wondering which account they are
@@ -40,6 +47,7 @@ export default async function SignInPage({
         </>
       }
     >
+      {resetComplete && <ResetCompleteNotice throttled={reset === 'throttled'} />}
       <SignInForm next={destination} />
     </AuthShell>
   )
