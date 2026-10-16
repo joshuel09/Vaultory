@@ -41,6 +41,12 @@ async function register(page: Page) {
 }
 
 async function resetLinkFor(page: Page, request: APIRequestContext, email: string) {
+  // Leave the vault before dropping the session. AuthForm calls router.push then router.refresh,
+  // and clearing cookies while that refresh is still fetching /collection makes it arrive
+  // unauthenticated; the middleware redirects it, and the client follows that redirect, which
+  // pre-empts the navigation below. The landing page is not behind the middleware, so there is
+  // nothing left to redirect. Same fix as reset-password.spec.ts (issue #41).
+  await gotoReady(page, '/')
   await page.context().clearCookies()
   await gotoReady(page, '/forgot-password')
   await page.getByLabel(/^email/i).fill(email)
