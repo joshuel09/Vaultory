@@ -211,10 +211,27 @@ export const auth = betterAuth({
         window: 60 * 60,
         max: Number(process.env.BETTER_AUTH_RECOVERY_MAX ?? 3),
       },
-      // Following a link is not requesting a message. Refusing these would lock somebody out of a
-      // link they legitimately hold, so they are bounded generously rather than tightly.
-      '/reset-password': { window: 60 * 60, max: 60 },
-      '/verify-email': { window: 60 * 60, max: 60 },
+      /*
+       * Following a link is not requesting a message. Refusing these would lock somebody out of a
+       * link they legitimately hold, so they are bounded generously rather than tightly.
+       *
+       * Configurable for the same reason as the three rules above, and it was the omission that
+       * made the browser suite look unreliable. Sixty an hour from one address is generous for a
+       * person and tight for a suite: the recovery specs complete dozens of resets per run, the
+       * window is a whole hour so consecutive runs accumulate, and past sixty every reset answers
+       * "Too many requests". That failed late tests and not early ones, so it read as a timing
+       * flake in whichever project happened to run last (issue #41).
+       *
+       * The production default is unchanged at sixty.
+       */
+      '/reset-password': {
+        window: 60 * 60,
+        max: Number(process.env.BETTER_AUTH_FOLLOW_LINK_MAX ?? 60),
+      },
+      '/verify-email': {
+        window: 60 * 60,
+        max: Number(process.env.BETTER_AUTH_FOLLOW_LINK_MAX ?? 60),
+      },
     },
   },
   session: {

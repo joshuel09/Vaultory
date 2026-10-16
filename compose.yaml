@@ -176,6 +176,11 @@ services:
       # Ten in production (FR-027). The browser suite signs in dozens of times from one address,
       # and Better Auth keys limits by address rather than by account.
       BETTER_AUTH_SIGNIN_MAX: ${BETTER_AUTH_SIGNIN_MAX:-1000}
+      # Sixty an hour in production, for following a reset or verification link. The recovery
+      # specs complete dozens of resets per run and the window is an hour, so consecutive runs
+      # accumulate and the suite exhausted it — which looked like flakiness rather than a limit
+      # (issue #41).
+      BETTER_AUTH_FOLLOW_LINK_MAX: ${BETTER_AUTH_FOLLOW_LINK_MAX:-1000}
       # Mail. Captured by Mailpit locally and readable at http://localhost:${MAILPIT_PORT:-8025};
       # none of it leaves the machine.
       MAIL_HOST: mailpit
