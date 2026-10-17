@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test'
-import { gotoReady } from './support'
+import { fillWhenReady, gotoReady } from './support'
 import { latestMessageTo, linkIn } from './mailpit'
 
 async function register(page: import('@playwright/test').Page) {
   const email = `verify-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.test`
   await gotoReady(page, '/register')
-  await page.getByLabel(/^email/i).fill(email)
+  await fillWhenReady(page.getByLabel(/^email/i), email)
   await page.getByLabel(/^password/i).fill('a-long-enough-password')
   await page.getByRole('button', { name: /create my vault/i }).click()
   await page.waitForURL('**/collection')

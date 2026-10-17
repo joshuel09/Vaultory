@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { addCollectible, addDetailedCollectible, gotoReady, openEditScreen, seedCollectible, signIn } from './support'
+import { addCollectible, addDetailedCollectible, fillWhenReady, gotoReady, openEditScreen, seedCollectible, signIn } from './support'
 
 /**
  * T079, FR-044, FR-045, SC-011.
@@ -182,7 +182,7 @@ test.describe('accessibility', () => {
     const other = await context.newPage()
     await other.goto(staleUrl)
     await other.waitForLoadState('networkidle')
-    await other.getByLabel(/^name/i).fill(`${name} elsewhere`)
+    await fillWhenReady(other.getByLabel(/^name/i), `${name} elsewhere`)
     await other.getByRole('button', { name: /save changes/i }).click()
     await other.waitForURL(/\/collection(\?|$)/)
     await other.close()

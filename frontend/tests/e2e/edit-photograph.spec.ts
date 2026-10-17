@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import {
+  fillWhenReady,
   firstPhoto,
   gotoReady,
   openEditScreen,
@@ -29,7 +30,7 @@ test.describe("changing a collectible's photograph", () => {
   /** Add a collectible carrying a real photograph, and return its rendition URL. */
   async function addWithPhoto(page: import('@playwright/test').Page, name: string) {
     await gotoReady(page, '/collection/new')
-    await page.getByLabel(/^name/i).fill(name)
+    await fillWhenReady(page.getByLabel(/^name/i), name)
     await page.locator('#collectible-image').setInputFiles(firstPhoto)
     await expect(page.getByRole('button', { name: /remove/i })).toBeVisible()
     await page.getByRole('button', { name: /add to my vault/i }).click()
@@ -103,7 +104,7 @@ test.describe("changing a collectible's photograph", () => {
     await expect(page.getByTestId('image-problem')).toContainText(/10 MB/i)
 
     // The collector can still save, and the photograph they already had is untouched (FR-019).
-    await page.getByLabel(/^name/i).fill(`${name} renamed`)
+    await fillWhenReady(page.getByLabel(/^name/i), `${name} renamed`)
     await page.getByRole('button', { name: /save changes/i }).click()
     await page.waitForURL(/\/collection(\?|$)/)
 
@@ -121,7 +122,7 @@ test.describe("changing a collectible's photograph", () => {
     const url = await addWithPhoto(page, name)
 
     await openEditScreen(page, name)
-    await page.getByLabel(/^name/i).fill(`${name} corrected`)
+    await fillWhenReady(page.getByLabel(/^name/i), `${name} corrected`)
     await page.getByRole('button', { name: /save changes/i }).click()
     await page.waitForURL(/\/collection(\?|$)/)
 

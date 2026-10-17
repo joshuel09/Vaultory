@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { addCollectible, gotoReady, openEditScreen, signIn } from './support'
+import { addCollectible, fillWhenReady, gotoReady, openEditScreen, signIn } from './support'
 
 test.describe('editing a collectible', () => {
   test.beforeEach(async ({ page }) => signIn(page))
@@ -22,7 +22,7 @@ test.describe('editing a collectible', () => {
     await expect(page.getByLabel(/manufacturer/i)).toHaveValue('')
 
     const corrected = `${first} MkII`
-    await page.getByLabel(/^name/i).fill(corrected)
+    await fillWhenReady(page.getByLabel(/^name/i), corrected)
     await page.getByLabel(/collection status/i).selectOption('owned')
     await page.getByRole('button', { name: /save changes/i }).click()
 
@@ -44,7 +44,7 @@ test.describe('editing a collectible', () => {
   test('clears an optional value rather than zeroing it', async ({ page }) => {
     const name = `Priced ${Date.now()}`
     await gotoReady(page, '/collection/new')
-    await page.getByLabel(/^name/i).fill(name)
+    await fillWhenReady(page.getByLabel(/^name/i), name)
     await page.getByLabel(/purchase price/i).fill('1250.00')
     await page.getByRole('button', { name: /add to my vault/i }).click()
     await expect(page.getByTestId('add-success')).toBeVisible()
@@ -52,7 +52,7 @@ test.describe('editing a collectible', () => {
 
     await openEditScreen(page, name)
     await expect(page.getByLabel(/purchase price/i)).toHaveValue('1250.00')
-    await page.getByLabel(/purchase price/i).fill('')
+    await fillWhenReady(page.getByLabel(/purchase price/i), '')
     await page.getByRole('button', { name: /save changes/i }).click()
     await page.waitForURL(/\/collection(\?|$)/)
 
@@ -66,7 +66,7 @@ test.describe('editing a collectible', () => {
     await addCollectible(page, name)
     await openEditScreen(page, name)
 
-    await page.getByLabel(/purchase price/i).fill('-5.00')
+    await fillWhenReady(page.getByLabel(/purchase price/i), '-5.00')
     await page.getByLabel(/notes/i).fill('Still here afterwards')
     await page.getByRole('button', { name: /save changes/i }).click()
 
@@ -86,14 +86,14 @@ test.describe('editing a collectible', () => {
     const other = await context.newPage()
     await other.goto(staleUrl)
     await other.waitForLoadState('networkidle')
-    await other.getByLabel(/^name/i).fill(`${name} won the race`)
+    await fillWhenReady(other.getByLabel(/^name/i), `${name} won the race`)
     await other.getByRole('button', { name: /save changes/i }).click()
     await other.waitForURL(/\/collection(\?|$)/)
     await other.close()
 
     // The first tab saves from the version it was opened at. Deliberately no reload — a reload
     // would hand it the current version and the test would pass for the wrong reason.
-    await page.getByLabel(/notes/i).fill('Written in the stale tab')
+    await fillWhenReady(page.getByLabel(/notes/i), 'Written in the stale tab')
     await page.getByRole('button', { name: /save changes/i }).click()
 
     const notice = page.getByTestId('version-conflict')
@@ -138,7 +138,7 @@ test.describe('editing a collectible', () => {
     await page.waitForURL(/\/collection\/[^/]+\/edit/)
     await page.waitForLoadState('networkidle')
 
-    await page.getByLabel(/notes/i).fill('Still sold')
+    await fillWhenReady(page.getByLabel(/notes/i), 'Still sold')
     await page.getByRole('button', { name: /save changes/i }).click()
 
     // Back where they were browsing, not dropped on an unfiltered gallery.
