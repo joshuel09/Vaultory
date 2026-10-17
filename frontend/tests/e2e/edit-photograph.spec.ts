@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import {
+  fillWhenReady,
   firstPhoto,
   gotoReady,
   openEditScreen,
