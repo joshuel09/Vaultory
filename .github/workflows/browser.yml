@@ -9,7 +9,7 @@
 #
 # The reason is the thing the old comment had backwards. The flakiness was never inherent to the
 # suite; it came from running it on a machine already busy with other work, where the Next dev
-# server had grown to a gigulp and a half of memory. A runner is cold, idle and exclusive, which is
+# server had grown to a gigabyte and a half of memory. A runner is cold, idle and exclusive, which is
 # the environment this suite wants.
 #
 # So it runs on every pull request. It is kept in its own workflow rather than folded into ci.yml
