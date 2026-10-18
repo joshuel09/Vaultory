@@ -1,0 +1,86 @@
+# What runs on every pull request.
+#
+# Until this existed, "green" meant somebody had run `make test` locally and said so in the PR
+# description. `main` is protected by a ruleset that requires a pull request, but a ruleset cannot
+# require a *passing* one — required status checks can only name checks that exist. These are
+# those checks (issue #37).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A second push to the same branch makes the first run's answer worthless, so stop paying for it.
+# Never applied to main: those runs are the record of what landed.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend — vet, build, unit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # From go.mod, so the toolchain here cannot drift from the one the project declares.
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - run: go vet ./...
+      - run: go build ./...
+      - run: go test ./tests/unit/... ./internal/...
+
+      # The integration and contract suites carry a build tag, so nothing above compiles them.
+      # Without this step a type error in those files reaches main and is found by whoever next
+      # runs the database suites.
+      - name: Type-check the tagged suites
+        run: go vet -tags integration ./...
+
+  frontend:
+    name: Frontend — lint, typecheck, unit, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the Dockerfiles. A version that only CI uses is a version nothing else tests.
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build
+
+  database-suites:
+    name: Backend — integration and contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # `make test`, not a hand-written equivalent.
+      #
+      # The compose file is where the isolation lives: a throwaway database with no route to the
+      # development one, migrations applied first, and `-p 1` because both packages share that
+      # database and `go test` would otherwise run them in parallel. Restating any of that here
+      # would be a second definition to keep in step, and the -p 1 flag in particular has already
+      # cost this project a round of failures that looked like product bugs.
+      - name: make test
+        run: make test

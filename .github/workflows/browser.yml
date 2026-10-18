@@ -1,0 +1,50 @@
+# The browser suite, kept out of the pull-request path on purpose.
+#
+# It runs three viewport projects against the whole stack — database, migrations, Go, Next — and
+# takes a little over twenty minutes on a warm developer machine. Putting that in front of every
+# pull request buys less than it costs: the suite's own history in this project is that a contended
+# run produces failures which are the machine's and not the product's, and a check that cries wolf
+# gets ignored precisely when it is right.
+#
+# So it is run deliberately rather than automatically: before merging anything that touches a
+# journey, and whenever the flake rate is in question. If it proves steady on a hosted runner it
+# can be moved into ci.yml or put on a schedule — that is a decision to make from evidence, and the
+# run summary below is what provides it.
+name: Browser suite
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: Playwright — desktop, tablet, mobile
+    runs-on: ubuntu-latest
+    # Generous rather than optimistic: the point of the first runs is to find out what it costs
+    # here, and a default timeout cutting it short would answer a different question.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start the stack
+        run: make up
+
+      - name: Run the browser suite
+        run: make test-e2e
+
+      # The report is the evidence, and a failed run is exactly when it is wanted.
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - if: always()
+        name: Stack logs on failure
+        run: docker compose --profile dev logs --tail 200
