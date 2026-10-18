@@ -140,3 +140,7 @@ func TestTotalFromMinorUnitsMatchesTheParseCeiling(t *testing.T) {
 		t.Error("a negative total was accepted; a wrapped accumulation arriving here must be refused")
 	}
 }
+
+func TestDeliberateFailureToProveEnforcement(t *testing.T) {
+	t.Fatal("deliberate: confirming required checks block a merge")
+}
