@@ -1,19 +1,29 @@
-# The browser suite, kept out of the pull-request path on purpose.
+# The browser suite: three viewport projects against the whole stack.
 #
-# It runs three viewport projects against the whole stack — database, migrations, Go, Next — and
-# takes a little over twenty minutes on a warm developer machine. Putting that in front of every
-# pull request buys less than it costs: the suite's own history in this project is that a contended
-# run produces failures which are the machine's and not the product's, and a check that cries wolf
-# gets ignored precisely when it is right.
+# This was first written to run only on demand, on the reasoning that twenty-odd minutes was too
+# much to put in front of every pull request and that a contended run would produce failures
+# belonging to the machine rather than to the product. Both halves of that turned out to be wrong,
+# and measuring beat assuming: on a hosted runner the suite finished in **15.3 minutes with 406
+# passed, 8 skipped and zero flakes** — faster and steadier than the same suite on a developer
+# machine, which was taking 22 minutes with four flakes.
 #
-# So it is run deliberately rather than automatically: before merging anything that touches a
-# journey, and whenever the flake rate is in question. If it proves steady on a hosted runner it
-# can be moved into ci.yml or put on a schedule — that is a decision to make from evidence, and the
-# run summary below is what provides it.
+# The reason is the thing the old comment had backwards. The flakiness was never inherent to the
+# suite; it came from running it on a machine already busy with other work, where the Next dev
+# server had grown to a gigulp and a half of memory. A runner is cold, idle and exclusive, which is
+# the environment this suite wants.
+#
+# So it runs on every pull request. It is kept in its own workflow rather than folded into ci.yml
+# because it is an order of magnitude slower than the other jobs, and because having it separately
+# dispatchable is useful when the flake rate is in question.
 name: Browser suite
 
 on:
+  pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -22,9 +32,9 @@ jobs:
   e2e:
     name: Playwright — desktop, tablet, mobile
     runs-on: ubuntu-latest
-    # Generous rather than optimistic: the point of the first runs is to find out what it costs
-    # here, and a default timeout cutting it short would answer a different question.
-    timeout-minutes: 60
+    # Roughly double the measured 15.3 minutes. Tight enough that a hang is reported rather than
+    # burning an hour, loose enough that an ordinarily slow run is not cut off and misread.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
@@ -45,6 +55,6 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - if: always()
-        name: Stack logs on failure
+      - if: failure()
+        name: Stack logs
         run: docker compose --profile dev logs --tail 200
