@@ -28,7 +28,6 @@ The backend reads all configuration from the environment; nothing secret is comm
 | `VAULTORY_DATABASE_URL` | PostgreSQL connection string |
 | `VAULTORY_IMAGE_STORE` | `filesystem` for local development |
 | `VAULTORY_IMAGE_STORE_PATH` | Directory for stored originals and renditions |
-| `VAULTORY_DEV_IDENTITY` | `enabled` — activates the development-only collector resolution (research Decision 1). Never enabled outside development |
 | `VAULTORY_LISTEN_ADDR` | Address the Go service listens on |
 
 The frontend needs the backend's address for its `/api/*` rewrite. Next streams a rewritten request
@@ -50,8 +49,9 @@ cd backend && go run ./cmd/vaultory-api
 cd frontend && npm install && npm run dev
 ```
 
-Migrations seed one development collector. Open the app and use the development sign-in path to
-become that collector; the session cookie it sets is what every request below relies on. Save it for
+Register an account — there is no development sign-in. Feature 004 deleted the resolver that used
+to mint sessions, along with the `production` build tag that excluded it, so registering is the only
+way into a vault. The session cookie it sets is what every request below relies on, so save it for
 `curl`:
 
 ```bash
@@ -139,6 +139,12 @@ curl -s -b /tmp/vaultory.jar -X POST http://localhost:3000/api/images \
 Expect `413` with `image_too_large` and a message stating the 10 MB limit, then `400` with
 `unsupported_image_format` and a message naming JPEG, PNG, and WebP. The declared
 `type=image/jpeg` must not help — the decode decides (research Decision 4).
+
+> **Known failure, issue #47.** The second of those holds. The first does not: through this origin
+> an oversized file currently answers `500` rather than `413`. The backend is right — posting the
+> same file straight to `:8080` gives the documented `413 image_too_large` — and the rewrite turns
+> it into a 500 at exactly `MaxUploadBytes + 1`, the point where Go stops reading the body and
+> replies. The expectation above is what the product owes; the issue tracks closing the gap.
 
 Then confirm the collectible still saves with no image at all: repeat Walkthrough A. Nothing about a
 refused upload may block it.

@@ -217,8 +217,36 @@ distinguishable from an empty vault.
 - [X] T085 [P] Document how to run both applications, become the development collector, and apply migrations in `README.md`, referring to `specs/001-add-browse-collectibles/quickstart.md` rather than duplicating it
 - [X] T086 [P] Record the deferred items from `research.md` — reclaiming unreferenced uploads, WebP renditions, the catalog and owned-instance split, currency selection, upload rate limiting — as tracked follow-ups in `docs/deferred.md`, so none is silently forgotten
 - [X] T087 Regenerate `frontend/lib/types/api.ts` from the contract and confirm it is unchanged, proving the implementation did not drift from `contracts/openapi.yaml` (Principle III)
-- [ ] T088 **BLOCKED — needs a running stack (no PostgreSQL, Docker, or `migrate` in the build environment).** Walk every scenario in `specs/001-add-browse-collectibles/quickstart.md` — Walkthroughs A through H — and confirm each expected result, **including Walkthrough G, where another collector's image must return 404 rather than 403**
-- [ ] T089 **PARTIAL — everything except `npm run test:e2e` passes; the end-to-end suite compiles and enumerates 138 tests but was not executed, as no running stack is available.** Run the constitution's Quality Gates in full: `go vet ./...`, `go build ./...`, `go test ./...` in `backend/`, and `npm run lint`, `npx tsc --noEmit`, `npm run build`, `npm run test`, `npm run test:e2e` in `frontend/`
+- [X] T088 Walk every scenario in `specs/001-add-browse-collectibles/quickstart.md` — Walkthroughs A through I — and confirm each expected result, **including Walkthrough G, where another collector's image must return 404 rather than 403**. Run by hand against the Docker stack on 2026-10-19 (issue #36). Eight of nine walkthroughs pass as written; **Walkthrough D does not**, and that is recorded rather than rounded away:
+
+  | Walkthrough | Result |
+  |---|---|
+  | A — name and status alone | **Pass.** 201, `id` set, `image` null, every optional null. An omitted `submissionKey` is refused with `submissionKey: required` |
+  | B — every attribute | **Pass.** 201, every value echoed, `purchasePrice` byte-identical as `"1250.00"`, `image.renditionUrl` populated |
+  | C — all problems at once | **Pass.** 400 with exactly four field errors: `collectionStatus`, `name`, `purchaseDate`, `purchasePrice` |
+  | D — a rejected image does not block saving | **FAIL on the refusal, pass on the recovery.** The PDF-as-JPEG is refused correctly (400, `unsupported_image_format`, decode decides). An oversized file answers **500 `Internal Server Error`**, not the documented 413 `image_too_large`. A collectible still saves with no image. Filed as **#47** |
+  | E — browse | **Pass.** 200, newest first, `totalUnfiltered` set, `nextCursor` present only when more remain, and no entry repeated or skipped across pages |
+  | F — filter by status | **Pass.** Only matching statuses returned; a status with nothing in it gives empty `items` with `totalUnfiltered` above zero, which is what distinguishes a filter matching nothing from an empty vault |
+  | G — privacy | **Pass, and this is the one that mattered.** No session → 401 with no collection content. A second collector against the first's image → **404, not 403**. The owner → 200 `image/jpeg`. The second collector's listing is empty, `totalUnfiltered` 0 |
+  | H — deliberate duplicates | **Pass.** Three distinct ids, all present, each keeping its own status and price; nothing merged or shown as a quantity |
+  | I — a retry does not duplicate | **Pass.** A replayed key returns the same id; five concurrent submissions of one key returned **one** distinct id across five responses; the collection holds exactly one of each |
+
+  **On Walkthrough D.** The backend is correct — posting the same files straight to Go answers 413 `image_too_large` with the documented message. The 500 comes from the Next rewrite: the threshold is exactly `MaxUploadBytes + 1`, the point at which Go stops reading the body and replies, and the proxy surfaces that mid-stream as a 500 instead of relaying it. Nothing caught it because `ImagePicker` has a client-side size check that fires before any request is made, so the browser shows the right message and `add-collectible.spec.ts` passes without exercising the server path. FR-010 is a server-side rule that is currently only *reported* client-side. It fails closed — the upload is refused either way — so this is a wrong status code, not a hole.
+
+- [X] T089 Run the constitution's Quality Gates in full. All pass, checked by **exit status** rather than by reading output:
+
+  | Gate | Result |
+  |---|---|
+  | `go vet ./...` | exit 0 |
+  | `go build ./...` | exit 0 |
+  | `go test ./...` | exit 0 |
+  | `make test` (integration and contract against real PostgreSQL) | exit 0 — unit, integration 3.2s, contract 0.6s |
+  | `npm run lint` | exit 0 |
+  | `npx tsc --noEmit` | exit 0 |
+  | `npm run build` | exit 0 |
+  | `npm run test` | exit 0 — **121 passed** |
+  | `npm run test:e2e` | **Executed at last, and green.** 406 passed, 8 skipped, **zero flakes**, 15.3 min, on a CI runner (#45). This is the gate that had never been run: it previously compiled and enumerated its tests with nothing to run them against |
+
 - [X] T090 Review this feature against `.specify/memory/constitution.md` and confirm the Constitution Check table in `plan.md` still holds, with the dev-only identity seam remaining the only entry in Complexity Tracking
 
 ---
