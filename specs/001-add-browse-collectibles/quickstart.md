@@ -141,10 +141,13 @@ Expect `413` with `image_too_large` and a message stating the 10 MB limit, then 
 `type=image/jpeg` must not help — the decode decides (research Decision 4).
 
 > **Known failure, issue #47.** The second of those holds. The first does not: through this origin
-> an oversized file currently answers `500` rather than `413`. The backend is right — posting the
-> same file straight to `:8080` gives the documented `413 image_too_large` — and the rewrite turns
-> it into a 500 at exactly `MaxUploadBytes + 1`, the point where Go stops reading the body and
-> replies. The expectation above is what the product owes; the issue tracks closing the gap.
+> an oversized file hangs for sixty seconds and answers `500`. The backend is right — posting the
+> same file straight to `:8080` gives the documented `413 image_too_large` in milliseconds — and
+> the request never reaches it intact. Next's rewrite caps a proxied request body at 10 MiB, which
+> is the same number FR-010 states, so a body at or above the product's own limit is truncated and
+> Go waits for the remainder until `proxyTimeout` fires. A *legitimate* upload at the top of the
+> allowed range fails the same way. The expectation above is what the product owes; the issue has
+> the measurements and what has been ruled out.
 
 Then confirm the collectible still saves with no image at all: repeat Walkthrough A. Nothing about a
 refused upload may block it.
