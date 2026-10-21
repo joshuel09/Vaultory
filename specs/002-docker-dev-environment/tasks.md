@@ -199,3 +199,13 @@ discovered as a surprise.
 - Two things are load-bearing and easy to get wrong: **the test database must be impossible to
   confuse with the development one** (T018, T020), and **uploaded images must live on a named
   volume** (T013), or every rebuild orphans image rows
+
+## Phase 7: Convergence
+
+Issue #29. Scope: the frontend production image against SC-006, FR-017 and FR-018.
+
+- [ ] T033 Remove the package manager from the frontend runtime image: move the runtime stage of `frontend/Dockerfile` onto a base that ships no npm, corepack, apt or apk, keeping it non-root, per SC-006, FR-017, FR-018 (contradicts)
+- [ ] T034 Measure each candidate runtime base — `node:22-bookworm-slim` as calibration against the recorded 458.6 MB, `node:22-alpine`, `gcr.io/distroless/nodejs22-debian12:nonroot` — as uncompressed layer bytes, the unit `docker image ls` reports, and record the results and method in `research.md`, per SC-006, T031 (partial)
+- [ ] T035 Measure what `.next/standalone` contains and exclude anything the server never reaches at runtime (sharp and libvips, given `images.unoptimized: true`) in `frontend/next.config.ts`, per SC-006, plan Decision 5 (partial)
+- [ ] T036 If the measured frontend total is still over 150 MB, amend SC-006 in `spec.md` with a stated, measured number and the reasoning — an amendment, not a dropped requirement — per SC-006, issue #29 (partial)
+- [ ] T037 Update the US3 section of `quickstart.md`: the new expected sizes, and a non-root check that works on an image with no shell or `id` binary, per FR-018, SC-006 (partial)
