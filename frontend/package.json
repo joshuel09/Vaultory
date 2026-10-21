@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.e2e.json",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "generate:api": "openapi-typescript ../specs/001-add-browse-collectibles/contracts/openapi.yaml -o lib/types/api.ts"
+    "generate:api": "openapi-typescript ../backend/api/openapi.yaml -o lib/types/api.ts"
   },
   "dependencies": {
     "@types/nodemailer": "^8.0.2",
