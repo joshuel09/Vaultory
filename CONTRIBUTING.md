@@ -88,8 +88,8 @@ change since.
   reversed turns a bad deploy into a restore from backup.
   ([feature 001](specs/001-add-browse-collectibles/research.md))
 - **Frontend types are generated from the contract, never written by hand.** The contract is
-  `specs/001-add-browse-collectibles/contracts/openapi.yaml`. A hand-written response
-  shape is a second copy of the contract, and it drifts.
+  `backend/api/openapi.yaml`. A hand-written response shape is a second copy of the contract, and
+  it drifts.
   ([feature 001](specs/001-add-browse-collectibles/plan.md))
 
 ## Before you open a pull request

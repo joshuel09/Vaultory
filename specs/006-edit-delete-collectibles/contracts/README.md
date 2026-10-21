@@ -1,7 +1,7 @@
 # Contracts: Edit & Delete Collectibles
 
 The contract for this feature is **not** in this directory. It is in
-[`specs/001-add-browse-collectibles/contracts/openapi.yaml`](../../001-add-browse-collectibles/contracts/openapi.yaml),
+[`backend/api/openapi.yaml`](../../../backend/api/openapi.yaml),
 now at version **0.2.0**.
 
 That document is the single source of truth for the frontend/backend seam (Constitution Principle

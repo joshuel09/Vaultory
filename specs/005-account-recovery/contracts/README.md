@@ -3,7 +3,7 @@
 ## The Go API contract does not change
 
 Not one path, request shape, or response shape in
-`specs/001-add-browse-collectibles/contracts/openapi.yaml` changes. A task verifies the generated
+`backend/api/openapi.yaml` changes. A task verifies the generated
 frontend types are byte-identical afterwards, the same check feature 004 ran.
 
 Recovery is a credentials-and-sessions concern, and feature 004 placed those in Better Auth. The

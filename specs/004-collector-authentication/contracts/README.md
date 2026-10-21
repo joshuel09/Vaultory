@@ -2,7 +2,7 @@
 
 ## The Go API contract does not change
 
-`specs/001-add-browse-collectibles/contracts/openapi.yaml` describes four operations. None of their
+`backend/api/openapi.yaml` describes four operations. None of their
 paths, request bodies, or response shapes change in this feature. What changes is how the acting
 collector is established behind them — and that was never in the contract, because the contract
 does not describe it.

@@ -25,8 +25,8 @@ specs/      Spec Kit artifacts: specification, plan, data model, contract, tasks
 ```
 
 `backend/` and `frontend/` are separate applications and communicate only over the REST contract in
-`specs/001-add-browse-collectibles/contracts/openapi.yaml`. The frontend's request and response
-types are generated from that file; it is the single source of truth for the seam.
+`backend/api/openapi.yaml`. The frontend's request and response types are generated from that file;
+it is the single source of truth for the seam.
 
 ## Governance
 
