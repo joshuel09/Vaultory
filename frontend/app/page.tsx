@@ -33,6 +33,28 @@ const RECORDED = [
   ['Notes', 'box condition, provenance'],
 ] as const
 
+/**
+ * The words that drift past under the hero.
+ *
+ * Invented series and makers, matching the showcase cards, rather than real brands — the same
+ * reason the preview photographs are unbranded. It is texture that says "this is for figure
+ * collectors" without borrowing anybody's trademark to say it.
+ */
+const MARQUEE = [
+  'Kaiju Wars',
+  'Apex Studio',
+  '1/4 scale',
+  'Nightfall',
+  'Deluxe Exclusive',
+  'Ironworks',
+  'Resin statue',
+  'Deep Current',
+  'Preorder',
+  'Vinyl',
+  'Chase variant',
+  'Grail',
+] as const
+
 // FR-024. Feature 004 replaced the temporary development sign-in this used to point at.
 const ENTER_VAULT = '/register'
 
@@ -58,36 +80,77 @@ export default async function Home() {
 
       <main>
         {/* Hero ---------------------------------------------------------------------------- */}
-        <section className="mx-auto w-full max-w-6xl px-4 pb-14 pt-10 sm:px-6 sm:pb-20 sm:pt-16">
-          <p className="mb-4 text-xs font-medium uppercase tracking-[0.2em] text-accent">
-            For collectors, not inventories
-          </p>
-          <h1 className="max-w-3xl text-4xl font-semibold leading-[1.1] tracking-tight text-ink sm:text-5xl lg:text-6xl">
-            Your collection, kept properly.
-          </h1>
-          <p className="mt-5 max-w-2xl text-base leading-relaxed text-ink-muted sm:text-lg">
-            Vaultory is a private vault for figures, statues, comics and trading collectibles. Every
-            piece you own, every preorder you are waiting on, everything still on the hunt — held in
-            one place and shown the way you would actually display it.
-          </p>
+        {/* relative + overflow-hidden so the drifting glow cannot widen the page (SC-010). */}
+        <section className="relative overflow-hidden">
+          {/* Decorative only: a slow wash of the accent, as light changes over a cabinet. */}
+          <div aria-hidden="true" className="vault-glow pointer-events-none absolute inset-0 -z-10" />
 
-          <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Link
-              href={collector ? '/collection' : ENTER_VAULT}
-              className={buttonClasses({ size: 'lg' })}
+          <div className="mx-auto w-full max-w-6xl px-4 pb-14 pt-10 sm:px-6 sm:pb-20 sm:pt-16">
+            <p className="rise mb-4 text-xs font-medium uppercase tracking-[0.2em] text-accent">
+              For collectors, not inventories
+            </p>
+            <h1
+              className="rise max-w-3xl text-4xl font-semibold leading-[1.1] tracking-tight text-ink sm:text-5xl lg:text-6xl"
+              style={{ animationDelay: '80ms' }}
             >
-              {collector ? 'Open my vault' : 'Create my vault'}
-            </Link>
-            {!collector && (
-              <span className="text-xs text-ink-faint">
-                Free, private, and yours. No profiles, no feeds.
-              </span>
-            )}
+              Your collection, kept properly.
+            </h1>
+            <p
+              className="rise mt-5 max-w-2xl text-base leading-relaxed text-ink-muted sm:text-lg"
+              style={{ animationDelay: '160ms' }}
+            >
+              Vaultory is a private vault for figures, statues, comics and trading collectibles.
+              Every piece you own, every preorder you are waiting on, everything still on the hunt —
+              held in one place and shown the way you would actually display it.
+            </p>
+
+            <div
+              className="rise mt-8 flex flex-wrap items-center gap-3"
+              style={{ animationDelay: '240ms' }}
+            >
+              <Link
+                href={collector ? '/collection' : ENTER_VAULT}
+                className={buttonClasses({ size: 'lg' })}
+              >
+                {collector ? 'Open my vault' : 'Create my vault'}
+              </Link>
+              {!collector && (
+                <span className="text-xs text-ink-faint">
+                  Free, private, and yours. No profiles, no feeds.
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/*
+            The marquee: the vocabulary of the hobby, drifting past.
+            
+            Decorative and aria-hidden — it is texture, not information, and a screen reader
+            reading the same twelve words twice would be worse than silence. The list is duplicated
+            because the loop translates by exactly -50%, which is seamless only if the second half
+            repeats the first.
+          */}
+          <div
+            aria-hidden="true"
+            className="relative flex overflow-hidden border-y border-edge bg-surface-raised/30 py-3"
+          >
+            <div className="marquee-track flex shrink-0 items-center gap-8 pr-8 sm:gap-12 sm:pr-12">
+              {[...MARQUEE, ...MARQUEE].map((word, i) => (
+                <span
+                  key={`${word}-${i}`}
+                  className="whitespace-nowrap text-xs uppercase tracking-[0.18em] text-ink-faint"
+                >
+                  {word}
+                </span>
+              ))}
+            </div>
           </div>
         </section>
 
         {/* The gallery, which is the whole premise ----------------------------------------- */}
-        <section className="mx-auto w-full max-w-6xl px-4 pb-16 sm:px-6 sm:pb-24">
+        {/* pt here, not only pb: the hero's bottom padding now ends above the marquee, so without
+            this the strip's border sits flush against the heading. */}
+        <section className="mx-auto w-full max-w-6xl px-4 pb-16 pt-14 sm:px-6 sm:pb-24 sm:pt-20">
           <div className="mb-6 flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-xl font-semibold tracking-tight text-ink sm:text-2xl">
               A gallery, not a spreadsheet
@@ -108,8 +171,12 @@ export default async function Home() {
               still chasing, and what you have let go are all part of the record.
             </p>
             <dl className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              {COLLECTION_STATUSES.map((status) => (
-                <div key={status} className="rounded-xl border border-edge bg-surface p-5">
+              {COLLECTION_STATUSES.map((status, i) => (
+                <div
+                  key={status}
+                  className="rise rounded-xl border border-edge bg-surface p-5 transition-colors duration-300 hover:border-accent/50"
+                  style={{ animationDelay: `${i * 70}ms` }}
+                >
                   <dt className="text-sm font-medium text-ink">{STATUS_LABELS[status]}</dt>
                   <dd className="mt-1.5 text-sm leading-relaxed text-ink-muted">
                     {status === 'owned' && 'On your shelf, in your hands, yours.'}
