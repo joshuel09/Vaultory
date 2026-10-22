@@ -186,7 +186,15 @@ and refuses to start with development identity enabled.
 - **SC-004**: A source change is reflected in the running stack within 10 seconds, without an
   image rebuild.
 - **SC-005**: Stopping and restarting the stack preserves 100% of collectibles and uploaded images.
-- **SC-006**: Each production image is under 150 MB and contains no compiler or package manager.
+- **SC-006**: Each production image contains no compiler or package manager. The backend image is
+  under 150 MB and the frontend image under 225 MB, measured as total uncompressed layer size.
+  *Amended 2026-10-22 (#29).* The original 150 MB applied to both images, and no Node.js runtime can
+  meet it: the Node 22 binary alone is 121 MB, and the smallest base without a package manager is
+  156 MB before any application code. The frontend measures ~190 MB on that base; 225 MB leaves
+  about 35 MB for Node and Next.js growth, so crossing it is a signal rather than routine drift.
+  The unit is stated because `docker image ls` on Docker's containerd store also counts compressed
+  copies of each layer, which is how the original measurement read 458.6 MB. See research.md,
+  Decision 5, revision of 2026-10-22.
 - **SC-007**: The documented commands work unchanged on arm64 and x86-64.
 - **SC-008**: A test run leaves the development database byte-identical to how it was before.
 

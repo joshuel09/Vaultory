@@ -151,11 +151,26 @@ use. The target supplies throwaway values; `up` still demands real ones.
 
 The images are named for the Compose project, which is `vaultory-prod`:
 
+SC-006 is measured as total **uncompressed layer size**. Not `docker image ls`: on Docker's
+containerd image store that also counts a compressed copy of every layer, which is how the first
+measurement below read 458.6 MB. Sum the layers instead:
+
 ```bash
-docker image ls --format '{{.Repository}}: {{.Size}}' | grep '^vaultory-prod'
+for i in vaultory-prod-backend vaultory-prod-frontend; do
+  docker history --human=false --format '{{.Size}}' "$i" |
+    awk -v i="$i" '{s+=$1} END {printf "%s: %.1f MB\n", i, s/1e6}'
+done
 ```
 
-Measured on 2026-09-17, arm64, Docker 29.8.0:
+Expected since #29 (SC-006 as amended: backend under 150 MB, frontend under 225 MB):
+
+| Image | Expected | Basis |
+|---|---|---|
+| `vaultory-prod-backend` | ~20 MB | measured 20.5 MB on 2026-09-17 |
+| `vaultory-prod-frontend` | **~190 MB** | distroless base 156.3 MB, measured from the registry; trimmed standalone 32.3 MB and static 1.0 MB, measured on disk. **Not yet confirmed by a `docker build`** — record the first real figure here |
+
+**History** — measured on 2026-09-17, arm64, Docker 29.8.0, on the bookworm-slim runtime that #29
+replaced:
 
 | Image | Size | SC-006 (150 MB) |
 |---|---|---|
@@ -172,10 +187,9 @@ The frontend layer breakdown says why, and says that nothing in this feature cou
 | `.next/standalone` | 85.3 MB |
 | `.next/static` + `public/` | 1.0 MB |
 
-The application's own contribution is ~86 MB; the runtime underneath it is ~266 MB. Even an empty
-Next app on this base misses the criterion, so trimming the bundle cannot get there. The real
-options are a substantially smaller runtime base or a different criterion, and both are decisions
-for a later feature rather than something to reach for here.
+The application's own contribution was ~86 MB; the runtime underneath it ~266 MB. #29 took both
+options this paragraph used to name: a smaller base (distroless, 156 MB), and a revised criterion,
+because no Node runtime fits in 150 MB. See research.md, Decision 5, revision of 2026-10-22.
 
 An earlier estimate in this file put the figure near 270 MB. That was too low — it was built from
 compressed registry layer sizes and on-disk `du` output, which are not what `docker image ls`
@@ -187,8 +201,12 @@ Then confirm the images contain no toolchain and do not run as root:
 docker run --rm --entrypoint sh vaultory-prod-backend -c 'echo reachable'
 # Expect a failure: distroless has no shell at all (FR-017)
 
-docker run --rm --entrypoint id vaultory-prod-frontend -u
-# Expect 1000, not 0 (FR-018)
+docker run --rm --entrypoint sh vaultory-prod-frontend -c 'echo reachable'
+# Expect a failure: the frontend is distroless too since #29 — no shell, no npm (FR-017, SC-006)
+
+docker image inspect --format '{{.Config.User}}' vaultory-prod-backend vaultory-prod-frontend
+# Expect a non-root uid for both, 65532 for the frontend — never empty, never 0 (FR-018).
+# Inspected rather than run: neither image has an `id` binary to run.
 ```
 
 And the security check in FR-019 — **superseded by feature 004, and kept here only so the change

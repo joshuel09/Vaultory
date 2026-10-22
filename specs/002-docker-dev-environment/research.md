@@ -140,6 +140,45 @@ reason to reach for an unsupported runtime.
 
 ---
 
+### Revised 2026-10-22 (#29): distroless for the frontend too
+
+The slim Node runtime failed both halves of SC-006: it measured 458.6 MB, and it shipped npm,
+corepack and apt. The frontend runtime is now `gcr.io/distroless/nodejs22-debian12:nonroot`.
+
+**Method.** Docker was not available, so each candidate was measured from its registry: the arm64
+manifest, every layer downloaded and decompressed, the uncompressed bytes counted. That is the size
+the layers occupy once unpacked, and it is reproducible without a daemon. Calibration against the
+recorded measurement: bookworm-slim's three layers come to 252.1 MB this way against Docker's 266.3
+MB for the same layers, so Docker's unpacked figure runs about 5–6% higher (filesystem overhead).
+
+| Runtime base | Uncompressed | Package manager | amd64 + arm64 |
+|---|---|---|---|
+| `node:22-bookworm-slim` (was) | 252.1 MB | npm, corepack, apt | yes |
+| `node:22-alpine` | 166.2 MB | npm, apk | yes |
+| `distroless/nodejs22-debian12:nonroot` | **156.3 MB** | **none** | yes |
+
+Alpine is out regardless of size: it ships two package managers. Distroless is the only candidate
+that satisfies SC-006's second half, and it is the smallest.
+
+**No Node base can meet 150 MB.** The Node 22 binary alone is a 120.7 MB layer in distroless, and the
+whole base is 156.3 MB before a line of application code.
+
+**The 458.6 MB was two things counted together.** Docker's own layer table sums to 352.6 MB. The
+remaining ~106 MB matches the compressed copies of those layers (79.9 MB for the base alone), which
+Docker 29's containerd image store keeps beside the unpacked ones and `docker image ls` includes.
+SC-006 now names its unit for that reason.
+
+**Standalone was carrying 28 MB it never runs.** sharp and libvips (18.8 MB on macOS; Linux traces
+both glibc and musl builds) are Next's image optimizer, which `images.unoptimized` switches off.
+TypeScript (9.1 MB) is reached through `next.config.ts`, which standalone's `server.js` never reads.
+Both are excluded with `outputFileTracingExcludes`: standalone went from 60.5 to 32.3 MB. Verified by
+booting the untrimmed and trimmed builds in turn and requesting five routes — identical status codes,
+and no missing module.
+
+**Projected frontend image**: 156.3 + 32.3 + 1.0 (static, public) ≈ **190 MB** uncompressed, from
+~353 MB of unpacked layers before. Not yet confirmed by `docker build`; that is the one step this
+revision could not run.
+
 ## Decision 6 — Uploaded images live in a named volume, not a bind mount
 
 **Decision**: `VAULTORY_IMAGE_STORE_PATH` points at a named volume shared by the backend across
