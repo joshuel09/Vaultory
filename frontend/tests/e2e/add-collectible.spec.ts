@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { addCollectible, fillWhenReady, gotoReady, notAnImage, oversizedFile, signIn } from './support'
+import { addCollectible, fillWhenReady, gotoReady, largestPermittedJpeg, notAnImage, oversizedFile, signIn } from './support'
 
 test.describe('adding a collectible', () => {
   test.beforeEach(async ({ page }) => signIn(page))
@@ -95,5 +95,54 @@ test.describe('adding a collectible', () => {
 
     await gotoReady(page, '/collection')
     await expect(page.getByText(name)).toHaveCount(2)
+  })
+})
+
+/*
+ * Issue #47 — the upload path through the frontend origin, which nothing else exercised.
+ *
+ * Every other test in this suite either drives ImagePicker, whose client-side size check fires
+ * before any request is made, or talks to Go directly, where the proxy is not in the picture. The
+ * defect lived in the gap between the two: Next truncated a proxied request body at 10 MiB and
+ * left the stream open, so Go waited for the rest of a Content-Length that never arrived until
+ * proxyTimeout fired sixty seconds later and the client got a 500.
+ *
+ * These go through page.request, so they cross the rewrite exactly as a non-browser client would,
+ * and they assert the thing that was wrong: the status, and that it arrives promptly. The sixty
+ * seconds is itself the regression signal — if this breaks again the request outlives Playwright's
+ * timeout and the test fails on time rather than on status.
+ */
+test.describe('uploading through the frontend origin', () => {
+  test.beforeEach(async ({ page }) => signIn(page))
+
+  test('refuses an oversized image with the documented 413, and does not hang', async ({ page }) => {
+    const started = Date.now()
+    const response = await page.request.post('/api/images', {
+      multipart: { file: oversizedFile },
+      timeout: 25_000,
+    })
+    const elapsed = Date.now() - started
+
+    expect(response.status(), 'an oversized upload must answer 413, not 500').toBe(413)
+    const body = await response.json()
+    expect(body.error.code).toBe('image_too_large')
+    expect(body.error.message).toMatch(/10 MB/i)
+
+    // Comfortably inside proxyTimeout. A truncated body would take sixty seconds.
+    expect(elapsed, 'the refusal must be prompt, not a proxy timeout').toBeLessThan(20_000)
+  })
+
+  test('accepts an image at the top of the permitted range', async ({ page }) => {
+    // The half of #47 that was silently broken: 10 MiB is FR-010's limit *and* was the proxy's
+    // cap, so the largest legitimate upload failed exactly like an oversized one.
+    const response = await page.request.post('/api/images', {
+      multipart: { file: largestPermittedJpeg() },
+      timeout: 25_000,
+    })
+
+    expect(response.status(), 'the largest permitted image must upload, not time out').toBe(201)
+    const body = await response.json()
+    expect(body.id).toBeTruthy()
+    expect(body.renditionUrl).toContain(body.id)
   })
 })

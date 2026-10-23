@@ -38,10 +38,35 @@ const nextConfig: NextConfig = {
     ]
   },
   experimental: {
-    // A 10 MB upload over a slow connection needs time, not a larger cap: Next streams a rewritten
-    // request body through without a size limit of its own, so there is no body cap here to raise.
-    // The only limit is the backend's, which is the rule that states it (FR-010).
+    // A 10 MB upload over a slow connection needs time as well as room.
     proxyTimeout: 60_000,
+    /*
+     * The cap on a request body Next will carry through a rewrite (issue #47).
+     *
+     * Next's default is exactly 10 MiB, and it does not refuse a larger body — it **truncates** it
+     * at the cap and leaves the stream open. The backend then waits for the rest of a
+     * Content-Length that will never arrive, until proxyTimeout fires sixty seconds later and the
+     * client gets a 500. Measured with a probe server behind the rewrite: send 12,000,000 bytes,
+     * receive exactly 10,485,760, then an abort at 60s.
+     *
+     * 10 MiB is also exactly FR-010's own limit, so the two collided: a *legitimate* upload at the
+     * top of the allowed range was broken in the same way as an oversized one, because the
+     * multipart envelope pushed it over.
+     *
+     * The invariant this value has to satisfy: **the proxy must carry more than the backend will
+     * ever accept**, so that the backend's answer is always what the client sees. Go refuses above
+     * MaxUploadBytes + multipartSlack = 11,534,336 bytes, in images.go. 12 MiB clears that by a
+     * megabyte.
+     *
+     * A body beyond this cap still truncates and still ends in a slow 500. That is unreachable
+     * through the product — the browser refuses before sending, and Go refuses anything over
+     * 11.5 MB long before this — so what remains is a hand-made request far outside any legitimate
+     * use. Raising this number does not remove that cliff; it only moves it.
+     *
+     * An earlier comment here claimed Next streams a rewritten body through with no limit of its
+     * own. That was wrong, and it is why nobody went looking for a cap.
+     */
+    middlewareClientMaxBodySize: '12mb',
   },
   images: {
     // Renditions are already 800x1000 and served from an authorized path; the optimizer would
