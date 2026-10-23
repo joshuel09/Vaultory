@@ -183,6 +183,24 @@ cd frontend && npm run test:e2e
 
 The constitution requires all of these to pass before a feature is complete.
 
+### On a pull request
+
+The same suites run again in GitHub Actions, on every pull request and on pushes to `main`:
+
+| Check | Required? |
+|-------|-----------|
+| Backend — vet, build, unit, and the tagged suites type-checked | yes |
+| Frontend — lint, typecheck, unit, build | yes |
+| Backend — integration and contract, via `make test` | yes |
+| Playwright — desktop, tablet, mobile | no, but it runs and is visible |
+
+A merge is refused until the three required checks pass, and a branch behind `main` has to be
+brought up to date first — a branch can pass its own checks and still break `main`.
+
+The browser suite does not block because sixteen minutes would dominate every merge. It is worth
+reading rather than ignoring: it is steadier on a runner than on a developer machine, and it has
+caught defects the faster checks could not see.
+
 ## Working on it
 
 Work starts as an issue, happens on its own branch, follows the Spec Kit specification cycle, and
