@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -76,4 +77,81 @@ func (s *Store) ImageExistsForCollector(ctx context.Context, collectorID, imageI
 		return false, fmt.Errorf("check image ownership: %w", err)
 	}
 	return exists, nil
+}
+
+// SweepAbandonedImages removes uploads that no collectible references and that are older than
+// olderThan, at most limit of them, oldest first, and queues their files for deletion. It returns
+// how many it removed.
+//
+// An upload exists before anything references it — uploading is a separate operation (research.md
+// Decision 3 of feature 001) — so a form abandoned after its upload leaves a row and two files
+// behind. This is what eventually reclaims them (feature 009).
+//
+// The hard part is a collector saving with that very upload while it is being swept. The outcome
+// must be one of two: the save keeps its photograph and the upload survives, or the save is refused
+// and the upload is gone (FR-006). It is settled by row locks rather than by timing:
+//
+//   - A save referencing the upload makes the foreign key take FOR KEY SHARE on its row. FOR UPDATE
+//     conflicts with that, so SKIP LOCKED passes over an upload a save is attaching right now.
+//   - A save that committed after the first statement's snapshot is seen by the second, which takes
+//     a fresh one and re-checks for a reference before deleting.
+//   - A save that starts after the lock is taken waits on it, then fails its foreign-key check
+//     against a row that is gone — ErrUnknownImage, which the collector sees as a refused save.
+//
+// Why not the obvious single DELETE ... WHERE NOT EXISTS: it waits. Run against an upload a save is
+// attaching, it blocks on the save's lock until the save commits. That was tried, and PostgreSQL
+// then did the right thing and kept the upload — but this runs inside a collector's upload request,
+// and that collector should not wait on somebody else's save (SC-005). SKIP LOCKED passes over the
+// busy upload instead; the next sweep finds it referenced. The explicit re-check in a second
+// statement also means correctness does not rest on how READ COMMITTED re-evaluates a subquery
+// after a lock wait (research.md Decision 2 of feature 009).
+//
+// No collector_id predicate, deliberately. Every collector-facing query carries one because it
+// reads something out to a collector; this reads nothing out to anyone. It is maintenance, like the
+// deletion drain, and each queue entry still records whose files it holds.
+func (s *Store) SweepAbandonedImages(ctx context.Context, olderThan time.Duration, limit int) (int, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	rows, err := tx.Query(ctx, `
+		SELECT ci.id
+		FROM collectible_images ci
+		WHERE ci.created_at < now() - make_interval(secs => $1)
+		  AND NOT EXISTS (SELECT 1 FROM collectibles c WHERE c.image_id = ci.id)
+		ORDER BY ci.created_at
+		LIMIT $2
+		FOR UPDATE OF ci SKIP LOCKED`, olderThan.Seconds(), limit)
+	if err != nil {
+		return 0, fmt.Errorf("find abandoned uploads: %w", err)
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return 0, fmt.Errorf("find abandoned uploads: %w", err)
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	// A new statement, so a new snapshot: a reference committed since the one above is visible
+	// here, and nothing can commit a new one while this transaction holds the rows.
+	tag, err := tx.Exec(ctx, `
+		WITH swept AS (
+			DELETE FROM collectible_images ci
+			WHERE ci.id = ANY($1)
+			  AND NOT EXISTS (SELECT 1 FROM collectibles c WHERE c.image_id = ci.id)
+			RETURNING ci.id, ci.collector_id, ci.original_key, ci.rendition_key
+		)
+		INSERT INTO pending_image_deletions (image_id, collector_id, original_key, rendition_key)
+		SELECT id, collector_id, original_key, rendition_key FROM swept
+		ON CONFLICT (image_id) DO NOTHING`, ids)
+	if err != nil {
+		return 0, fmt.Errorf("sweep abandoned uploads: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("commit sweep: %w", err)
+	}
+	return int(tag.RowsAffected()), nil
 }
