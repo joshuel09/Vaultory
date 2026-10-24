@@ -20,7 +20,9 @@ that matters most, and it can only be shown against real PostgreSQL.
   `backend/internal/store/postgres/images.go`: one transaction; lock eligible rows
   `FOR UPDATE SKIP LOCKED`, oldest first, bounded; then delete those ids again conditioned on no
   collectible referencing them, inserting their keys into `pending_image_deletions` in the same
-  statement; return the number removed (FR-001, FR-003–FR-006, FR-008, research Decision 2)
+  statement; return the number removed. Its comment says why it carries no `collector_id`
+  predicate: it is system maintenance like 006's drain, reads nothing out to anyone, and records the
+  owner on each queue entry (FR-001, FR-003–FR-006, FR-008, research Decision 2)
 - [ ] T003 Add `abandonedUploadGrace = 30 * 24 * time.Hour` and
   `SweepAbandonedUploads(ctx) int` to `backend/internal/collection/image_cleanup.go`: one bounded
   batch through T002, log the count when non-zero (FR-011), log and swallow errors (FR-010), then
@@ -79,8 +81,10 @@ that matters most, and it can only be shown against real PostgreSQL.
 - [ ] T016 Run the full gate: backend `go vet` (with and without `-tags integration`), build, unit,
   integration and contract suites against PostgreSQL; frontend lint, typecheck, unit tests, build
 - [ ] T017 Confirm migration 000011 applies, rolls back, and reapplies cleanly
-- [ ] T018 Record in `docs/deferred.md` that "Reclaiming unreferenced uploads" is now done by
-  feature 009, if that file lists it
+- [ ] T018 Mark "Reclaiming unreferenced uploads" in `docs/deferred.md` as done by feature 009
+- [ ] T019 [US1] In `backend/tests/integration/abandoned_upload_sweep_test.go`: make the sweep fail
+  (rename `pending_image_deletions` for the test's duration, restoring it in cleanup) and assert an
+  upload still succeeds and returns its image (FR-010)
 
 ## Dependencies
 
