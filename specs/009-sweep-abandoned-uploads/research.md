@@ -27,13 +27,17 @@
     sweep to commit, then fails because the row is gone. That surfaces as the existing unknown-image
     violation, which is FR-007.
 
-  The only outcomes are the two FR-006 permits. The foreign key's `ON DELETE SET NULL` can never fire
+  The only outcomes are the two FR-006 permits, and the sweep never waits on a save. The foreign key's `ON DELETE SET NULL` can never fire
   from the sweep, because nothing references a row at the moment it is deleted.
-- **Alternatives considered**: one `DELETE … WHERE NOT EXISTS` statement. Under READ COMMITTED, a
-  reference committed while the delete waits is not reliably re-checked inside the subquery, and the
-  `SET NULL` action would then strip the photograph from a saved collectible: the exact failure
-  FR-006 forbids. An advisory lock per upload would work too, but adds a second locking convention
-  where row locks already say everything.
+- **Alternatives considered**: one `DELETE … WHERE NOT EXISTS` statement. Planned as unsafe, on the
+  reasoning that READ COMMITTED might not re-check the subquery after waiting for the row's lock,
+  letting `ON DELETE SET NULL` strip a saved collectible's photograph. **Tested, that did not
+  happen**: swapped in for the real implementation, it blocked on the open save, then kept the upload
+  once the save committed. What it does do is *wait*, and the sweep runs inside an upload request, so
+  one collector's upload would stall behind another's save (SC-005). That, plus not resting
+  correctness on subquery re-evaluation after a lock wait, is why the locking version stays. The
+  deterministic test asserts both, and the swapped-in version fails it on the wait. An advisory lock
+  per upload would also work, but adds a second locking convention where row locks already suffice.
 
 ## 3. Triggered by uploads and at start-up, no ticker
 
