@@ -24,6 +24,10 @@ Deleting something already in the Trash leaves `deleted_at` unchanged (FR-004).
 
 - `collectibles_trash_idx ON collectibles (collector_id, deleted_at DESC, id DESC) WHERE deleted_at IS NOT NULL`: the Trash listing, keyset-paginated.
 - `collectibles_trash_expiry_idx ON collectibles (deleted_at) WHERE deleted_at IS NOT NULL`: the purge, across collectors.
+- `collectibles_image_unique ON collectibles (image_id) WHERE image_id IS NOT NULL`, **unique**: a
+  photograph belongs to at most one collectible (FR-018). If a database already holds two
+  collectibles sharing an image — possible only through a hand-crafted request — the migration fails
+  rather than choosing which one loses its photograph.
 
 **Down migration**: queues the files of trashed collectibles' images, deletes those image rows and
 the trashed collectibles, then drops the column. Reversing the feature destroys the Trash the way 006

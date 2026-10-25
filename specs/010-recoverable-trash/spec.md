@@ -168,6 +168,11 @@ including its owner.
 - **FR-016**: Only deletions are undoable. Edits are not recorded for undo; this feature adds no edit
   history.
 
+- **FR-018**: A photograph MUST be referenced by at most one collectible, enforced by the persistence
+  layer. A save naming a photograph another collectible already uses — including one in the Trash —
+  MUST be refused with a field-level message on the photograph. Without this, destroying one
+  collectible (FR-010, FR-011) would silently remove the photograph of another that shares it.
+
 #### Amendments to feature 006
 
 - **FR-017**: 006 FR-020, FR-022 and FR-023, and SC-005, MUST be amended in feature 006's spec to say

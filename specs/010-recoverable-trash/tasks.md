@@ -62,8 +62,8 @@
 ## Phase 6: Retention
 
 - [ ] T018 `PurgeExpiredTrash(retention, limit)` in `trash.go`: lock up to 20 expired rows `FOR UPDATE
-  SKIP LOCKED`, oldest deletion first; delete each and `releaseImage`; return the count. Service
-  wrapper logs; called after each deletion and at start-up in `main.go` before the drain (FR-010,
+  SKIP LOCKED`, oldest deletion first; delete each and `releaseImage`; return the collector and
+  collectible ids. Service wrapper logs each with identifiers only (FR-015); called after each deletion and at start-up in `main.go` before the drain (FR-010,
   FR-012, research Decision 4)
 
 ## Phase 7: Tests
@@ -101,6 +101,11 @@
 - [ ] T030 Update the existing integration and contract tests that assert deletion destroys
   immediately (`delete_collectible_test.go`, `edit_delete_test.go`, `image_lifecycle_test.go`) to the
   new behaviour, keeping their intent where it still applies to permanent deletion
+
+- [ ] T031 FR-018: the unique partial index in migration 000012; map its violation on add and edit to
+  an `imageId` violation, "That photograph is already used by another collectible. Choose a different
+  one."; integration test that adding with a trashed collectible's photograph is refused, and that
+  destroying a trashed collectible never changes another collectible's photograph
 
 ## Dependencies
 
