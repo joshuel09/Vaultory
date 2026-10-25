@@ -113,10 +113,10 @@ export function EditCollectibleForm({ collectible, returnTo }: Props) {
           <DeleteCollectibleDialog
             collectibleId={base.id}
             name={base.name}
-            onDeleted={() => router.push(returnTo)}
+            onDeleted={() => router.push(withDeletedMarker(returnTo, base.id))}
           />
           <p className="mt-2 text-xs text-ink-faint">
-            Deleting is permanent. There is no undo and no trash.
+            Deleted collectibles go to the Trash and can be restored for 30 days.
           </p>
         </div>
       }
@@ -133,4 +133,14 @@ export function EditCollectibleForm({ collectible, returnTo }: Props) {
       }
     />
   )
+}
+
+/**
+ * The gallery the collector came from, marked with what they just deleted, so it can offer Undo
+ * (feature 010, FR-005). returnTo may already carry a filter, so the marker is added, not appended.
+ */
+function withDeletedMarker(returnTo: string, id: string): string {
+  const url = new URL(returnTo, 'http://vaultory.invalid')
+  url.searchParams.set('deleted', id)
+  return url.pathname + url.search
 }

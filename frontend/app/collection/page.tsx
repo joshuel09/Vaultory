@@ -5,6 +5,7 @@ import { CollectionGallery } from '@/components/collection/CollectionGallery'
 import { StatusFilter } from '@/components/collection/StatusFilter'
 import { EmptyCollection } from '@/components/collection/EmptyCollection'
 import { NoResults } from '@/components/collection/NoResults'
+import { UndoDeleteNotice } from '@/components/collection/UndoDeleteNotice'
 import { buttonClasses } from '@/components/ui/button'
 import { isCollectionStatus, type CollectionPage } from '@/lib/api/types'
 import { galleryHref, isFiltered, type GalleryFilter } from '@/lib/gallery-link'
@@ -74,6 +75,11 @@ export default async function CollectionPage({
     manufacturer: typeof params.manufacturer === 'string' ? params.manufacturer : null,
   }
 
+  // Set by the edit screen after a deletion, so the way back is offered where the collector lands
+  // (feature 010, FR-005). Only a well-formed id is acted on; anything else is ignored.
+  const deleted =
+    typeof params.deleted === 'string' && /^[0-9a-f-]{36}$/i.test(params.deleted) ? params.deleted : null
+
   const page = await fetchFirstPage(filter)
   const isEmptyVault = page.totalUnfiltered === 0
   const filterMatchedNothing = !isEmptyVault && page.items.length === 0 && isFiltered(filter)
@@ -106,6 +112,8 @@ export default async function CollectionPage({
           </Link>
         </div>
       </header>
+
+      {deleted && <UndoDeleteNotice deletedId={deleted} galleryHref={galleryHref(filter)} />}
 
       {/* The filter is pointless on an empty vault, and showing it would imply there is something
           to narrow. */}

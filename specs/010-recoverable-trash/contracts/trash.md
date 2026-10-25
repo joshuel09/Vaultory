@@ -13,7 +13,7 @@ its deletion time is unchanged.
 
 ```json
 {
-  "items": [ { "...every Collectible field...": "", "deletedAt": "2026-10-25T09:00:00Z", "purgeAt": "2026-11-24T09:00:00Z" } ],
+  "items": [ { "collectible": { "...a Collectible...": "" }, "deletedAt": "2026-10-25T09:00:00Z", "purgeAt": "2026-11-24T09:00:00Z" } ],
   "nextCursor": "opaque or absent"
 }
 ```
