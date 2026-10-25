@@ -146,6 +146,9 @@ func (s *Store) Add(
 		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
 			return AddResult{}, ErrUnknownImage
 		}
+		if isImageInUse(err) {
+			return AddResult{}, ErrImageInUse
+		}
 		return AddResult{}, fmt.Errorf("insert collectible: %w", err)
 	}
 
@@ -189,6 +192,20 @@ func (s *Store) Add(
 // same answer whether it never existed or belongs to someone else (FR-027).
 var ErrUnknownImage = errors.New("unknown image for this collector")
 
+// ErrImageInUse means the referenced image already belongs to another collectible — possibly one in
+// the Trash. A photograph belongs to at most one collectible, because destroying a collectible
+// deletes its image row, and a second collectible sharing it would silently lose its photograph
+// (feature 010, FR-018).
+var ErrImageInUse = errors.New("image is already used by another collectible")
+
+// imageUniqueConstraint is the index that enforces ErrImageInUse (migration 000012).
+const imageUniqueConstraint = "collectibles_image_unique"
+
+func isImageInUse(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == uniqueViolation && pgErr.ConstraintName == imageUniqueConstraint
+}
+
 // findBySubmissionKey looks for a collectible already created under this key, inside the window.
 //
 // The window is passed as seconds through make_interval rather than as a duration string: Go
@@ -203,7 +220,8 @@ func (s *Store) findBySubmissionKey(
 		JOIN collectibles c ON c.id = s.collectible_id AND c.collector_id = s.collector_id
 		LEFT JOIN collectible_images i ON i.id = c.image_id AND i.collector_id = c.collector_id
 		WHERE s.collector_id = $1 AND s.submission_key = $2
-		  AND s.created_at > now() - make_interval(secs => $3)`,
+		  AND s.created_at > now() - make_interval(secs => $3)
+		  AND c.deleted_at IS NULL`,
 		collectorID, key, window.Seconds()))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Row{}, false, nil
@@ -219,12 +237,14 @@ func (s *Store) findBySubmissionKey(
 // collector_id is part of the WHERE clause rather than something checked afterwards, so there is
 // no moment at which this code holds another collector's row and has yet to decide what to do with
 // it. Absent and someone-else's are the same answer (FR-030, FR-031).
+//
+// A collectible in the Trash is not in the vault, so it is absent here too (feature 010, FR-002).
 func (s *Store) Get(ctx context.Context, collectorID, collectibleID uuid.UUID) (Row, error) {
 	row, err := scanRow(s.pool.QueryRow(ctx, `
 		SELECT `+collectibleColumns+`
 		FROM collectibles c
 		LEFT JOIN collectible_images i ON i.id = c.image_id AND i.collector_id = c.collector_id
-		WHERE c.id = $1 AND c.collector_id = $2`, collectibleID, collectorID))
+		WHERE c.id = $1 AND c.collector_id = $2 AND c.deleted_at IS NULL`, collectibleID, collectorID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Row{}, ErrNotFound
 	}
@@ -318,10 +338,12 @@ func (s *Store) Edit(
 	)
 	err = tx.QueryRow(ctx, `
 		SELECT version, image_id FROM collectibles
-		WHERE id = $1 AND collector_id = $2
+		WHERE id = $1 AND collector_id = $2 AND deleted_at IS NULL
 		FOR UPDATE`, collectibleID, collectorID).Scan(&currentVersion, &currentImageID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		// Absent, or another collector's. Deliberately the same answer (FR-031).
+		// Absent, another collector's, or in the Trash. Deliberately the same answer (FR-031). An
+		// edit form left open across a deletion is refused here rather than editing — or
+		// resurrecting — something the collector deleted (feature 010).
 		return Row{}, ErrNotFound
 	}
 	if err != nil {
@@ -371,6 +393,9 @@ func (s *Store) Edit(
 		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
 			return Row{}, ErrUnknownImage
 		}
+		if isImageInUse(err) {
+			return Row{}, ErrImageInUse
+		}
 		return Row{}, fmt.Errorf("update collectible: %w", err)
 	}
 
@@ -397,16 +422,85 @@ func (s *Store) Edit(
 	return row, nil
 }
 
-// Delete removes one collectible permanently, and the photograph it referenced with it.
+// Trash moves one collectible to the Trash (feature 010, FR-001).
 //
-// Reports whether a row was actually removed. The caller does not vary its response on that —
-// deleting something absent is answered as a success either way (FR-025) — but it decides whether
-// a deletion is recorded, because a record of a deletion that did not happen is wrong in exactly
-// the situation the record exists to explain (FR-040).
+// Nothing about the row changes except deleted_at — not its id, its created_at, its version, its
+// attributes or its photograph — which is what lets a restore return it exactly as it was, in its
+// original gallery position (research.md Decisions 1 and 2).
 //
-// collector_id is in the WHERE clause, so there is no path by which this reaches another
-// collector's row (FR-030).
-func (s *Store) Delete(ctx context.Context, collectorID, collectibleID uuid.UUID) (bool, error) {
+// Reports whether it moved. Something absent, another collector's, or already in the Trash is left
+// alone, and its 30 days are not restarted (FR-004). The caller answers success either way (006
+// FR-025) but records only a real move (FR-015).
+//
+// Its add's idempotency record goes in the same transaction. Otherwise a retried add carrying the
+// same submission key would find this collectible and hand back something the collector has deleted
+// (research.md Decision 5).
+func (s *Store) Trash(ctx context.Context, collectorID, collectibleID uuid.UUID) (bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return false, fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	tag, err := tx.Exec(ctx, `
+		UPDATE collectibles SET deleted_at = now()
+		WHERE id = $1 AND collector_id = $2 AND deleted_at IS NULL`, collectibleID, collectorID)
+	if err != nil {
+		return false, fmt.Errorf("move to trash: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return false, nil
+	}
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM collectible_submissions
+		WHERE collectible_id = $1 AND collector_id = $2`, collectibleID, collectorID); err != nil {
+		return false, fmt.Errorf("forget submission: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("commit: %w", err)
+	}
+	return true, nil
+}
+
+// Restore returns one collectible from the Trash to the vault, if it was deleted within retention
+// (feature 010, FR-007).
+//
+// ErrNotFound for anything else — absent, another collector's, never deleted, already restored,
+// destroyed, or older than retention — without saying which (FR-008). The cutoff is the same one
+// the listing and the purge use, so nothing is listed but unrestorable or the reverse (research.md
+// Decision 3).
+//
+// Against the purge: if the purge locked the row first, this UPDATE waits, then finds it gone. If
+// this commits first, the purge's re-check sees deleted_at NULL and passes over it (FR-012).
+func (s *Store) Restore(
+	ctx context.Context, collectorID, collectibleID uuid.UUID, retention time.Duration,
+) (Row, error) {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE collectibles SET deleted_at = NULL
+		WHERE id = $1 AND collector_id = $2
+		  AND deleted_at IS NOT NULL
+		  AND deleted_at > now() - make_interval(secs => $3)`,
+		collectibleID, collectorID, retention.Seconds())
+	if err != nil {
+		return Row{}, fmt.Errorf("restore: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return Row{}, ErrNotFound
+	}
+	return s.Get(ctx, collectorID, collectibleID)
+}
+
+// DeletePermanently destroys one collectible that is in the Trash, and its photograph, now
+// (feature 010, FR-011).
+//
+// This is feature 006's deletion, moved: the image row goes in the same transaction, so nothing can
+// observe the collectible destroyed and its photograph still fetchable (006 FR-020). The files are
+// queued and drained afterwards (006 FR-020a).
+//
+// Only from the Trash. A collectible in the vault has to be moved there first, so there is one way
+// to delete and one confirmation for it. Anything not in this collector's Trash is left alone, and
+// the caller answers success either way, as for any deletion (006 FR-025).
+func (s *Store) DeletePermanently(ctx context.Context, collectorID, collectibleID uuid.UUID) (bool, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("begin: %w", err)
@@ -416,27 +510,19 @@ func (s *Store) Delete(ctx context.Context, collectorID, collectibleID uuid.UUID
 	var imageID *uuid.UUID
 	err = tx.QueryRow(ctx, `
 		DELETE FROM collectibles
-		WHERE id = $1 AND collector_id = $2
+		WHERE id = $1 AND collector_id = $2 AND deleted_at IS NOT NULL
 		RETURNING image_id`, collectibleID, collectorID).Scan(&imageID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		// Already gone, never existed, or someone else's. Nothing to do, and nothing to disclose.
 		return false, nil
 	}
 	if err != nil {
 		return false, fmt.Errorf("delete collectible: %w", err)
 	}
-
-	// The photograph goes with it, in the same transaction. Nothing can observe a state in which
-	// the collectible is gone and its image is still fetchable (FR-020).
-	//
-	// collectible_submissions cascades on collectible_id, so a collectible added inside the
-	// idempotency window deletes cleanly rather than tripping over its own submission row.
 	if imageID != nil {
 		if err := releaseImage(ctx, tx, collectorID, *imageID); err != nil {
 			return false, err
 		}
 	}
-
 	if err := tx.Commit(ctx); err != nil {
 		return false, fmt.Errorf("commit: %w", err)
 	}
@@ -505,6 +591,7 @@ func (s *Store) List(
 		FROM collectibles c
 		LEFT JOIN collectible_images i ON i.id = c.image_id AND i.collector_id = c.collector_id
 		WHERE c.collector_id = $1
+		  AND c.deleted_at IS NULL
 		  AND ($2::text IS NULL OR c.collection_status = $2)
 		  AND ($3::timestamptz IS NULL OR (c.created_at, c.id) < ($3, $4))
 		  AND ($6::text IS NULL OR lower(btrim(coalesce(c.series, ''))) = lower(btrim($6)))
@@ -542,7 +629,7 @@ func (s *Store) List(
 	// (FR-041) from a filter matching nothing (FR-040) without another request. Constant work per
 	// page load, not per entry.
 	if err := s.pool.QueryRow(ctx,
-		`SELECT count(*) FROM collectibles WHERE collector_id = $1`, collectorID,
+		`SELECT count(*) FROM collectibles WHERE collector_id = $1 AND deleted_at IS NULL`, collectorID,
 	).Scan(&page.TotalUnfiltered); err != nil {
 		return Page{}, fmt.Errorf("count collection: %w", err)
 	}
