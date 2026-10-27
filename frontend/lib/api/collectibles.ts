@@ -5,6 +5,7 @@ import type {
   CollectionPage,
   CollectionStatus,
   EditCollectibleRequest,
+  SortOrder,
 } from './types'
 
 /**
@@ -27,6 +28,10 @@ export interface ListParams {
   series?: string
   /** A manufacturer, with exactly the semantics of `series` above. */
   manufacturer?: string
+  /** A search (feature 011). */
+  q?: string
+  /** The order (feature 011). A cursor is only valid with the order it came from. */
+  sort?: SortOrder
   cursor?: string
   limit?: number
 }
@@ -39,6 +44,8 @@ export async function listCollectibles(
   if (params.status) query.set('status', params.status)
   if (params.series !== undefined) query.set('series', params.series)
   if (params.manufacturer !== undefined) query.set('manufacturer', params.manufacturer)
+  if (params.q) query.set('q', params.q)
+  if (params.sort) query.set('sort', params.sort)
   if (params.cursor) query.set('cursor', params.cursor)
   if (params.limit) query.set('limit', String(params.limit))
 

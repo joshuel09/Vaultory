@@ -1,4 +1,4 @@
-import type { CollectionStatus } from '@/lib/api/types'
+import { DEFAULT_SORT, type CollectionStatus, type SortOrder } from '@/lib/api/types'
 
 /**
  * How the gallery is narrowed, and the one place a link to it is built.
@@ -16,6 +16,10 @@ export interface GalleryFilter {
   status?: CollectionStatus | null
   series?: string | null
   manufacturer?: string | null
+  /** A search (feature 011). Unlike series, an empty search means no search, so it is dropped. */
+  q?: string | null
+  /** The order (feature 011). The default is dropped, so a plain gallery address stays plain. */
+  sort?: SortOrder | null
 }
 
 export function galleryHref(filter: GalleryFilter = {}): string {
@@ -24,11 +28,24 @@ export function galleryHref(filter: GalleryFilter = {}): string {
   if (filter.status != null) query.set('status', filter.status)
   if (filter.series != null) query.set('series', filter.series)
   if (filter.manufacturer != null) query.set('manufacturer', filter.manufacturer)
+  // Here truthiness is right: a blank search is no search, which the server agrees with.
+  const q = filter.q?.trim()
+  if (q) query.set('q', q)
+  if (filter.sort && filter.sort !== DEFAULT_SORT) query.set('sort', filter.sort)
 
   const suffix = query.toString()
   return suffix ? `/collection?${suffix}` : '/collection'
 }
 
+/**
+ * Whether the gallery is narrowed — and so whether nothing showing means "nothing matches" rather
+ * than "nothing here". A search narrows; an order does not.
+ */
 export function isFiltered(filter: GalleryFilter): boolean {
-  return filter.status != null || filter.series != null || filter.manufacturer != null
+  return (
+    filter.status != null ||
+    filter.series != null ||
+    filter.manufacturer != null ||
+    Boolean(filter.q?.trim())
+  )
 }
