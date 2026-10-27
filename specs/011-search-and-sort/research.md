@@ -2,8 +2,9 @@
 
 ## 1. Words, substrings, one predicate
 
-- **Decision**: Go splits the search on whitespace (at most 20 words, at most 200 characters), escapes
-  `\`, `%` and `_` in each word, and passes them as one `text[]`. SQL requires that no word fails to
+- **Decision**: the domain splits the search on whitespace (at most 20 words, at most 200 characters);
+  the store escapes `\`, `%` and `_` in each word, since that is an `ILIKE` detail, and passes them as
+  one `text[]`. SQL requires that no word fails to
   match:
   `NOT EXISTS (SELECT 1 FROM unnest($n::text[]) w WHERE NOT (<doc> ILIKE '%' || w || '%'))`, where
   `<doc>` is the eight searchable attributes joined with a newline.
@@ -35,6 +36,9 @@
 - **Rationale**: one row comparison cannot express "missing values last" in both directions, so the
   predicate is spelled out. `id` in the same direction as the key makes the order total (FR-008). A
   cursor whose order differs from the request's is refused (FR-012).
+- **Values in the cursor**: the database's own text form (`purchase_price::text`, `purchase_date::text`,
+  the timestamp as nanoseconds), bound back with an explicit cast. A price never passes through a float,
+  so a tie at 1250.00 is a tie, not two neighbouring doubles (Constitution IV).
 - **Compatibility**: the old two-part cursor (`nanos|id`) is still read, as `added_desc`, so a page
   opened before deploy can keep scrolling.
 
