@@ -543,23 +543,32 @@ type Page struct {
 // series at all", which is the group the statistics label unspecified. Collapsing the two — which is
 // what a plain string does, because Go cannot tell an absent query parameter from a blank one —
 // makes the unspecified group's link return the whole vault (008 FR-031, research.md Decision 8).
+//
+// Search and Sort arrived with feature 011. Search is the words every result must contain, as the
+// domain parsed them; nil is no search. Sort is the order; empty is newest added first.
 type ListFilter struct {
 	Status       *collectible.CollectionStatus
 	Series       *string
 	Manufacturer *string
+	Search       []string
+	Sort         collectible.SortOrder
 }
 
-// List returns one page in creation order, newest first, optionally narrowed.
+// List returns one page of a collector's vault, narrowed, searched and ordered as asked.
 //
-// Keyset pagination on (created_at, id): page cost stays constant as a collection grows, and the
-// id tiebreaker makes the order total, so entries created in the same instant cannot be skipped or
-// repeated across pages (research.md Decision 7).
+// Keyset pagination: page cost stays constant as a collection grows, and the id tiebreaker makes
+// every order total, so entries sharing a value cannot be skipped or repeated across pages
+// (research.md Decision 7 of feature 001; Decision 2 of feature 011).
 //
 // The series and manufacturer predicates normalise both sides through PostgreSQL, in exactly the
 // form the statistics breakdown groups by: coalesce first, then btrim, then lower. Normalising the
 // parameter in Go instead would be a second implementation of the same rule, and Go's ToLower and
 // PostgreSQL's collation-dependent lower() do not have to agree on every input. When they disagree,
 // a breakdown group and the gallery it links to hold different collectibles (008 SC-010).
+//
+// The search requires every word in the collectible's searchable text. The attributes are joined
+// with a newline and a word holds no whitespace, so no match can straddle two attributes; the words
+// arrive escaped, so none acts as a wildcard (feature 011, FR-002, FR-003).
 func (s *Store) List(
 	ctx context.Context,
 	collectorID uuid.UUID,
@@ -567,16 +576,13 @@ func (s *Store) List(
 	cursor string,
 	limit int,
 ) (Page, error) {
-	var (
-		afterTime *time.Time
-		afterID   *uuid.UUID
-	)
-	if cursor != "" {
-		t, id, err := decodeCursor(cursor)
-		if err != nil {
-			return Page{}, err
-		}
-		afterTime, afterID = &t, &id
+	spec, err := specFor(filter.Sort)
+	if err != nil {
+		return Page{}, err
+	}
+	order := filter.Sort
+	if order == "" {
+		order = collectible.DefaultSortOrder
 	}
 
 	var statusArg *string
@@ -584,34 +590,63 @@ func (s *Store) List(
 		v := string(*filter.Status)
 		statusArg = &v
 	}
+	var words []string
+	for _, w := range filter.Search {
+		words = append(words, likeEscape(w))
+	}
 
-	// One extra row tells us whether a further page exists, without a second count.
-	rows, err := s.pool.Query(ctx, `
-		SELECT `+collectibleColumns+`
+	args := []any{collectorID, statusArg, filter.Series, filter.Manufacturer, words, limit + 1}
+	query := `
+		SELECT ` + collectibleColumns + `, (` + spec.key + `)::text
 		FROM collectibles c
 		LEFT JOIN collectible_images i ON i.id = c.image_id AND i.collector_id = c.collector_id
 		WHERE c.collector_id = $1
 		  AND c.deleted_at IS NULL
 		  AND ($2::text IS NULL OR c.collection_status = $2)
-		  AND ($3::timestamptz IS NULL OR (c.created_at, c.id) < ($3, $4))
-		  AND ($6::text IS NULL OR lower(btrim(coalesce(c.series, ''))) = lower(btrim($6)))
-		  AND ($7::text IS NULL OR lower(btrim(coalesce(c.manufacturer, ''))) = lower(btrim($7)))
-		ORDER BY c.created_at DESC, c.id DESC
-		LIMIT $5`,
-		collectorID, statusArg, afterTime, afterID, limit+1,
-		filter.Series, filter.Manufacturer)
+		  AND ($3::text IS NULL OR lower(btrim(coalesce(c.series, ''))) = lower(btrim($3)))
+		  AND ($4::text IS NULL OR lower(btrim(coalesce(c.manufacturer, ''))) = lower(btrim($4)))
+		  AND ($5::text[] IS NULL OR NOT EXISTS (
+		        SELECT 1 FROM unnest($5::text[]) AS w
+		        WHERE NOT (concat_ws(E'\n', c.name, c."character", c.series, c.manufacturer,
+		                             c.category, c.scale, c.edition, c.notes) ILIKE '%' || w || '%')))`
+	if cursor != "" {
+		after, err := decodeGalleryCursor(cursor, order)
+		if err != nil {
+			return Page{}, err
+		}
+		// NULL, not "", when the last entry had no value. The predicate's missing branch does not
+		// read it, but PostgreSQL casts a constant while planning, and ''::numeric is an error
+		// whichever branch would have run.
+		var value *string
+		if !after.missing {
+			value = &after.value
+		}
+		args = append(args, value, after.id, after.missing)
+		query += `
+		  AND ` + spec.after("$7", "$8", "$9")
+	}
+	query += `
+		ORDER BY ` + spec.orderBy() + `
+		LIMIT $6`
+
+	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
 		return Page{}, fmt.Errorf("list collectibles: %w", err)
 	}
 	defer rows.Close()
 
-	var out []Row
+	type keyed struct {
+		row Row
+		key *string
+	}
+	var out []keyed
 	for rows.Next() {
-		r, err := scanRow(rows)
+		var key *string
+		r, err := scanRow(trailing{rows, &key})
 		if err != nil {
 			return Page{}, fmt.Errorf("scan collectible: %w", err)
 		}
-		out = append(out, r)
+		out = append(out, keyed{r, key})
 	}
 	if err := rows.Err(); err != nil {
 		return Page{}, fmt.Errorf("read collectibles: %w", err)
@@ -620,14 +655,21 @@ func (s *Store) List(
 	page := Page{}
 	if len(out) > limit {
 		last := out[limit-1]
-		page.NextCursor = encodeCursor(last.Collectible.CreatedAt, last.Collectible.ID)
+		c := galleryCursor{order: order, id: last.row.Collectible.ID, missing: last.key == nil}
+		if last.key != nil {
+			c.value = *last.key
+		}
+		page.NextCursor = encodeGalleryCursor(c)
 		out = out[:limit]
 	}
-	page.Rows = out
+	page.Rows = make([]Row, 0, len(out))
+	for _, k := range out {
+		page.Rows = append(page.Rows, k.row)
+	}
 
 	// The second of the page's two statements. It is what lets the frontend tell an empty vault
-	// (FR-041) from a filter matching nothing (FR-040) without another request. Constant work per
-	// page load, not per entry.
+	// (FR-041) from a filter or search matching nothing (FR-040) without another request — so it
+	// counts the whole vault, ignoring every filter and the search. Constant work per page load.
 	if err := s.pool.QueryRow(ctx,
 		`SELECT count(*) FROM collectibles WHERE collector_id = $1 AND deleted_at IS NULL`, collectorID,
 	).Scan(&page.TotalUnfiltered); err != nil {
