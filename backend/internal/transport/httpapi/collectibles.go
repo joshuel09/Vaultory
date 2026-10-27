@@ -119,10 +119,31 @@ func (s *Server) handleListCollectibles(w http.ResponseWriter, r *http.Request, 
 		limit = n
 	}
 
-	filter := postgres.ListFilter{Status: status, Series: series, Manufacturer: manufacturer}
+	// Feature 011: a search and an order. Both are parsed by the domain, which owns what they mean;
+	// an over-long search or an unknown order is refused rather than quietly ignored (FR-004, FR-013).
+	var browse []collectible.Violation
+	search, v := collectible.ParseSearch(q.Get("q"))
+	if v != nil {
+		browse = append(browse, *v)
+	}
+	order, v := collectible.ParseSortOrder(q.Get("sort"))
+	if v != nil {
+		browse = append(browse, *v)
+	}
+	if len(browse) > 0 {
+		WriteValidationFailed(w, toFieldErrors(browse))
+		return
+	}
+
+	filter := postgres.ListFilter{
+		Status: status, Series: series, Manufacturer: manufacturer,
+		Search: search, Sort: order,
+	}
 	page, err := s.service.List(r.Context(), collector, filter, q.Get("cursor"), limit)
 	if err != nil {
-		// A malformed cursor is the client's mistake, not a server failure.
+		// A malformed cursor is the client's mistake, not a server failure — and so is one issued
+		// for a different order, which cannot be reinterpreted without skipping or repeating
+		// entries (feature 011, FR-012).
 		if strings.Contains(err.Error(), "cursor is not valid") {
 			WriteValidationFailed(w, []FieldError{{
 				Field:   "cursor",

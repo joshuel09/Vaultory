@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"unicode/utf8"
 )
@@ -178,4 +179,68 @@ func queryEscape(s string) string {
 		}
 	}
 	return out
+}
+
+// Feature 011: q and sort across the HTTP seam.
+func TestSearchAndSortParameters(t *testing.T) {
+	h := newHarness(t)
+	cookie := h.sessionFor(t, "")
+	for _, body := range []string{
+		`{"submissionKey":"k-s1","name":"Kaiju Sentinel","collectionStatus":"owned","purchasePrice":"900.00"}`,
+		`{"submissionKey":"k-s2","name":"Mecha Titan","collectionStatus":"owned","purchasePrice":"300.00"}`,
+		`{"submissionKey":"k-s3","name":"Kaiju Brute","collectionStatus":"owned"}`,
+	} {
+		_ = decode(t, postJSON(t, h, body, cookie))
+	}
+
+	// A search narrows; the CollectionPage shape and its whole-vault count are unchanged.
+	found := listWith(t, h, "q=kaiju", cookie)
+	if n := itemCount(t, found); n != 2 {
+		t.Errorf("q=kaiju returned %d, want 2", n)
+	}
+	if total, _ := found["totalUnfiltered"].(float64); total != 3 {
+		t.Errorf("totalUnfiltered = %v, want the whole vault, 3", found["totalUnfiltered"])
+	}
+
+	// A sort orders, with missing prices last.
+	sorted := listWith(t, h, "sort=price_asc", cookie)
+	items, _ := sorted["items"].([]any)
+	var names []string
+	for _, it := range items {
+		m, _ := it.(map[string]any)
+		names = append(names, fmt.Sprint(m["name"]))
+	}
+	if strings.Join(names, ",") != "Mecha Titan,Kaiju Sentinel,Kaiju Brute" {
+		t.Errorf("sort=price_asc = %v", names)
+	}
+
+	// Refusals: 400 validation_failed, naming the field.
+	for query, field := range map[string]string{
+		"q=" + strings.Repeat("a", 201): "q",
+		"sort=price":                    "sort",
+	} {
+		req, _ := http.NewRequest(http.MethodGet, h.server.URL+"/api/collectibles?"+query, nil)
+		resp := h.do(t, req, cookie)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("%s: status %d, want 400", query[:10], resp.StatusCode)
+			continue
+		}
+		body := decode(t, resp)
+		errBody, _ := body["error"].(map[string]any)
+		fields, _ := errBody["fields"].([]any)
+		if len(fields) != 1 || fields[0].(map[string]any)["field"] != field {
+			t.Errorf("%s: fields = %v, want one on %q", query[:10], fields, field)
+		}
+	}
+
+	// A cursor issued for one order is refused under another.
+	first := listWith(t, h, "sort=price_desc&limit=1", cookie)
+	cursor, _ := first["nextCursor"].(string)
+	if cursor == "" {
+		t.Fatal("no nextCursor with limit=1")
+	}
+	req, _ := http.NewRequest(http.MethodGet, h.server.URL+"/api/collectibles?sort=name_asc&cursor="+cursor, nil)
+	if resp := h.do(t, req, cookie); resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("cross-order cursor: status %d, want 400", resp.StatusCode)
+	}
 }
