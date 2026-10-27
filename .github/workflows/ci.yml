@@ -84,3 +84,65 @@ jobs:
       # cost this project a round of failures that looked like product bugs.
       - name: make test
         run: make test
+
+  migrations:
+    name: Migrations — up, down, up
+    runs-on: ubuntu-latest
+
+    # A cluster of its own, and that matters more than it looks. `vaultory_auth` is a role, which
+    # is cluster-level rather than database-level, so `down -all` against a cluster that also holds
+    # a development database fails — the role cannot be dropped while objects elsewhere depend on
+    # it — and leaves the database dirty. A service container has nothing else in it.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: vaultory_dev
+          POSTGRES_USER: vaultory
+          # Lives for the length of one job, in a container reachable only from it.
+          POSTGRES_PASSWORD: ci_only_not_a_real_secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vaultory -d vaultory_dev"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The constitution asks that schema changes ship as reversible migrations, with no
+      # exceptions. Until this job, the only thing behind that was whoever remembered to run the
+      # down migration by hand — and a `down` that is wrong is not discovered when it is written,
+      # but when somebody needs to roll back, which is the worst moment to find out (issue #60).
+      #
+      # Up, all the way down, and up again: the third step is the one that matters, because a
+      # `down` that drops more than its `up` created passes the second and fails the third.
+      - name: Apply, reverse, and re-apply every migration
+        env:
+          DATABASE_URL: postgres://vaultory:ci_only_not_a_real_secret@localhost:5432/vaultory_dev?sslmode=disable
+        run: |
+          set -euo pipefail
+
+          # Read the tool's version from compose rather than naming it again here. A second
+          # definition is a thing to keep in step, and this one would drift silently.
+          image=$(sed -n 's/^x-migrate-image: &migrate-image //p' compose.yaml)
+          echo "migrate image: $image"
+
+          migrate() {
+            docker run --rm --network host \
+              -v "$PWD/backend/migrations:/migrations:ro" \
+              "$image" -path=/migrations -database="$DATABASE_URL" "$@"
+          }
+
+          migrate up
+          migrate down -all
+          migrate up
+
+          # `migrate` reports a failed step by leaving the version dirty, and reports it on
+          # stderr. Without this the job would pass on a migration that half-applied.
+          if migrate version 2>&1 | grep -q dirty; then
+            echo "::error::migrations left the database dirty"
+            exit 1
+          fi

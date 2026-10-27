@@ -192,6 +192,7 @@ The same suites run again in GitHub Actions, on every pull request and on pushes
 | Backend — vet, build, unit, and the tagged suites type-checked | yes |
 | Frontend — lint, typecheck, unit, build | yes |
 | Backend — integration and contract, via `make test` | yes |
+| Migrations — up, down, up | no, but it runs and is visible |
 | Playwright — desktop, tablet, mobile | no, but it runs and is visible |
 
 A merge is refused until the three required checks pass, and a branch behind `main` has to be
@@ -200,6 +201,13 @@ brought up to date first — a branch can pass its own checks and still break `m
 The browser suite does not block because sixteen minutes would dominate every merge. It is worth
 reading rather than ignoring: it is steadier on a runner than on a developer machine, and it has
 caught defects the faster checks could not see.
+
+The migration check applies every migration, reverses every one of them, and applies them again.
+The constitution asks that schema changes be reversible with no exceptions, and the third step is
+the one that earns the job: a `down` that drops more than its `up` created survives the reversal
+and fails the re-apply. It runs against a PostgreSQL of its own, which is not an incidental
+detail — `vaultory_auth` is a cluster-level role, so reversing against a cluster that also holds a
+development database cannot drop it and leaves the database dirty.
 
 ## Working on it
 
