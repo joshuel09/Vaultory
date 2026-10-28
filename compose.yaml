@@ -50,6 +50,11 @@ services:
   # FR-002 is expressed declaratively rather than with a sleep or a retry loop.
   #
   # `up` applies only what is outstanding, so running it repeatedly is safe (FR-005).
+  #
+  # It runs through a script rather than directly, for one reason: a database left on a migration
+  # this checkout does not have fails here, and the failure `make up` prints names neither the
+  # cause nor the cure. The script checks for that before applying anything and says what happened
+  # (issue #62). Everything else it does is `migrate ... up`.
   # -------------------------------------------------------------------------------------------
   migrate:
     profiles: [dev]
@@ -59,10 +64,10 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/migrations:/migrations:ro
-    command:
-      - -path=/migrations
-      - -database=postgres://${POSTGRES_USER:-vaultory}:${POSTGRES_PASSWORD:-vaultory_dev_password}@postgres:5432/${POSTGRES_DB:-vaultory_dev}?sslmode=disable
-      - up
+      - ./scripts/migrate-up.sh:/migrate-up.sh:ro
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-vaultory}:${POSTGRES_PASSWORD:-vaultory_dev_password}@postgres:5432/${POSTGRES_DB:-vaultory_dev}?sslmode=disable
+    entrypoint: ["/bin/sh", "/migrate-up.sh"]
     restart: "no"
 
   # -------------------------------------------------------------------------------------------
