@@ -1,6 +1,6 @@
 # Tasks: Say What Is Wrong When the Database Is Ahead
 
-- [ ] T001 `backend/scripts/migrate.sh`: read the version, find the checkout's newest; up when empty, behind or current; stop with exit 3 and the explanation when ahead; exit 4 with its own explanation when dirty; `goto N` passes through; any other argument refused (FR-001, FR-002, FR-005–FR-007)
+- [ ] T001 `backend/scripts/migrate.sh`: read the version, find the checkout's newest; up when empty, behind or current; stop with exit 3 and the explanation when ahead; exit 4 with its own explanation when dirty; `goto N` passes through; any other argument refused; never prints the database URL, which carries the password (FR-001, FR-002, FR-005–FR-007; analyze A1)
 - [ ] T002 `compose.yaml`: the `migrate` service runs the script, with the script mounted read-only and the database URL in the environment (FR-001)
 - [ ] T003 `Makefile`: `up` prints the `migrate` step's output when that step exited non-zero; `migrate-to` requires `VERSION` and runs the script's `goto` (FR-003, FR-004)
 - [ ] T004 README: what this message means and what to do, under running locally
