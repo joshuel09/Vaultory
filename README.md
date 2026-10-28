@@ -65,6 +65,33 @@ echo 'VAULTORY_DB_PORT=5433' >> .env    # if you already run PostgreSQL on 5432
 Every variable has a development-only default documented inline in `compose.yaml`; there is nothing
 you must set to get started.
 
+### When the database is ahead of your checkout
+
+Run the stack on a branch that adds a migration, then go back to a branch without it, and `make up`
+stops — the database is recorded as being at a migration this checkout has no file for. This is the
+ordinary consequence of reviewing a pull request, so `make up` says so rather than failing with a
+number:
+
+```
+The development database is ahead of this checkout.
+
+    the database is at migration   12
+    the newest migration here is   10
+```
+
+Nothing is broken and no collectible is lost; the schema simply belongs to a branch you are not on.
+Go forward again by switching back to that branch, or come back to this one by reversing the extra
+migrations **on the branch that has them** — a branch cannot reverse a migration it does not carry:
+
+```bash
+git switch <the branch that added them>
+make db-rewind VERSION=10     # drops the columns and tables those migrations added
+git switch -
+make up
+```
+
+`make reset` is the third way, and discards your data along with the schema.
+
 ### Without Docker — running from the host
 
 Still supported. You need Go, Node, PostgreSQL, and `golang-migrate` installed:
