@@ -41,16 +41,6 @@ reset: ## DESTROY all data — database and uploaded images — then stop
 		read ans && [ "$$ans" = "yes" ] || (echo "Cancelled."; exit 1)
 	$(COMPOSE) --profile dev down -v
 
-# Run this on the branch whose migrations are to be reversed, not on the one you are going back
-# to: the down files live with the up files, so a branch cannot reverse a migration it does not
-# have. That is the whole reason `make up` refuses in the first place (issue #62).
-db-rewind: ## Reverse migrations down to VERSION, e.g. make db-rewind VERSION=10. Drops what they added.
-	@[ -n "$(VERSION)" ] || (echo "Set the migration to come back to, e.g. make db-rewind VERSION=10"; exit 1)
-	@printf "This reverses every migration after $(VERSION), dropping the columns and tables they added. Type 'yes' to continue: " && \
-		read ans && [ "$$ans" = "yes" ] || (echo "Cancelled."; exit 1)
-	$(COMPOSE) --profile dev run --rm --entrypoint sh migrate \
-		-c 'migrate -path=/migrations -database="$$DATABASE_URL" goto $(VERSION)'
-
 test: ## Run the backend suites (unit, integration, contract) against a throwaway database
 	$(COMPOSE) --profile test run --rm --build backend-test
 	@$(COMPOSE) --profile test down --remove-orphans >/dev/null 2>&1 || true
