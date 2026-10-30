@@ -50,6 +50,11 @@ services:
   # FR-002 is expressed declaratively rather than with a sleep or a retry loop.
   #
   # `up` applies only what is outstanding, so running it repeatedly is safe (FR-005).
+  #
+  # Through backend/scripts/migrate.sh rather than `migrate up` directly (feature 012). It first
+  # checks for a database *ahead* of this checkout — another branch's migrations applied while
+  # reviewing it — and explains that, instead of failing with "no migration found for version N".
+  # It also runs `make migrate-to VERSION=n`, which is `goto n` through the same script.
   # -------------------------------------------------------------------------------------------
   migrate:
     profiles: [dev]
@@ -59,10 +64,14 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/migrations:/migrations:ro
-    command:
-      - -path=/migrations
-      - -database=postgres://${POSTGRES_USER:-vaultory}:${POSTGRES_PASSWORD:-vaultory_dev_password}@postgres:5432/${POSTGRES_DB:-vaultory_dev}?sslmode=disable
-      - up
+      - ./backend/scripts/migrate.sh:/scripts/migrate.sh:ro
+    environment:
+      # In the environment rather than on the command line, so `goto` and `force` can reuse it, and
+      # so the script can be sure never to print it: it carries the password.
+      MIGRATE_DATABASE_URL: postgres://${POSTGRES_USER:-vaultory}:${POSTGRES_PASSWORD:-vaultory_dev_password}@postgres:5432/${POSTGRES_DB:-vaultory_dev}?sslmode=disable
+      MIGRATIONS_PATH: /migrations
+    entrypoint: ["/bin/sh", "/scripts/migrate.sh"]
+    command: []
     restart: "no"
 
   # -------------------------------------------------------------------------------------------

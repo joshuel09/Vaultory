@@ -55,6 +55,21 @@ make down       # stop; your data is kept
 make reset      # DESTROY all data, then stop
 ```
 
+#### "The database is ahead of this checkout"
+
+Run the stack on a branch that adds a migration — reviewing a pull request, say — then switch back,
+and `make up` stops with that message instead of starting. Your data is intact. The database has
+migrations this checkout does not know about, and only the branch that added them can undo them:
+
+```bash
+git switch <that branch>
+make migrate-to VERSION=<the version make up printed>
+git switch -
+make up
+```
+
+Or simply carry on with that branch. Nothing is ever rolled back for you.
+
 To change a port or any other value, create a `.env` beside `compose.yaml`. Compose reads it
 automatically and it is gitignored, so your local settings never appear in a diff:
 
