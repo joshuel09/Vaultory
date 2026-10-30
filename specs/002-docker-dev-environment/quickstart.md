@@ -151,23 +151,32 @@ use. The target supplies throwaway values; `up` still demands real ones.
 
 The images are named for the Compose project, which is `vaultory-prod`:
 
-SC-006 is measured as total **uncompressed layer size**. Not `docker image ls`: on Docker's
-containerd image store that also counts a compressed copy of every layer, which is how the first
-measurement below read 458.6 MB. Sum the layers instead:
+SC-006 is measured with one command: the flattened filesystem a container of the image runs on,
+as `docker export` streams it. Not `docker image ls` or `docker image inspect`: on Docker's
+containerd image store those also count a compressed copy of every layer, which is how the first
+measurement below read 458.6 MB. Not the sum of `docker history` either, which reads a few MB
+higher. For the same frontend image the three gave 191.1, 198.4 and 259.5 MB, and only the first is
+SC-006's number:
 
 ```bash
 for i in vaultory-prod-backend vaultory-prod-frontend; do
-  docker history --human=false --format '{{.Size}}' "$i" |
-    awk -v i="$i" '{s+=$1} END {printf "%s: %.1f MB\n", i, s/1e6}'
+  c=$(docker create "$i")
+  docker export "$c" | wc -c | awk -v i="$i" '{printf "%s: %.1f MB\n", i, $1/1e6}'
+  docker rm "$c" >/dev/null
 done
+docker version --format '{{.Server.Arch}}'   # record the architecture with the figures
 ```
 
-Expected since #29 (SC-006 as amended: backend under 150 MB, frontend under 225 MB):
+Expected since #29 (SC-006 as amended: backend under 150 MB, frontend under 225 MB, on each
+architecture):
 
-| Image | Expected | Basis |
+| Image | arm64 | x86-64 |
 |---|---|---|
-| `vaultory-prod-backend` | ~20 MB | measured 20.5 MB on 2026-09-17 |
-| `vaultory-prod-frontend` | **~190 MB** | distroless base 156.3 MB, measured from the registry; trimmed standalone 32.3 MB and static 1.0 MB, measured on disk. **Not yet confirmed by a `docker build`** — record the first real figure here |
+| `vaultory-prod-backend` | 20.6 MB, measured 2026-10-25 | not yet measured |
+| `vaultory-prod-frontend` | **191.1 MB**, measured 2026-10-25 by `make prod-build` and `docker export` in the review of #53; it boots as uid 65532 | **not yet measured** — record the first figure here; the amd64 Node binary need not be the same size |
+
+The arm64 frontend figure confirms the projection in research.md (156.3 + 32.3 + 1.0 ≈ 190 MB),
+down from 461 MB before #29.
 
 **History** — measured on 2026-09-17, arm64, Docker 29.8.0, on the bookworm-slim runtime that #29
 replaced:

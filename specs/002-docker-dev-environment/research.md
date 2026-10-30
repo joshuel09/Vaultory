@@ -176,8 +176,11 @@ booting the untrimmed and trimmed builds in turn and requesting five routes — 
 and no missing module.
 
 **Projected frontend image**: 156.3 + 32.3 + 1.0 (static, public) ≈ **190 MB** uncompressed, from
-~353 MB of unpacked layers before. Not yet confirmed by `docker build`; that is the one step this
-revision could not run.
+~353 MB of unpacked layers before. **Confirmed on arm64** in the review of #53 (2026-10-25):
+`make prod-build`, then `docker export | wc -c`, gave 191.1 MB, and the Node layer was 121 MB as
+above. The same image read 198.4 MB summed over `docker history` and 259.5 MB in
+`docker image inspect`, so SC-006 now names `docker export` as its command. x86-64 is not yet
+measured.
 
 ## Decision 6 — Uploaded images live in a named volume, not a bind mount
 

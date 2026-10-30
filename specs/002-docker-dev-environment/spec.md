@@ -187,14 +187,18 @@ and refuses to start with development identity enabled.
   image rebuild.
 - **SC-005**: Stopping and restarting the stack preserves 100% of collectibles and uploaded images.
 - **SC-006**: Each production image contains no compiler or package manager. The backend image is
-  under 150 MB and the frontend image under 225 MB, measured as total uncompressed layer size.
-  *Amended 2026-10-22 (#29).* The original 150 MB applied to both images, and no Node.js runtime can
-  meet it: the Node 22 binary alone is 121 MB, and the smallest base without a package manager is
-  156 MB before any application code. The frontend measures ~190 MB on that base; 225 MB leaves
+  under 150 MB and the frontend image under 225 MB on each architecture SC-007 covers, measured as
+  the size of its flattened filesystem as `docker export "$(docker create <image>)" | wc -c`
+  reports it. *Amended 2026-10-22 (#29); command named 2026-10-31 (review of #53).* The original
+  150 MB applied to both images, and no Node.js runtime can meet it: the Node 22 binary alone is 121 MB, and the smallest base without a package manager is
+  156 MB before any application code. The frontend measures 191.1 MB on that base (arm64); 225 MB leaves
   about 35 MB for Node and Next.js growth, so crossing it is a signal rather than routine drift.
-  The unit is stated because `docker image ls` on Docker's containerd store also counts compressed
-  copies of each layer, which is how the original measurement read 458.6 MB. See research.md,
-  Decision 5, revision of 2026-10-22.
+  The command is named, not just the unit, because the obvious ones disagree: for the same frontend
+  image on arm64, `docker export` gave 191.1 MB, the sum of `docker history` 198.4 MB, and
+  `docker image inspect` 259.5 MB. Only the first measures the filesystem a container runs on; on
+  Docker's containerd store `inspect` and `docker image ls` also count compressed copies of each
+  layer, which is how the original measurement read 458.6 MB. See research.md, Decision 5,
+  revision of 2026-10-22.
 - **SC-007**: The documented commands work unchanged on arm64 and x86-64.
 - **SC-008**: A test run leaves the development database byte-identical to how it was before.
 
