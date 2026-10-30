@@ -9,6 +9,8 @@ import type { components } from '@/lib/types/api'
  */
 export type Collectible = components['schemas']['Collectible']
 export type CollectionPage = components['schemas']['CollectionPage']
+export type TrashedCollectible = components['schemas']['TrashedCollectible']
+export type TrashPage = components['schemas']['TrashPage']
 export type CollectionStatus = components['schemas']['CollectionStatus']
 export type AddCollectibleRequest = components['schemas']['AddCollectibleRequest']
 export type EditCollectibleRequest = components['schemas']['EditCollectibleRequest']

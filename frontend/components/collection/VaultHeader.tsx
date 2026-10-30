@@ -35,6 +35,12 @@ export async function VaultHeader() {
               >
                 My vault
               </Link>
+              <Link
+                href="/collection/trash"
+                className="text-sm text-ink-muted transition-colors hover:text-ink"
+              >
+                Trash
+              </Link>
               <span
                 data-testid="signed-in-as"
                 className="hidden max-w-[16rem] truncate text-xs text-ink-faint sm:inline"

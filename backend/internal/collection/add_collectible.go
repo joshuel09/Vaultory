@@ -10,6 +10,15 @@ import (
 	"github.com/joshuel09/vaultory/backend/internal/store/postgres"
 )
 
+// imageInUseViolation is the refusal when a save names a photograph another collectible already
+// uses — including one in the Trash, whose photograph is kept so it can be restored. A photograph
+// belongs to at most one collectible (feature 010, FR-018).
+var imageInUseViolation = collectible.Violation{
+	Field:   "imageId",
+	Code:    collectible.CodeInvalidValue,
+	Message: "That photograph is already used by another collectible. Choose a different one.",
+}
+
 // AddResult is what an add produced.
 //
 // Existing is true when a replayed submission key returned the collectible it had already created.
@@ -52,6 +61,9 @@ func (s *Service) Add(
 	}
 
 	res, err := s.store.Add(ctx, collectorID, validated, s.idempotencyWindow)
+	if errors.Is(err, postgres.ErrImageInUse) {
+		return AddResult{}, []collectible.Violation{imageInUseViolation}, nil
+	}
 	if errors.Is(err, postgres.ErrUnknownImage) {
 		// The window between the check above and the insert. Rare, but the database caught it.
 		return AddResult{}, []collectible.Violation{{

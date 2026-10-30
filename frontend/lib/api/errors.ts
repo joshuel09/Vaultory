@@ -44,6 +44,11 @@ export class ApiError extends Error {
   }
 
   /** True when the collector's session could not be established (FR-029). */
+  /** Nothing of the collector's at that address — used by restore, where it means "did not come back". */
+  get isNotFound(): boolean {
+    return this.status === 404
+  }
+
   get isUnauthenticated(): boolean {
     return this.status === 401
   }
