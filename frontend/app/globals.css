@@ -72,8 +72,12 @@
     *::before,
     *::after {
       animation-duration: 0.01ms !important;
+      animation-delay: 0s !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
+      /* A staggered reveal whose delay survived would leave content invisible for its delay and
+         then snap in — worse than no animation. Zeroing the delay as well as the duration is what
+         makes "reduce" mean reduced rather than merely faster. */
     }
   }
 }
@@ -99,5 +103,98 @@
     100% {
       background-position: -200% 0;
     }
+  }
+}
+
+@layer components {
+  /*
+   * Landing-page motion.
+   *
+   * All of it is CSS and none of it is JavaScript, deliberately. The landing page is a server
+   * component that renders and decides nothing (FR-010), and scroll-triggered reveals need a
+   * client bundle and an initial hidden state — which, the one time the script fails to run, is a
+   * page of invisible text. These run on load instead, so the worst case is motion nobody sees.
+   *
+   * Every one is covered by the prefers-reduced-motion block above: duration and delay both go to
+   * zero and the content is simply there.
+   *
+   * No colour is introduced here. Everything draws on the existing tokens.
+   */
+
+  /* The entrance. Short, slightly overshooting easing, and upward — a shelf being set down. */
+  .rise {
+    animation: rise 0.7s cubic-bezier(0.22, 0.68, 0.3, 1) both;
+  }
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 14px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  /*
+   * The ambient glow behind the hero: a wide, very low-opacity wash of the accent that drifts.
+   *
+   * Slow enough (28s) to read as light changing in a room rather than as something moving. It sits
+   * under the content at a low z-index and is aria-hidden, so it adds nothing for a screen reader.
+   */
+  .vault-glow {
+    background: radial-gradient(
+      55% 55% at 50% 40%,
+      rgb(var(--accent) / 0.18) 0%,
+      rgb(var(--accent) / 0.06) 45%,
+      transparent 72%
+    );
+    animation: glow-drift 28s ease-in-out infinite alternate;
+  }
+
+  @keyframes glow-drift {
+    from {
+      transform: translate3d(-4%, 0, 0) scale(1);
+      opacity: 0.85;
+    }
+    to {
+      transform: translate3d(4%, -3%, 0) scale(1.12);
+      opacity: 1;
+    }
+  }
+
+  /* The marquee of series and makers. Duplicated content inside, so -50% is a seamless loop. */
+  .marquee-track {
+    animation: marquee 38s linear infinite;
+  }
+
+  @keyframes marquee {
+    from {
+      transform: translate3d(0, 0, 0);
+    }
+    to {
+      transform: translate3d(-50%, 0, 0);
+    }
+  }
+
+  /*
+   * The sheen that crosses a card on hover: light moving over a display case.
+   *
+   * Transform-only, so it composites on the GPU and cannot reflow the grid.
+   */
+  .sheen {
+    background: linear-gradient(
+      105deg,
+      transparent 35%,
+      rgb(var(--ink) / 0.1) 50%,
+      transparent 65%
+    );
+    transform: translate3d(-120%, 0, 0);
+  }
+
+  .group:hover .sheen {
+    transition: transform 0.9s cubic-bezier(0.2, 0.6, 0.2, 1);
+    transform: translate3d(120%, 0, 0);
   }
 }

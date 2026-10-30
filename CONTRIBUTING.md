@@ -88,8 +88,8 @@ change since.
   reversed turns a bad deploy into a restore from backup.
   ([feature 001](specs/001-add-browse-collectibles/research.md))
 - **Frontend types are generated from the contract, never written by hand.** The contract is
-  `specs/001-add-browse-collectibles/contracts/openapi.yaml`. A hand-written response
-  shape is a second copy of the contract, and it drifts.
+  `backend/api/openapi.yaml`. A hand-written response shape is a second copy of the contract, and
+  it drifts.
   ([feature 001](specs/001-add-browse-collectibles/plan.md))
 
 ## Before you open a pull request
@@ -106,3 +106,16 @@ work counts as complete:
 - The change has been reviewed against the constitution.
 
 The commands for each are in the README's [Testing](README.md#testing) section.
+
+Running them yourself is still worth doing — a failure found locally costs a minute, and the same
+failure found on a pull request costs a push and a wait. But they no longer rest on your word for
+it. Opening a pull request runs the backend suites, the frontend suites and the browser suite
+again, and three of those four checks are **required**: the merge button refuses until they pass.
+
+Two consequences worth knowing before they surprise you:
+
+- A branch **behind `main`** cannot merge until it is brought up to date, even with every check
+  green. A branch can pass its own checks and still break `main`, which is what that rule is for.
+- The browser suite runs and is visible but does not block, because at roughly sixteen minutes it
+  would dominate every merge. Read it rather than ignore it: it has caught real defects that the
+  faster checks could not see.

@@ -2,7 +2,7 @@
 
 This feature's API contract lives in the one OpenAPI document the project has:
 
-**[`specs/001-add-browse-collectibles/contracts/openapi.yaml`](../../001-add-browse-collectibles/contracts/openapi.yaml)**
+**[`backend/api/openapi.yaml`](../../../backend/api/openapi.yaml)**
 
 Feature 008 bumps it to **0.3.0** and adds:
 

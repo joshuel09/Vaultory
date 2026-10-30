@@ -25,8 +25,8 @@ specs/      Spec Kit artifacts: specification, plan, data model, contract, tasks
 ```
 
 `backend/` and `frontend/` are separate applications and communicate only over the REST contract in
-`specs/001-add-browse-collectibles/contracts/openapi.yaml`. The frontend's request and response
-types are generated from that file; it is the single source of truth for the seam.
+`backend/api/openapi.yaml`. The frontend's request and response types are generated from that file;
+it is the single source of truth for the seam.
 
 ## Governance
 
@@ -54,6 +54,21 @@ make logs       # follow the logs
 make down       # stop; your data is kept
 make reset      # DESTROY all data, then stop
 ```
+
+#### "The database is ahead of this checkout"
+
+Run the stack on a branch that adds a migration — reviewing a pull request, say — then switch back,
+and `make up` stops with that message instead of starting. Your data is intact. The database has
+migrations this checkout does not know about, and only the branch that added them can undo them:
+
+```bash
+git switch <that branch>
+make migrate-to VERSION=<the version make up printed>
+git switch -
+make up
+```
+
+Or simply carry on with that branch. Nothing is ever rolled back for you.
 
 To change a port or any other value, create a `.env` beside `compose.yaml`. Compose reads it
 automatically and it is gitignored, so your local settings never appear in a diff:
@@ -182,6 +197,32 @@ cd frontend && npm run test:e2e
 ```
 
 The constitution requires all of these to pass before a feature is complete.
+
+### On a pull request
+
+The same suites run again in GitHub Actions, on every pull request and on pushes to `main`:
+
+| Check | Required? |
+|-------|-----------|
+| Backend — vet, build, unit, and the tagged suites type-checked | yes |
+| Frontend — lint, typecheck, unit, build | yes |
+| Backend — integration and contract, via `make test` | yes |
+| Migrations — up, down, up | no, but it runs and is visible |
+| Playwright — desktop, tablet, mobile | no, but it runs and is visible |
+
+A merge is refused until the three required checks pass, and a branch behind `main` has to be
+brought up to date first — a branch can pass its own checks and still break `main`.
+
+The browser suite does not block because sixteen minutes would dominate every merge. It is worth
+reading rather than ignoring: it is steadier on a runner than on a developer machine, and it has
+caught defects the faster checks could not see.
+
+The migration check applies every migration, reverses every one of them, and applies them again.
+The constitution asks that schema changes be reversible with no exceptions, and the third step is
+the one that earns the job: a `down` that drops more than its `up` created survives the reversal
+and fails the re-apply. It runs against a PostgreSQL of its own, which is not an incidental
+detail — `vaultory_auth` is a cluster-level role, so reversing against a cluster that also holds a
+development database cannot drop it and leaves the database dirty.
 
 ## Working on it
 

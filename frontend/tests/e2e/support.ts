@@ -220,6 +220,48 @@ export const oversizedFile = {
   buffer: Buffer.alloc(10 * 1024 * 1024 + 1024, 0x5a),
 }
 
+/**
+ * A real JPEG grown to just under the 10 MB rule, for proving the largest permitted upload works.
+ *
+ * Padded with JPEG comment segments inserted after the SOI marker rather than with trailing bytes:
+ * a decoder is entitled to stop at EOI, so junk appended to the end may or may not count toward
+ * anything, while a COM segment is part of the file by definition and every decoder must carry it.
+ *
+ * It exists because issue #47 broke this case, not only the refusal: Next truncated a proxied body
+ * at 10 MiB, which is FR-010's own limit, so a legitimate upload at the top of the range died the
+ * same way an oversized one did.
+ */
+export function largestPermittedJpeg() {
+  const raw = Buffer.from(JPEG_BASE64, 'base64')
+  /*
+   * Exactly MaxUploadBytes, not comfortably under it.
+   *
+   * This matters more than it looks, and a mutation check is what showed it: at 2 KB under the
+   * limit the file plus its multipart envelope still fits inside Next's default 10 MiB cap, so the
+   * test passed whether or not the bug was fixed and proved nothing. Sitting *on* the limit is what
+   * pushes the envelope over the cap while staying inside what Go accepts, which is the exact
+   * window issue #47 broke.
+   */
+  const target = 10 * 1024 * 1024
+  const chunks: Buffer[] = []
+  let remaining = target - raw.length
+  while (remaining > 0) {
+    // Each segment costs its payload plus the two length bytes; the last one is sized to land on
+    // the target exactly rather than overshoot it.
+    const n = remaining >= 65535 ? 65533 : remaining - 2
+    const seg = Buffer.alloc(n + 2)
+    seg.writeUInt16BE(0xfffe, 0)
+    seg.writeUInt16BE(n, 2)
+    chunks.push(seg)
+    remaining -= n + 2
+  }
+  return {
+    name: 'largest-permitted.jpg',
+    mimeType: 'image/jpeg',
+    buffer: Buffer.concat([raw.subarray(0, 2), ...chunks, raw.subarray(2)]),
+  }
+}
+
 export const notAnImage = {
   name: 'document.jpg',
   mimeType: 'image/jpeg',
