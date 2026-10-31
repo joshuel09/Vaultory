@@ -6,3 +6,13 @@
 - [X] T004 README: what this message means and what to do, under running locally
 - [X] T005 Verify the script on the host against PostgreSQL 17 with migrate 4.18.1 in every state — ahead (nothing changed), dirty, empty, behind, current, `goto` both ways, no version — and record the output (SC-001, SC-002)
 - [X] T006 Note in the PR what could not run here: `make`, Compose, and the image's busybox `sh`
+
+## Phase 2: Convergence
+
+Issue #69. Scope: FR-008 and SC-004 — the password in the migrations step's output.
+
+- [ ] T007 `compose.yaml`: take the password out of `MIGRATE_DATABASE_URL` and pass it as `PGPASSWORD`, which lib/pq reads, so golang-migrate's errors have no password to quote — including the `exec`ed `up`, whose output the script never sees, per FR-008 (missing)
+- [ ] T008 `backend/scripts/migrate.sh`: refuse, with exit 2 and without printing the address, an `MIGRATE_DATABASE_URL` whose user part carries a password; correct the header comment, which says the URL carries the password, per FR-008 (missing)
+- [ ] T009 `compose.prod.yaml`: the production `migrate` passes the password inside `-database` on its command line, the same leak in `docker compose logs migrate`; move it to `PGPASSWORD` as `auth-role` already does, per FR-008, SC-004 (missing)
+- [ ] T010 Verify on the host against PostgreSQL 17 with password authentication and migrate 4.18.1: right password from `PGPASSWORD` migrates; a wrong one fails with output containing the password 0 times, from both `version` and the `exec`ed `up`; an address with a password is refused unprinted, per SC-004 (missing)
+
