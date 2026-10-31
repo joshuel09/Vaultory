@@ -197,9 +197,15 @@ jobs:
               done >> "$found"
           done
 
-          # Anything not ending in an allowed address.
+          # Anything that is not an allowed address.
+          #
+          # The whole record is anchored, and the noreply local part may not contain whitespace or
+          # a second @. Matching the suffix alone would accept
+          # `victim@example.com@users.noreply.github.com`, which ends in an allowed suffix and is
+          # not an allowed address.
           bad="$RUNNER_TEMP/bad"
-          grep -vE ' (.+@users\.noreply\.github\.com|noreply@github\.com|noreply@anthropic\.com)$' "$found" > "$bad" || true
+          grep -vE '^[0-9a-f]+ (author|committer|co-author) +([^[:space:]@]+@users\.noreply\.github\.com|noreply@github\.com|noreply@anthropic\.com)$' \
+            "$found" > "$bad" || true
 
           if [ -s "$bad" ]; then
             echo "::error::a commit on this branch carries an address that is not a noreply address"
@@ -207,10 +213,20 @@ jobs:
               echo "::error::$line"
             done < "$bad"
             echo
-            echo "Fix it before merging, while the branch can still be rewritten:"
-            echo "  git config --get user.email        # check what you are committing as"
+            echo "Fix it before merging, while the branch can still be rewritten."
+            echo
+            echo "First, check what you are committing as. Note that running git config inside a"
+            echo "linked worktree sets it for the whole repository, which is how this last happened:"
+            echo "  git config --get user.email"
             echo "  git config --local --unset user.email"
+            echo
+            echo "For an 'author' or 'committer' line, and only if every commit in the range is"
+            echo "yours — this rewrites them all, including anyone else's:"
             echo "  git rebase --exec 'git commit --amend --no-edit --reset-author' $BASE"
+            echo
+            echo "For a 'co-author' line, the address is in the commit message, so amending the"
+            echo "author does not touch it. Reword the named commit and delete the trailer:"
+            echo "  git rebase -i $BASE"
             exit 1
           fi
 
