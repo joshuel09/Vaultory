@@ -146,3 +146,72 @@ jobs:
             echo "::error::migrations left the database dirty"
             exit 1
           fi
+
+  authorship:
+    name: Authorship — commits carry a noreply address
+    runs-on: ubuntu-latest
+    # Only on a pull request, which is the whole point: this is the last moment the branch can
+    # still be rewritten freely. Once a squash merge has happened the address is on main *and* in
+    # a refs/pull ref that nothing can rewrite, and both remedies left are bad ones — rewriting
+    # shared history, or detaching an email from an account and losing its contributions elsewhere.
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The base commit has to be present to diff against it.
+          fetch-depth: 0
+
+      # Four commits once reached main authored with a work email belonging to a different GitHub
+      # account, which then appeared in this repository's Contributors list. One `git config`
+      # call did it — run inside a linked worktree, which shares .git/config rather than keeping
+      # its own — and nothing caught it until somebody looked at the front page days later
+      # (issue #74).
+      #
+      # An allowlist rather than a denylist, deliberately: a denylist would have to name the
+      # company domain, and this repository is public. Every commit in its history already uses a
+      # noreply address, so requiring one costs nothing and names nobody.
+      - name: Check the author, committer and co-authors of every commit
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          found="$RUNNER_TEMP/addresses"
+          : > "$found"
+
+          for sha in $(git rev-list "$BASE..$HEAD"); do
+            # Author and committer. They differ more often than people expect — a rebase or a
+            # web-UI merge rewrites the committer and leaves the author alone.
+            git log -1 --format="$sha author    %ae" "$sha" >> "$found"
+            git log -1 --format="$sha committer %ce" "$sha" >> "$found"
+
+            # Co-authors count too. GitHub attributes a commit to every account named in one of
+            # these trailers, and a squash merge copies the branch commit's author into one — which
+            # is exactly how the wrong account reached main last time.
+            git log -1 --format='%b' "$sha" |
+              sed -n 's/^[Cc]o-[Aa]uthored-[Bb]y:.*<\([^>]*\)>.*/\1/p' |
+              while IFS= read -r address; do
+                [ -n "$address" ] && echo "$sha co-author $address"
+              done >> "$found"
+          done
+
+          # Anything not ending in an allowed address.
+          bad="$RUNNER_TEMP/bad"
+          grep -vE ' (.+@users\.noreply\.github\.com|noreply@github\.com|noreply@anthropic\.com)$' "$found" > "$bad" || true
+
+          if [ -s "$bad" ]; then
+            echo "::error::a commit on this branch carries an address that is not a noreply address"
+            while IFS= read -r line; do
+              echo "::error::$line"
+            done < "$bad"
+            echo
+            echo "Fix it before merging, while the branch can still be rewritten:"
+            echo "  git config --get user.email        # check what you are committing as"
+            echo "  git config --local --unset user.email"
+            echo "  git rebase --exec 'git commit --amend --no-edit --reset-author' $BASE"
+            exit 1
+          fi
+
+          echo "every commit carries a noreply address"

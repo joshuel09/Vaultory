@@ -193,6 +193,7 @@ The same suites run again in GitHub Actions, on every pull request and on pushes
 | Frontend — lint, typecheck, unit, build | yes |
 | Backend — integration and contract, via `make test` | yes |
 | Migrations — up, down, up | no, but it runs and is visible |
+| Authorship — commits carry a noreply address | no, but it runs and is visible |
 | Playwright — desktop, tablet, mobile | no, but it runs and is visible |
 
 A merge is refused until the three required checks pass, and a branch behind `main` has to be
@@ -208,6 +209,19 @@ the one that earns the job: a `down` that drops more than its `up` created survi
 and fails the re-apply. It runs against a PostgreSQL of its own, which is not an incidental
 detail — `vaultory_auth` is a cluster-level role, so reversing against a cluster that also holds a
 development database cannot drop it and leaves the database dirty.
+
+The authorship check reads the author, committer and `Co-authored-by:` address of every commit on
+the branch and refuses any that is not a GitHub `noreply` address. It exists because four commits
+once reached `main` authored with an address belonging to a different GitHub account, which then
+appeared in this repository's Contributors list — and removing it afterwards took a history
+rewrite, a force push, and still could not reach the copies kept in `refs/pull/*`. The check runs
+on pull requests only, which is the point: that is the last moment the branch can still be
+rewritten freely.
+
+An allowlist rather than a denylist, so no private domain is written into a public repository. If
+you are refused, the message names the commit and the address, and `git config --get user.email`
+is where to look first — note that running `git config` inside a linked worktree sets it for the
+whole repository, which is how this happened.
 
 ## Working on it
 
