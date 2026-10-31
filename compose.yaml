@@ -66,9 +66,11 @@ services:
       - ./backend/migrations:/migrations:ro
       - ./backend/scripts/migrate.sh:/scripts/migrate.sh:ro
     environment:
-      # In the environment rather than on the command line, so `goto` and `force` can reuse it, and
-      # so the script can be sure never to print it: it carries the password.
-      MIGRATE_DATABASE_URL: postgres://${POSTGRES_USER:-vaultory}:${POSTGRES_PASSWORD:-vaultory_dev_password}@postgres:5432/${POSTGRES_DB:-vaultory_dev}?sslmode=disable
+      # In the environment rather than on the command line, so `goto` and `force` can reuse it.
+      # The password is not in it: golang-migrate quotes the whole URL in its errors, and since #62
+      # `make up` prints those. lib/pq reads PGPASSWORD instead (feature 012, FR-008).
+      MIGRATE_DATABASE_URL: postgres://${POSTGRES_USER:-vaultory}@postgres:5432/${POSTGRES_DB:-vaultory_dev}?sslmode=disable
+      PGPASSWORD: ${POSTGRES_PASSWORD:-vaultory_dev_password}
       MIGRATIONS_PATH: /migrations
     entrypoint: ["/bin/sh", "/scripts/migrate.sh"]
     command: []

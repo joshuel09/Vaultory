@@ -13,7 +13,10 @@
 # It never reverses anything on its own. Which way to go is the developer's choice (FR-005).
 #
 # Environment:
-#   MIGRATE_DATABASE_URL  the database. Carries the password, so it is never printed.
+#   MIGRATE_DATABASE_URL  the database, without a password. golang-migrate quotes the whole URL in
+#                         its errors, and this script's output reaches `make up`, so a URL carrying
+#                         a password is refused rather than risk printing it (FR-008).
+#   PGPASSWORD            the password, which lib/pq reads on golang-migrate's behalf
 #   MIGRATIONS_PATH       the migrations directory (default /migrations)
 #   MIGRATE_BIN           the golang-migrate binary (default: migrate)
 #
@@ -28,6 +31,21 @@ if [ -z "${MIGRATE_DATABASE_URL:-}" ]; then
 	echo "migrate.sh: MIGRATE_DATABASE_URL is not set." >&2
 	exit 2
 fi
+
+# The user part of the URL, between "scheme://" and the last "@" before the host. A ":" in it
+# means a password. The URL itself is never echoed, not even here.
+authority=${MIGRATE_DATABASE_URL#*://}
+authority=${authority%%/*}
+case "$authority" in
+*@*)
+	case "${authority%@*}" in
+	*:*)
+		echo "migrate.sh: MIGRATE_DATABASE_URL carries a password. Put it in PGPASSWORD instead, so no error can print it." >&2
+		exit 2
+		;;
+	esac
+	;;
+esac
 
 run_migrate() {
 	"$MIGRATE_BIN" -path "$MIGRATIONS_PATH" -database "$MIGRATE_DATABASE_URL" "$@"
