@@ -32,18 +32,41 @@ if [ -z "${MIGRATE_DATABASE_URL:-}" ]; then
 	exit 2
 fi
 
-# The user part of the URL, between "scheme://" and the last "@" before the host. A ":" in it
-# means a password. The URL itself is never echoed, not even here.
+# A password can ride in the URL two ways: in the user part ("user:secret@host"), or as a query
+# parameter ("?password=secret"), which lib/pq also reads. Either is refused. The URL itself is
+# never echoed, not even here.
+refuse_password() {
+	echo "migrate.sh: MIGRATE_DATABASE_URL carries a password$1. Put it in PGPASSWORD instead, so no error can print it." >&2
+	exit 2
+}
+
+# The user part: the authority is everything after "scheme://" up to the first "/", "?" or "#",
+# and the user part is what comes before its last "@". A ":" in it means a password.
 authority=${MIGRATE_DATABASE_URL#*://}
 authority=${authority%%/*}
+authority=${authority%%\?*}
+authority=${authority%%#*}
 case "$authority" in
 *@*)
 	case "${authority%@*}" in
-	*:*)
-		echo "migrate.sh: MIGRATE_DATABASE_URL carries a password. Put it in PGPASSWORD instead, so no error can print it." >&2
-		exit 2
-		;;
+	*:*) refuse_password "" ;;
 	esac
+	;;
+esac
+
+# The query: each key is percent-decoded before lib/pq reads it, so "p%61ssword" is "password".
+# Only the letters of "password" need decoding to tell; case is folded as well, to err on the side
+# of refusing. Every other key — sslmode, for one — passes.
+case "$MIGRATE_DATABASE_URL" in
+*\?*)
+	query=${MIGRATE_DATABASE_URL#*\?}
+	query=${query%%#*}
+	if printf '%s\n' "$query" | tr '&;' '\n\n' | sed 's/=.*//' | tr 'A-Z' 'a-z' |
+		sed 's/%70/p/g; s/%61/a/g; s/%73/s/g; s/%77/w/g; s/%6f/o/g; s/%72/r/g; s/%64/d/g;
+			s/%50/p/g; s/%41/a/g; s/%53/s/g; s/%57/w/g; s/%4f/o/g; s/%52/r/g; s/%44/d/g' |
+		grep -qx password; then
+		refuse_password " as a query parameter"
+	fi
 	;;
 esac
 
