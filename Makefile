@@ -6,14 +6,23 @@
 COMPOSE := docker compose
 
 .DEFAULT_GOAL := help
-.PHONY: help up watch down logs ps reset test test-e2e shell-backend shell-db check
+.PHONY: help up watch down logs ps reset test test-e2e shell-backend shell-db check migrate-to
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[1m%-16s\033[0m %s\n", $$1, $$2}'
 
 up: ## Start the stack (database, migrations, backend, frontend)
-	$(COMPOSE) --profile dev up --build -d
+	@# When the migrations step fails, its own explanation is the useful part — and `up -d` does not
+	@# print it. Show that step's output, and only when that step is what failed, so an unrelated
+	@# failure is not buried under it (feature 012).
+	@$(COMPOSE) --profile dev up --build -d || { \
+		status=$$?; \
+		if [ "$$($(COMPOSE) --profile dev ps -a --format '{{.ExitCode}}' migrate 2>/dev/null)" != "0" ]; then \
+			$(COMPOSE) --profile dev logs --no-log-prefix migrate 2>/dev/null; \
+		fi; \
+		exit $$status; \
+	}
 	@echo
 	@echo "  Vaultory is starting on http://localhost:$${VAULTORY_FRONTEND_PORT:-3000}"
 	@echo
@@ -49,6 +58,13 @@ test-e2e: ## Run the browser suite. Requires `make up` first.
 	@# Both profiles: the e2e container shares the frontend's network namespace, so that service
 	@# has to be part of the project Compose is resolving. It already had to be running anyway.
 	$(COMPOSE) --profile dev --profile e2e run --rm e2e
+
+# For a database ahead of the checkout (feature 012): run from the branch whose migrations are
+# applied, since only it has the files that undo them. Never runs without a version, and never on
+# its own — `make up` only ever suggests it.
+migrate-to: ## Move the dev database to VERSION using this checkout's migrations, e.g. VERSION=10
+	@[ -n "$(VERSION)" ] || { echo "Say which version: make migrate-to VERSION=10"; exit 2; }
+	$(COMPOSE) --profile dev run --rm migrate goto $(VERSION)
 
 shell-backend: ## Open a shell in the backend container
 	$(COMPOSE) --profile dev exec backend sh
