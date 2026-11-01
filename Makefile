@@ -16,10 +16,18 @@ up: ## Start the stack (database, migrations, backend, frontend)
 	@# When the migrations step fails, its own explanation is the useful part — and `up -d` does not
 	@# print it. Show that step's output, and only when that step is what failed, so an unrelated
 	@# failure is not buried under it (feature 012).
-	@$(COMPOSE) --profile dev up --build -d || { \
+	@#
+	@# "That step" means this invocation's: the container can be left over from an earlier run, with
+	@# its exit code and log still readable (#70). Logs since this run started are empty unless
+	@# migrate ran now; the exit code then says whether it failed. The time carries a Z, or Docker
+	@# reads it as local time.
+	@start=$$(date -u +%Y-%m-%dT%H:%M:%SZ); \
+	$(COMPOSE) --profile dev up --build -d || { \
 		status=$$?; \
-		if [ "$$($(COMPOSE) --profile dev ps -a --format '{{.ExitCode}}' migrate 2>/dev/null)" != "0" ]; then \
-			$(COMPOSE) --profile dev logs --no-log-prefix migrate 2>/dev/null; \
+		log=$$($(COMPOSE) --profile dev logs --since "$$start" --no-log-prefix migrate 2>/dev/null); \
+		if [ -n "$$log" ] && \
+			[ "$$($(COMPOSE) --profile dev ps -a --format '{{.ExitCode}}' migrate 2>/dev/null)" != "0" ]; then \
+			printf '%s\n' "$$log"; \
 		fi; \
 		exit $$status; \
 	}
