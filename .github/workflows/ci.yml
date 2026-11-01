@@ -225,8 +225,15 @@ jobs:
             echo "  git rebase --exec 'git commit --amend --no-edit --reset-author' $BASE"
             echo
             echo "For a 'co-author' line, the address is in the commit message, so amending the"
-            echo "author does not touch it. Reword the named commit and delete the trailer:"
+            echo "author does not touch it. Reword the named commit and correct the address:"
             echo "  git rebase -i $BASE"
+            echo
+            echo "Replace the address with that person's own noreply address rather than deleting"
+            echo "the trailer — deleting it removes their credit for the work."
+            echo "If the named commit is a merge commit, plain -i drops it from the list; use"
+            echo "  git rebase -i --rebase-merges $BASE"
+            echo "and check the merge resolution afterwards, since changes made only in the merge"
+            echo "can be lost."
             exit 1
           fi
 
