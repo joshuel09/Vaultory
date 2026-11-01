@@ -29,3 +29,11 @@ Issue #77, found by review of #76. Scope: FR-008's guard and its two gaps.
 
 
 **T013 as run** (2026-11-01, PostgreSQL 17.6 with `scram-sha-256`, migrate 4.18.1, a dummy password). The gap is real: with no guard, migrate connects with `?password=` and, given a wrong one, prints it once. With the guard, `password`, `p%61ssword`, `%70%41%73%73%77%4F%72%64`, `PASSWORD`, a `;` separator and a bare `password` key are all refused with exit 2, as are a user-part password with and without a path; the password appears 0 times in each. Accepted: `sslmode` alone, `password` as a value, `passwordx` as a key, an `@` and `:` inside the query (with and without a path — before T011, the no-path form was wrongly refused), and a `#password=` fragment. T010's cases again: wrong `PGPASSWORD` prints no password; `goto 9` and `up` work.
+
+## Phase 4: Convergence
+
+Issue #70. Scope: FR-003 as amended — which migrate run `make up` reports.
+
+- [ ] T014 `Makefile`: `up` records the time it starts, in UTC with an explicit `Z` so Docker cannot read it as local time; on failure it reads the `migrate` log with `--since` that time, and prints it only when there is some (the step ran in this invocation) and the step's exit code is not 0 (it failed). The successful lines of an earlier run no longer print above the error, per FR-003 (contradicts)
+- [ ] T015 Verify `up`'s failure path with a stand-in for `docker compose` that answers `up`, `ps` and `logs --since` as each case would: an unrelated failure with a leftover failed `migrate` (nothing printed), migrate failing in this run (printed), migrate succeeding in this run under an unrelated failure (nothing printed), and success (no log); the exit status is always `up`'s own, per FR-003 (missing)
+

@@ -75,6 +75,10 @@ target to version 10; the database is at 10, and `make up` on a checkout ending 
   migrations have been applied; that the data is intact; and the command that resolves it.
 - **FR-003**: That message MUST be visible in the output of `make up` itself, not only in the
   migrations container's log.
+  It MUST be shown only when the migrations step ran in that same `make up` and failed: a
+  container left over from an earlier run MUST NOT be read, and a step that succeeded MUST NOT be
+  printed under some other failure. *Amended 2026-11-01 (#70): the leftover container's exit code
+  and log were shown after an unrelated build failure, as a confident and false explanation.*
 - **FR-004**: A make target MUST move the development database to a given version using the current
   checkout's migrations, and MUST refuse to run without a version.
 - **FR-005**: Nothing MUST be reversed automatically. Which way to go is the developer's choice.
