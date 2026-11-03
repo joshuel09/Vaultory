@@ -62,8 +62,15 @@ test-e2e: ## Run the browser suite. Requires `make up` first.
 # For a database ahead of the checkout (feature 012): run from the branch whose migrations are
 # applied, since only it has the files that undo them. Never runs without a version, and never on
 # its own — `make up` only ever suggests it.
+#
+# It asks first, the way `reset` does. Going to a lower version is the only thing this target is
+# for, and that reverses the migrations above it: a down drops what its up created, so the data in
+# there goes too. The number is typed by somebody who has just been told their database is
+# unfamiliar, which is the worst moment to act on a typo without a question.
 migrate-to: ## Move the dev database to VERSION using this checkout's migrations, e.g. VERSION=10
 	@[ -n "$(VERSION)" ] || { echo "Say which version: make migrate-to VERSION=10"; exit 2; }
+	@printf "This reverses every migration above $(VERSION) and deletes what they hold. Type 'yes' to continue: " && \
+		read ans && [ "$$ans" = "yes" ] || (echo "Cancelled."; exit 1)
 	$(COMPOSE) --profile dev run --rm migrate goto $(VERSION)
 
 shell-backend: ## Open a shell in the backend container
