@@ -42,6 +42,12 @@ refuse_password() {
 
 # The user part: the authority is everything after "scheme://" up to the first "/", "?" or "#",
 # and the user part is what comes before its last "@". A ":" in it means a password.
+#
+# With no "@" the authority is a host, or a host and a port, and anything else standing there is a
+# password that cut its own URL short. "postgres://user:secret?part@host/db" ends its authority at
+# the "?", so there is no "@" left to find and "user:secret" is what golang-migrate quotes back in
+# an error. A port is digits, so that is what is checked. A bracketed IPv6 literal is the one host
+# that brings colons of its own, and carries no port to check.
 authority=${MIGRATE_DATABASE_URL#*://}
 authority=${authority%%/*}
 authority=${authority%%\?*}
@@ -50,6 +56,12 @@ case "$authority" in
 *@*)
 	case "${authority%@*}" in
 	*:*) refuse_password "" ;;
+	esac
+	;;
+\[*\]) ;;
+*:*)
+	case "${authority##*:}" in
+	'' | *[!0-9]*) refuse_password " where its host belongs" ;;
 	esac
 	;;
 esac
