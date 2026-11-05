@@ -16,10 +16,23 @@ up: ## Start the stack (database, migrations, backend, frontend)
 	@# When the migrations step fails, its own explanation is the useful part — and `up -d` does not
 	@# print it. Show that step's output, and only when that step is what failed, so an unrelated
 	@# failure is not buried under it (feature 012).
-	@$(COMPOSE) --profile dev up --build -d || { \
+	@#
+	@# "That step" means this invocation's: the container can be left over from an earlier run, with
+	@# its exit code and log still readable (#70). Docker's own StartedAt says whether it ran now.
+	@# It changes on every start and carries nanoseconds, where `date` here gives whole seconds and
+	@# two runs inside the same second are indistinguishable by it (#81). The same value bounds the
+	@# log, because starting a container again keeps the earlier run's lines in front of the new
+	@# ones. An absent container inspects to nothing, which differs from anything and so reads as
+	@# "ran now" — correct, since there was nothing to be stale.
+	@before=$$(docker inspect -f '{{.State.StartedAt}}' \
+		"$$($(COMPOSE) --profile dev ps -aq migrate 2>/dev/null | head -n1)" 2>/dev/null); \
+	$(COMPOSE) --profile dev up --build -d || { \
 		status=$$?; \
-		if [ "$$($(COMPOSE) --profile dev ps -a --format '{{.ExitCode}}' migrate 2>/dev/null)" != "0" ]; then \
-			$(COMPOSE) --profile dev logs --no-log-prefix migrate 2>/dev/null; \
+		id=$$($(COMPOSE) --profile dev ps -aq migrate 2>/dev/null | head -n1); \
+		started=$$(docker inspect -f '{{.State.StartedAt}}' "$$id" 2>/dev/null); \
+		if [ -n "$$started" ] && [ "$$started" != "$$before" ] && \
+			[ "$$(docker inspect -f '{{.State.ExitCode}}' "$$id" 2>/dev/null)" != "0" ]; then \
+			$(COMPOSE) --profile dev logs --since "$$started" --no-log-prefix migrate; \
 		fi; \
 		exit $$status; \
 	}
