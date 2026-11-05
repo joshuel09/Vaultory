@@ -39,3 +39,14 @@
 
 - [X] T018 `frontend/tests/e2e/search-sort.spec.ts`: search, sort, edit and return (written; runs with the Docker stack)
 - [X] T019 Full gate: backend gofmt, vet (± integration tag), build, unit, integration, contract; frontend lint, typecheck, unit, build
+
+## Phase 7: Convergence
+
+Issue #71, found by review of #59. Scope: FR-016.
+
+- [ ] T020 `backend/internal/store/postgres/gallery_cursor.go`: `decodeGalleryCursor` checks the value against its order's `cast` — `numeric` a plain decimal, `date` a calendar date, `timestamptz` a timestamp PostgreSQL can have written, `text` anything — and refuses any other with the cursor error, so no request value reaches a cast that can fail, per FR-016 (missing)
+- [ ] T021 `backend/internal/store/postgres`: one exported `ErrCursorInvalid` for both the gallery and the Trash cursors; `internal/transport/httpapi/collectibles.go` and `trash.go` test it with `errors.Is` instead of matching the message text, per FR-012, FR-016 (partial)
+- [ ] T022 [P] `backend/internal/store/postgres/gallery_cursor_test.go`: every order's own cursor round-trips; values of the wrong type for `price_*`, `purchased_*`, `released_*`, `added_*` are refused; any text is accepted for `name_*`, per FR-016 (missing)
+- [ ] T023 [P] `backend/tests/integration/search_sort_test.go` and `backend/tests/contract/list_filters_test.go`: the issue's three cursors (`price_desc` "abc", `purchased_asc` "not-a-date", `added_desc` "nonsense") are refused by `List` with `ErrCursorInvalid` and answered 400 over HTTP; each order's real next page still works, per FR-016, SC-002 (missing)
+- [ ] T024 Full gate: backend gofmt, vet (± integration tag), build, unit, integration, contract
+

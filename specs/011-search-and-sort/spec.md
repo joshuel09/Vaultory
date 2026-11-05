@@ -136,6 +136,11 @@ gallery returns with the same filter, search and sort.
   sharing, on returning from editing, and when the status filter changes; and MUST be shown in the
   controls.
 - **FR-012**: A page reference from one sort order MUST be refused when used with another.
+- **FR-016**: A page reference that is not one this system issued — altered, truncated, or carrying a
+  value that is not of its order's kind (a price that is not a number, a date that is not a date) —
+  MUST be refused as the collector's mistake with the same field-level message as FR-012, never as
+  a server failure. *Added 2026-11-05 (#71): a structurally valid reference with a value of the
+  wrong type reached the database and answered 500.*
 - **FR-013**: An unknown sort order MUST be refused with a field-level message.
 - **FR-014**: Search and sort MUST only ever consider the acting collector's own collectibles in
   their vault — never another collector's, never the Trash (010 FR-002).
