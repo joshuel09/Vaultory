@@ -685,22 +685,21 @@ func encodeCursor(t time.Time, id uuid.UUID) string {
 }
 
 func decodeCursor(raw string) (time.Time, uuid.UUID, error) {
-	invalid := errors.New("cursor is not valid")
 	data, err := base64.RawURLEncoding.DecodeString(raw)
 	if err != nil {
-		return time.Time{}, uuid.Nil, invalid
+		return time.Time{}, uuid.Nil, ErrCursorInvalid
 	}
 	nanos, idPart, ok := strings.Cut(string(data), "|")
 	if !ok {
-		return time.Time{}, uuid.Nil, invalid
+		return time.Time{}, uuid.Nil, ErrCursorInvalid
 	}
 	n, err := strconv.ParseInt(nanos, 10, 64)
 	if err != nil {
-		return time.Time{}, uuid.Nil, invalid
+		return time.Time{}, uuid.Nil, ErrCursorInvalid
 	}
 	id, err := uuid.Parse(idPart)
 	if err != nil {
-		return time.Time{}, uuid.Nil, invalid
+		return time.Time{}, uuid.Nil, ErrCursorInvalid
 	}
 	return time.Unix(0, n).UTC(), id, nil
 }

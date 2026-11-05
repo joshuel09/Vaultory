@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -25,7 +26,10 @@ import (
 // galleryCursorVersion marks this layout, so a legacy two-part cursor can still be told apart.
 const galleryCursorVersion = "v2"
 
-var errCursorInvalid = errors.New("cursor is not valid")
+// ErrCursorInvalid is a page reference this system did not issue, or one issued for another order.
+// It is the client's mistake, so the transport answers it with 400 (feature 011, FR-012, FR-016).
+// Shared by the gallery and the Trash, which test for it with errors.Is rather than by its text.
+var ErrCursorInvalid = errors.New("cursor is not valid")
 
 type galleryCursor struct {
 	order   collectible.SortOrder
@@ -50,7 +54,7 @@ func encodeGalleryCursor(c galleryCursor) string {
 func decodeGalleryCursor(raw string, order collectible.SortOrder) (galleryCursor, error) {
 	data, err := base64.RawURLEncoding.DecodeString(raw)
 	if err != nil {
-		return galleryCursor{}, errCursorInvalid
+		return galleryCursor{}, ErrCursorInvalid
 	}
 	parts := strings.SplitN(string(data), "|", 5)
 
@@ -58,15 +62,15 @@ func decodeGalleryCursor(raw string, order collectible.SortOrder) (galleryCursor
 	// gallery open across a deploy can keep scrolling.
 	if len(parts) == 2 {
 		if order != collectible.SortAddedDesc {
-			return galleryCursor{}, errCursorInvalid
+			return galleryCursor{}, ErrCursorInvalid
 		}
 		nanos, err := strconv.ParseInt(parts[0], 10, 64)
 		if err != nil {
-			return galleryCursor{}, errCursorInvalid
+			return galleryCursor{}, ErrCursorInvalid
 		}
 		id, err := uuid.Parse(parts[1])
 		if err != nil {
-			return galleryCursor{}, errCursorInvalid
+			return galleryCursor{}, ErrCursorInvalid
 		}
 		return galleryCursor{
 			order: order,
@@ -76,16 +80,60 @@ func decodeGalleryCursor(raw string, order collectible.SortOrder) (galleryCursor
 	}
 
 	if len(parts) != 5 || parts[0] != galleryCursorVersion || parts[1] != string(order) {
-		return galleryCursor{}, errCursorInvalid
+		return galleryCursor{}, ErrCursorInvalid
 	}
 	if parts[2] != "0" && parts[2] != "1" {
-		return galleryCursor{}, errCursorInvalid
+		return galleryCursor{}, ErrCursorInvalid
 	}
 	id, err := uuid.Parse(parts[3])
 	if err != nil {
-		return galleryCursor{}, errCursorInvalid
+		return galleryCursor{}, ErrCursorInvalid
 	}
-	return galleryCursor{order: order, missing: parts[2] == "1", id: id, value: parts[4]}, nil
+	c := galleryCursor{order: order, missing: parts[2] == "1", id: id, value: parts[4]}
+	// The value is cast back in the query, and a cast that fails is a database error, not a
+	// refusal: a reference altered to carry "abc" as a price answered 500 (#71). So nothing goes
+	// to the cast that the cast could reject. When the last entry was missing the value, it is
+	// not sent at all.
+	if !c.missing {
+		spec, err := specFor(order)
+		if err != nil || !validCursorValue(spec.cast, c.value) {
+			return galleryCursor{}, ErrCursorInvalid
+		}
+	}
+	return c, nil
+}
+
+// cursorNumeric is numeric's text form as PostgreSQL writes it for a price: digits, and a fraction.
+var cursorNumeric = regexp.MustCompile(`^-?[0-9]{1,20}(\.[0-9]{1,20})?$`)
+
+// cursorTimestampLayouts are timestamptz's text forms under DateStyle ISO, whatever the session's
+// time zone: its offset is written as hours, hours and minutes, or all three.
+var cursorTimestampLayouts = []string{
+	"2006-01-02 15:04:05.999999999-07",
+	"2006-01-02 15:04:05.999999999-07:00",
+	"2006-01-02 15:04:05.999999999-07:00:00",
+}
+
+// validCursorValue says whether value is something its cast accepts — the database's own text form
+// of the sorted-by key, as encodeGalleryCursor wrote it.
+func validCursorValue(cast, value string) bool {
+	switch cast {
+	case "text":
+		return true
+	case "numeric":
+		return cursorNumeric.MatchString(value)
+	case "date":
+		_, err := time.Parse("2006-01-02", value)
+		return err == nil
+	case "timestamptz":
+		for _, layout := range cursorTimestampLayouts {
+			if _, err := time.Parse(layout, value); err == nil {
+				return true
+			}
+		}
+		return false
+	}
+	return false
 }
 
 // sortSpec is how one order becomes SQL. Every field is a fixed string chosen by the order; nothing

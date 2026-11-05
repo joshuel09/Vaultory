@@ -5,6 +5,7 @@ package integration
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -312,6 +313,38 @@ func TestACursorBelongsToItsOrder(t *testing.T) {
 	}
 	if _, err := svc.List(ctx, collectorA, postgres.ListFilter{Sort: collectible.SortNameAsc}, legacy, 24); err == nil {
 		t.Error("a legacy cursor was accepted for a non-default order")
+	}
+}
+
+// T023 — FR-016: a structurally valid cursor whose value is not of its order's kind is refused as
+// an invalid cursor, not passed to a cast that fails in the database (#71). Each order's real next
+// page is still accepted under the stricter check.
+func TestATamperedCursorValueIsRefused(t *testing.T) {
+	_, svc := freshStore(t)
+	ctx := context.Background()
+	seedForSorting(t, collectorA, 30)
+
+	for order, value := range map[collectible.SortOrder]string{
+		collectible.SortPriceDesc:    "abc",
+		collectible.SortPurchasedAsc: "not-a-date",
+		collectible.SortAddedDesc:    "nonsense",
+	} {
+		raw := "v2|" + string(order) + "|0|" + uuid.NewString() + "|" + value
+		cursor := base64.RawURLEncoding.EncodeToString([]byte(raw))
+		_, err := svc.List(ctx, collectorA, postgres.ListFilter{Sort: order}, cursor, 24)
+		if !errors.Is(err, postgres.ErrCursorInvalid) {
+			t.Errorf("%s with %q: got %v, want ErrCursorInvalid", order, value, err)
+		}
+	}
+
+	for _, order := range collectible.AllSortOrders() {
+		page, err := svc.List(ctx, collectorA, postgres.ListFilter{Sort: order}, "", 10)
+		if err != nil || page.NextCursor == "" {
+			t.Fatalf("%s first page: %v", order, err)
+		}
+		if _, err := svc.List(ctx, collectorA, postgres.ListFilter{Sort: order}, page.NextCursor, 10); err != nil {
+			t.Errorf("%s: its own next page was refused: %v", order, err)
+		}
 	}
 }
 

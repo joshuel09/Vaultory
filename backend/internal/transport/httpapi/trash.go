@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -53,7 +52,7 @@ func (s *Server) handleListTrash(w http.ResponseWriter, r *http.Request, collect
 
 	page, err := s.service.ListTrash(r.Context(), collector, q.Get("cursor"), limit)
 	if err != nil {
-		if strings.Contains(err.Error(), "cursor is not valid") {
+		if errors.Is(err, postgres.ErrCursorInvalid) {
 			WriteValidationFailed(w, []FieldError{{
 				Field:   "cursor",
 				Code:    FieldInvalidValue,
