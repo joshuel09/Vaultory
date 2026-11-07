@@ -18,8 +18,9 @@ import (
 //
 // It carries everything the next page's predicate needs: which order it belongs to, whether the
 // last entry was missing the sorted-by value, that value, and the last entry's id. The value is the
-// database's own text form of the key and goes back with an explicit cast, so a price is never a
-// float on the way round (Constitution IV) and a tie stays a tie.
+// key as the database renders it with to_json — ISO 8601 for dates and timestamps, whatever the
+// session's DateStyle (FR-017) — and goes back with an explicit cast, so a price is never a float on
+// the way round (Constitution IV) and a tie stays a tie.
 //
 // Opaque to the client. Its layout is an encoding detail, not part of the contract.
 
@@ -106,16 +107,23 @@ func decodeGalleryCursor(raw string, order collectible.SortOrder) (galleryCursor
 // cursorNumeric is numeric's text form as PostgreSQL writes it for a price: digits, and a fraction.
 var cursorNumeric = regexp.MustCompile(`^-?[0-9]{1,20}(\.[0-9]{1,20})?$`)
 
-// cursorTimestampLayouts are timestamptz's text forms under DateStyle ISO, whatever the session's
-// time zone: its offset is written as hours, hours and minutes, or all three.
+// cursorTimestampLayouts are the timestamp forms the cursor carries. The store renders the key with
+// to_json, which is ISO 8601 ("T" between date and time) whatever the session's DateStyle, so this
+// check does not depend on how the database is configured to display dates (FR-017, #85). The
+// offset is hours, hours and minutes, or all three — that one follows the session's TimeZone. The
+// space-separated forms are what ::text wrote before #85, still accepted so a reference issued
+// then keeps working.
 var cursorTimestampLayouts = []string{
+	"2006-01-02T15:04:05.999999999-07",
+	"2006-01-02T15:04:05.999999999-07:00",
+	"2006-01-02T15:04:05.999999999-07:00:00",
 	"2006-01-02 15:04:05.999999999-07",
 	"2006-01-02 15:04:05.999999999-07:00",
 	"2006-01-02 15:04:05.999999999-07:00:00",
 }
 
-// validCursorValue says whether value is something its cast accepts — the database's own text form
-// of the sorted-by key, as encodeGalleryCursor wrote it.
+// validCursorValue says whether value is something its cast accepts — the sorted-by key as the store
+// rendered it with to_json, and encodeGalleryCursor wrote it.
 func validCursorValue(cast, value string) bool {
 	switch cast {
 	case "text":
