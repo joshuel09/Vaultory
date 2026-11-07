@@ -596,8 +596,11 @@ func (s *Store) List(
 	}
 
 	args := []any{collectorID, statusArg, filter.Series, filter.Manufacturer, words, limit + 1}
+	// The sorted-by key travels in the cursor as text. to_json renders dates and timestamps as
+	// ISO 8601 whatever the session's DateStyle, where ::text follows it — and a cursor rendered as
+	// 06/11/2026 would fail the cursor's own check on the next page (feature 011, FR-017, #85).
 	query := `
-		SELECT ` + collectibleColumns + `, (` + spec.key + `)::text
+		SELECT ` + collectibleColumns + `, to_json(` + spec.key + `) #>> '{}'
 		FROM collectibles c
 		LEFT JOIN collectible_images i ON i.id = c.image_id AND i.collector_id = c.collector_id
 		WHERE c.collector_id = $1
