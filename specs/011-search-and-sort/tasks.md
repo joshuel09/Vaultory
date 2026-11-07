@@ -52,3 +52,13 @@ Issue #71, found by review of #59. Scope: FR-016.
 
 
 **T024 as run** (2026-11-05, Go 1.26.10, PostgreSQL 17.6, migrations 1–12): gofmt clean; vet with and without the integration tag; build; unit, integration and contract all pass. With `validCursorValue` forced to accept everything, the new integration test gets the issue's three cast errors (`22P02`, `22007`, `22007`) and the contract test gets 500 for each — so both tests fail without the fix. Own cursors were also paged for every order with the session time zone set to Asia/Kolkata, America/St_Johns and Asia/Tokyo through the connection URL, to cover offsets written as `+05:30` and `-03:30`.
+
+## Phase 8: Convergence
+
+Issue #85, found by review of #84. Scope: FR-017.
+
+- [ ] T025 `backend/internal/store/postgres/collectibles.go`: render the sorted-by key for the cursor as `to_json(key) #>> '{}'` instead of `key::text`, which is ISO 8601 for dates and timestamps whatever `DateStyle` is, and unchanged for text and numeric, per FR-017 (contradicts)
+- [ ] T026 `backend/internal/store/postgres/gallery_cursor.go`: accept the ISO 8601 timestamp (`T` separator) the cursor now carries, keep accepting the space-separated form, and say beside the layouts why the text is DateStyle-free, per FR-016, FR-017 (partial)
+- [ ] T027 [P] Tests: the unit cases gain the `T` form; `backend/tests/integration/search_sort_test.go` pages every order to the end with the session's `DateStyle` set to `SQL, DMY` and to `German`, and with `TimeZone` Asia/Kolkata, per FR-017, SC-002 (missing)
+- [ ] T028 Full gate: backend gofmt, vet (± integration tag), build, unit, integration, contract
+
