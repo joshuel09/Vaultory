@@ -15,23 +15,36 @@ COMPOSE := docker compose
 # the worktree, it adopts this one's and migrates its database to whatever the branch carries. That
 # happened on 29 October and left the main checkout unable to start (#87).
 #
-# A worktree is exactly detectable: its git dir is not the common one. Refused rather than named
-# automatically, because a different default would move everyone's existing volumes, and because
-# the second stack wants the same host ports — which is the developer's decision, not ours.
+# A worktree is exactly detectable: its git dir is not the common one. Asked of git first, and of
+# the filesystem when git has nothing to say — a command that is missing or fails answers with two
+# empty strings, which compare equal, and a guard that reads that as "not a worktree" would wave
+# `make reset` through against the main checkout's data. What makes a linked worktree one is that
+# its `.git` is a regular file naming the real git dir, and that is true whether or not git can be
+# run at all.
+#
+# Refused rather than named automatically, because a different default would move everyone's
+# existing volumes, and because the second stack wants the same host ports — which is the
+# developer's decision, not ours.
 one-stack-per-checkout:
-	@[ "$$(git rev-parse --git-dir 2>/dev/null)" = "$$(git rev-parse --git-common-dir 2>/dev/null)" ] \
-		|| [ -n "$$COMPOSE_PROJECT_NAME" ] \
-		|| { \
-			echo "This is a linked worktree, and compose.yaml pins one project name, so this would"; \
-			echo "drive the main checkout's containers and its development database — not a stack"; \
-			echo "of its own. Give this worktree its own:"; \
-			echo; \
-			echo "  COMPOSE_PROJECT_NAME=vaultory-$$(basename "$$PWD") make $(or $(MAKECMDGOALS),up)"; \
-			echo; \
-			echo "The ports are the same either way, so stop the other stack first, or set"; \
-			echo "VAULTORY_*_PORT in a .env beside compose.yaml."; \
-			exit 2; \
-		}
+	@if [ -n "$$COMPOSE_PROJECT_NAME" ]; then exit 0; fi; \
+	gitdir=$$(git rev-parse --git-dir 2>/dev/null); \
+	common=$$(git rev-parse --git-common-dir 2>/dev/null); \
+	if [ -n "$$gitdir" ] && [ -n "$$common" ]; then \
+		[ "$$gitdir" != "$$common" ] || exit 0; \
+	else \
+		[ -f "$(CURDIR)/.git" ] || exit 0; \
+	fi; \
+	{ \
+		echo "This is a linked worktree, and compose.yaml pins one project name, so this would"; \
+		echo "drive the main checkout's containers and its development database — not a stack"; \
+		echo "of its own. Give this worktree its own:"; \
+		echo; \
+		echo "  COMPOSE_PROJECT_NAME=vaultory-$$(basename "$$PWD") make $(or $(MAKECMDGOALS),up)"; \
+		echo; \
+		echo "The ports are the same either way, so stop the other stack first, or set"; \
+		echo "VAULTORY_*_PORT in a .env beside compose.yaml."; \
+		exit 2; \
+	}
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
