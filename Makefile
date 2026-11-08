@@ -9,7 +9,7 @@ COMPOSE := docker compose
 .PHONY: help up watch down logs ps reset test test-e2e shell-backend shell-db check migrate-to
 
 help: ## Show this help
-	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
+	@grep -hE '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[1m%-16s\033[0m %s\n", $$1, $$2}'
 
 up: ## Start the stack (database, migrations, backend, frontend)
