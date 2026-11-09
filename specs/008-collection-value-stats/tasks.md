@@ -279,7 +279,19 @@ The shared helper reads asynchronously published, database-wide transaction tota
 not the SQL queries SC-004 and FR-006 require us to bound. Product behavior is unchanged.
 
 - [X] T086 Replace the integration query-count helper with test-only pgx tracing scoped to the operation's context; count queries inside transactions and across pool connections, excluding transaction-control statements and unrelated fixture queries (FR-006, SC-004; also 001 T082 and 006 T075).
-- [ ] T087 Verify the measurement against a known sequence spanning two connections and multiple queries in one transaction, and assert nonzero fixed gallery/statistics budgets so a disconnected tracer cannot silently pass (FR-006, SC-004).
-- [ ] T088 Run the affected checks repeatedly against a disposable PostgreSQL database, run the full backend gate and required PR CI, and correct the measurement documentation with actual results (FR-006, SC-004).
+- [X] T087 Verify the measurement against a known sequence spanning two connections and multiple queries in one transaction, and assert nonzero fixed gallery/statistics budgets so a disconnected tracer cannot silently pass (FR-006, SC-004).
+- [X] T088 Run the affected checks repeatedly against a disposable PostgreSQL database, run the full backend gate and required PR CI, and correct the measurement documentation with actual results (FR-006, SC-004).
 
 Out of scope: changing statistics isolation, product behavior, API contracts, or schema.
+
+**T086–T088 verification (2026-11-09):** `go vet ./...`, `go build ./...`,
+`go test ./tests/unit/... ./internal/...`, and `go vet -tags integration ./...`
+passed. `COMPOSE_PROJECT_NAME=vaultory-issue91 make test` passed unit, integration
+and contract suites against its disposable PostgreSQL database. The four affected
+tests (`TestQueryCounterMeasuresOnlyScopedQueries`, gallery, statistics and
+image-cleanup query budgets) passed with `-count=10` (40 executions). Gallery
+reads counted 2 queries; statistics counted 3. Edit/delete counted 4/2 queries
+with an empty queue and 24/22 with 200 pending images. The tracer calibration
+counted exactly 5 data queries, including 2 in one transaction. Required PR CI
+passed on implementation commit `23c0f21`; final-head checks remain enforced by
+the repository before merge. No development database was used.
