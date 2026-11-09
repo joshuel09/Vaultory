@@ -70,6 +70,7 @@ type queryCountTracer struct{}
 
 var _ pgx.QueryTracer = queryCountTracer{}
 
+// TraceQueryStart counts data queries only when their context carries a measurement.
 func (queryCountTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
 	counter, ok := ctx.Value(queryCounterKey{}).(*atomic.Int64)
 	if !ok {
@@ -88,14 +89,17 @@ func (queryCountTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data p
 	return ctx
 }
 
+// TraceQueryEnd needs no bookkeeping because query starts are counted synchronously.
 func (queryCountTracer) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
 
+// countQueries measures one operation without including fixture work or other contexts.
 func countQueries(ctx context.Context, work func(context.Context)) int64 {
 	counter := &atomic.Int64{}
 	work(context.WithValue(ctx, queryCounterKey{}, counter))
 	return counter.Load()
 }
 
+// tracedPool copies the test database configuration and instruments every new connection.
 func tracedPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	cfg := pool.Config()
@@ -108,6 +112,7 @@ func tracedPool(t *testing.T) *pgxpool.Pool {
 	return db
 }
 
+// freshTracedService uses the standard fixtures with an operation-traced repository.
 func freshTracedService(t *testing.T) *collection.Service {
 	t.Helper()
 	freshStore(t) // Reset and seed the same database as every other integration test.

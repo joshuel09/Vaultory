@@ -111,6 +111,7 @@ func freshStore(t *testing.T) (*postgres.Store, *collection.Service) {
 	return serviceForPool(t, pool)
 }
 
+// serviceForPool keeps the standard image store and fixed clock for either test pool.
 func serviceForPool(t *testing.T, db *pgxpool.Pool) (*postgres.Store, *collection.Service) {
 	t.Helper()
 	store := postgres.NewStore(db)
