@@ -51,7 +51,7 @@ Vitest for frontend units; Playwright across desktop, tablet and mobile projects
 **Target Platform**: Linux containers under Docker Compose; browsers from mobile to desktop.
 
 **Performance Goals**: the complete view costs three statements regardless of collection size
-(SC-004), asserted with the existing `statementCount(t)` helper. Render within the budget the
+(SC-004), asserted with operation-scoped pgx query tracing in the integration tests (issue #91). Render within the budget the
 gallery already meets, for a vault an order of magnitude larger than typical (SC-005).
 
 **Constraints**: exact decimals end to end; every query predicated on `collector_id` from the

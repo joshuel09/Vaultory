@@ -231,3 +231,30 @@ so rather than repeating a figure that does not mean what its name suggests.
 **Rejected**: `REPEATABLE READ`. The default isolation already gives each statement a consistent
 snapshot, and a single transaction is what makes the three agree with each other; a stricter level
 buys nothing here and invites serialisation failures on a read-only path.
+
+
+## Verification correction — direct query counts (issue #91)
+
+Decision 10's discussion of transaction counters is historical. The main CI run
+[42485143702](https://github.com/joshuel09/Vaultory/actions/runs/42485143702) reported
+a cost of 1 for the empty vault and 0 for the populated vault. PostgreSQL
+[cumulative statistics](https://www.postgresql.org/docs/17/monitoring-stats.html#MONITORING-STATS-VIEWS)
+are published asynchronously; `xact_commit + xact_rollback` counts database-wide
+transactions, not queries. Even a perfectly fresh counter cannot detect extra
+queries inside one transaction.
+
+The integration tests now install a pgx QueryTracer on a test-only pool and carry
+a counter in the context of the measured service call. It sees queries on every
+connection used by that call, including each query inside a transaction, while
+excluding fixture work and unrelated calls. BEGIN/COMMIT/ROLLBACK and savepoint
+control are excluded from data-query budgets. A known five-query sequence on two
+connections, including two queries in a single transaction and an unscoped query
+during measurement, verifies that distinction. An empty operation must count zero;
+gallery reads must count two and statistics must count three. The bounded
+image-cleanup check uses the same measurement.
+
+This counts pgx Query/QueryRow/Exec calls, not statements hidden inside a future
+multi-statement string or SendBatch. Current measured paths use neither; add the
+appropriate tracing coverage if that changes. No production instrumentation or
+dependency is added. This verification change does not establish or repair the
+separate snapshot-isolation claim in Decision 10.
