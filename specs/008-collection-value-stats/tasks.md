@@ -271,3 +271,15 @@ criterion was already missed at 458.6 MB; this feature adds about 2.4 MB. Issue 
 | Traceability — unspecified group | claimed 4, its link returned **4**; `?manufacturer=` returned **0**, so the empty filter is a filter and not a no-op |
 | N+1 | `TestStatisticsCostDoesNotGrowWithCollection` passed |
 | Privacy | a second collector sees `totalCount: 0`; no session answers **401**; the endpoint takes no parameters at all |
+
+## Query-count verification repair — issue #91
+
+The main CI run at `09a6e23` failed T030's statistics-cost check (1 versus 0).
+The shared helper reads asynchronously published, database-wide transaction totals,
+not the SQL queries SC-004 and FR-006 require us to bound. Product behavior is unchanged.
+
+- [ ] T086 Replace the integration query-count helper with test-only pgx tracing scoped to the operation's context; count queries inside transactions and across pool connections, excluding transaction-control statements and unrelated fixture queries (FR-006, SC-004; also 001 T082 and 006 T075).
+- [ ] T087 Verify the measurement against a known sequence spanning two connections and multiple queries in one transaction, and assert nonzero fixed gallery/statistics budgets so a disconnected tracer cannot silently pass (FR-006, SC-004).
+- [ ] T088 Run the affected checks repeatedly against a disposable PostgreSQL database, run the full backend gate and required PR CI, and correct the measurement documentation with actual results (FR-006, SC-004).
+
+Out of scope: changing statistics isolation, product behavior, API contracts, or schema.
