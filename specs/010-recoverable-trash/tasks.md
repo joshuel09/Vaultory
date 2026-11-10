@@ -114,3 +114,17 @@
 
 T001 → T004–T006, T012, T015, T018. T002 → T003 → T009. T004 → T019. Backend stories before their
 frontend tasks. T030 after T005, since that change is what breaks them.
+
+## Phase 9: Convergence
+
+Issue #73, found by review of #58. Scope: comments that explain a mechanism wrongly, and one rule the
+frontend restates.
+
+- [ ] T032 `backend/migrations/000012_add_collectible_trash.up.sql`: the `collectibles_image_unique` comment says what a shared photograph does on destruction — a not-null violation from the composite `ON DELETE SET NULL`, so the destroy fails — not that it is silently stripped. Comment only; no schema change, per FR-018 (contradicts)
+- [ ] T033 `backend/internal/store/postgres/collectibles.go` (`Edit`, `Delete`) and `trash.go` (`PurgeExpiredTrash`): say beside each `releaseImage` call that clearing the collectible's reference first is required, not tidiness — reversed, the same `SET NULL` fails, per FR-018 (missing)
+- [ ] T034 `backend/internal/store/postgres/trash.go`: the purge's `DELETE` re-checks `deleted_at IS NOT NULL`, so a collectible restored between the select and the delete is never destroyed without relying on how READ COMMITTED re-evaluates a locked row — the same caution feature 009 Decision 2 takes, per FR-010 (partial)
+- [ ] T035 `frontend/lib/api/trash.ts`: one `TRASH_RETENTION_DAYS`, used by every sentence that states the retention — `UndoDeleteNotice`, `TrashList`, `DeleteCollectibleDialog`, `EditCollectibleForm`, the Trash page — instead of five written-out "30 days", per FR-006 (partial)
+- [ ] T036 [P] `backend/tests/unit/trash_retention_test.go`: fails when `TRASH_RETENTION_DAYS` in the frontend and `collection.TrashRetention()` disagree, so changing one and not the other is loud, per FR-006 (missing)
+- [ ] T037 [P] `backend/tests/integration/trash_test.go`: a collectible restored after the purge has chosen it is not destroyed, per FR-010, T034 (missing)
+- [ ] T038 Full gate: backend gofmt, vet (± integration tag), build, unit, integration, contract; frontend lint, typecheck, unit, build
+
