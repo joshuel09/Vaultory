@@ -158,14 +158,16 @@ it confirmed, and one it corrected:
 
 ## One transaction, one moment
 
-The three statements run inside a single read-only transaction (research.md Decision 10). Three
-independent reads observe three independent snapshots, and a collectible added between two of them is
-counted by one and not the other — which breaks FR-017 and FR-026 silently, and looks like a bug in
-the arithmetic rather than in the sequencing.
+The three statements run inside one explicitly read-only **Repeatable Read**
+transaction (research.md Decision 10, corrected by issue #93). A concurrent write
+committed after the first aggregate cannot enter either breakdown. A subsequent
+request opens a fresh snapshot and sees the committed change. Read-only mode at
+Read Committed alone would not provide this guarantee.
 
-Note for anyone extending `query_count_test.go`: its `statementCount` helper reads
-`xact_commit + xact_rollback`, so it counts **transactions**, not statements, despite the name. The
-property worth asserting is that the cost does not move between a small vault and a large one.
+The integration regression commits a write from another connection between the
+status query and the first breakdown, verifies the original counts/totals across
+all aggregates, then verifies the next request sees the new row. Operation-scoped
+pgx tracing (issue #91) separately verifies the unchanged three-query budget.
 
 ## Exactness
 

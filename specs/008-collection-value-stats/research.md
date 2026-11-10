@@ -204,34 +204,30 @@ whose entire value is being correct about numbers, for a page that is not on the
 
 ---
 
-## Decision 10 — The three statements share one read-only transaction
+## Decision 10 — One read-only Repeatable Read snapshot (corrected by issue #93)
 
-**Decision**: the three aggregates run inside a single read-only transaction, so every figure in a
-response describes the same moment.
+**Decision**: explicitly use `pgx.RepeatableRead` together with `pgx.ReadOnly`.
+The first aggregate establishes the snapshot; the remaining aggregates see that
+same state even if another connection commits a write between them. The next
+statistics request sees the later commit. No writer-blocking row locks, schema
+changes, extra data queries, or cached responses are introduced.
 
-**This was found by reading the test harness rather than by reasoning.**
-`backend/tests/integration/query_count_test.go` names its helper `statementCount`, but what it
-actually reads is `xact_commit + xact_rollback` from `pg_stat_database` — it counts **transactions**,
-not statements. Checking that before writing a test that asserts "three statements" turned up the
-real problem it would have missed.
+The original rationale wrongly claimed that one read-only transaction at the
+default isolation level guaranteed this. PostgreSQL Read Committed instead takes
+a new snapshot for each statement. Read-only restricts writes; it does not choose
+snapshot isolation. A deterministic regression now commits an insertion through
+a second connection after the status aggregate and before the first breakdown.
+Before the fix, the response counted one collectible but both breakdowns counted
+two. The fixed response must retain the original one-piece/10.00 snapshot, while
+the next request sees both pieces and the new 20.00 preorder.
 
-Three independent reads observe three independent snapshots. A collectible added between the status
-query and the series query is counted by one and not the other, and the response then violates FR-017
-and FR-026 — counts that must reconcile exactly, failing through no fault of the arithmetic. It is
-rare, it is silent, and it looks exactly like a bug in the aggregation when it finally shows up.
+**Rejected**: Serializable, because a stable read snapshot needs no serial ordering
+of transactions; locking collection rows, because readers should not block edits;
+or combining all aggregates into a new SQL shape, because the existing three-query
+design already meets the budget when the correct transaction isolation is chosen.
 
-One transaction makes the whole response a consistent snapshot. It costs nothing: these are reads of
-one collector's rows, held briefly, taking no locks that any writer waits on.
-
-**Consequence for the query-count test**: the correct assertion is that the cost is *constant*
-between a small vault and a large one, which is the N+1 property the budget exists to protect. The
-absolute number the helper reports is one transaction, not three statements, and the test should say
-so rather than repeating a figure that does not mean what its name suggests.
-
-**Rejected**: `REPEATABLE READ`. The default isolation already gives each statement a consistent
-snapshot, and a single transaction is what makes the three agree with each other; a stricter level
-buys nothing here and invites serialisation failures on a read-only path.
-
+Source: [PostgreSQL 17 consistency guidance](https://www.postgresql.org/docs/17/applevel-consistency.html).
+The query-count measurement was separately corrected in issue #91, below.
 
 ## Verification correction — direct query counts (issue #91)
 
@@ -256,5 +252,5 @@ image-cleanup check uses the same measurement.
 This counts pgx Query/QueryRow/Exec calls, not statements hidden inside a future
 multi-statement string or SendBatch. Current measured paths use neither; add the
 appropriate tracing coverage if that changes. No production instrumentation or
-dependency is added. This verification change does not establish or repair the
-separate snapshot-isolation claim in Decision 10.
+dependency is added. The query-count change alone did not establish snapshot isolation; issue #93
+corrects Decision 10 and adds the interleaved-write regression.
