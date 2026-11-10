@@ -312,5 +312,5 @@ Repeatable Read, the snapshot regression and statistics query-budget test each
 passed with `-count=10` (20 executions). Full backend vet/build, tagged vet, unit,
 integration and contract suites passed on disposable PostgreSQL using the existing
 test image. The three data-query budget is unchanged. No development DB was used.
-T091 remains open for PR CI and integration: the current sandbox denies writes to
-`.git`, so branch creation, commits, push and merge have not happened.
+T091 remains open until required PR CI passes. Git access was restored on
+2026-11-10; the repair is tracked in PR #95.
