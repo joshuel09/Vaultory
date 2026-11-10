@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { ApiError } from '@/lib/api/errors'
 import { restoreCollectible } from '@/lib/api/trash'
+import { TRASH_RETENTION_DAYS } from '@/lib/trash-retention'
 
 interface Props {
   /** The collectible just moved to the Trash. */
@@ -65,7 +66,7 @@ export function UndoDeleteNotice({ deletedId, galleryHref }: Props) {
         <Link href="/collection/trash" className="underline underline-offset-4 hover:text-accent">
           Trash
         </Link>
-        . It will be kept for 30 days.
+        . It will be kept for {TRASH_RETENTION_DAYS} days.
         {problem && (
           <span role="alert" className="mt-1 block text-danger">
             {problem}

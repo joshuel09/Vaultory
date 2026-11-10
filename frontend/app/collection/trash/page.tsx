@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { TrashList } from '@/components/collection/TrashList'
 import type { TrashPage } from '@/lib/api/types'
+import { TRASH_RETENTION_DAYS } from '@/lib/trash-retention'
 
 /**
  * The Trash (feature 010). Rendered on the server like the gallery; only restoring, deleting and
@@ -38,7 +39,7 @@ export default async function TrashPageRoute() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-ink">Trash</h1>
           <p className="mt-1 text-sm text-ink-muted">
-            Deleted collectibles are kept here for 30 days, then removed for good.
+            Deleted collectibles are kept here for {TRASH_RETENTION_DAYS} days, then removed for good.
           </p>
         </div>
         <Link

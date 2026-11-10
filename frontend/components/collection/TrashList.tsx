@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { ApiError } from '@/lib/api/errors'
 import { listTrash, restoreCollectible } from '@/lib/api/trash'
 import type { TrashedCollectible } from '@/lib/api/types'
+import { TRASH_RETENTION_DAYS } from '@/lib/trash-retention'
 import { DeletePermanentlyDialog } from './DeletePermanentlyDialog'
 import { ImagePlaceholder } from './ImagePlaceholder'
 
@@ -92,7 +93,8 @@ export function TrashList({ initialItems, initialCursor }: Props) {
         >
           <h2 className="text-lg font-medium text-ink">The Trash is empty</h2>
           <p className="mt-2 max-w-sm text-sm text-ink-muted">
-            When you delete a collectible it comes here, with its photograph, and is kept for 30 days
+            When you delete a collectible it comes here, with its photograph, and is kept for{' '}
+            {TRASH_RETENTION_DAYS} days
             in case you want it back.
           </p>
         </div>
