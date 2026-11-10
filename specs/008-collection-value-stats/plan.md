@@ -20,6 +20,7 @@ it is the same risk wearing different clothes — **that a number is quietly wro
 - **Totals get a ceiling of their own**, seven orders of magnitude above a single stored amount, and
   the accumulation guards it with a named error. An unguarded int64 total wraps to a *negative*
   number, which nobody reads as a bug.
+- **One snapshot.** All aggregates share an explicitly read-only Repeatable Read transaction (issue #93). Read-only mode alone does not establish snapshot isolation.
 - **Three statements, constant.** One `GROUP BY collection_status` serves both the headline and the
   status split; one statement per breakdown dimension. The breakdown tail is folded in SQL so the
   response is bounded in rows as well as in queries.
