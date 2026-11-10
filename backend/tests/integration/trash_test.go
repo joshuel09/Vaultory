@@ -503,6 +503,48 @@ func TestARestoreRacingThePurgeEndsOneWay(t *testing.T) {
 	}
 }
 
+// T037 — FR-010: a restore in flight wins over the purge. The restore holds the row's lock and has
+// not committed; the purge skips the row rather than wait or destroy it, and once the restore
+// commits the collectible is in the vault with its photograph (#73).
+func TestThePurgeSkipsACollectibleBeingRestored(t *testing.T) {
+	_, svc := freshStore(t)
+	ctx := context.Background()
+
+	r := addWith(t, svc, collectorA, "being-restored", "Kaiju Sentinel", true)
+	if err := svc.Delete(ctx, collectorA, r.Collectible.ID); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	backdateDeletion(t, r.Collectible.ID, collection.TrashRetention()+time.Hour)
+
+	restore, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = restore.Rollback(ctx) }()
+	if _, err := restore.Exec(ctx,
+		`UPDATE collectibles SET deleted_at = NULL WHERE id = $1`, r.Collectible.ID); err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+
+	purged, err := postgres.NewStore(pool).PurgeExpiredTrash(ctx, collection.TrashRetention(), 20)
+	if err != nil {
+		t.Fatalf("purge: %v", err)
+	}
+	if len(purged) != 0 {
+		t.Errorf("the purge destroyed %d collectibles while one was being restored", len(purged))
+	}
+	if err := restore.Commit(ctx); err != nil {
+		t.Fatalf("commit restore: %v", err)
+	}
+	got, err := svc.Get(ctx, collectorA, r.Collectible.ID)
+	if err != nil {
+		t.Fatalf("after the restore committed the collectible is not in the vault: %v", err)
+	}
+	if got.Collectible.ImageID == nil {
+		t.Error("the restored collectible lost its photograph")
+	}
+}
+
 // T031 — FR-018: a photograph belongs to one collectible. Naming a trashed collectible's photograph
 // is refused, so destroying it can never take another collectible's photograph with it.
 func TestAPhotographCannotBeSharedWithATrashedCollectible(t *testing.T) {

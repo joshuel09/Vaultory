@@ -171,7 +171,11 @@ including its owner.
 - **FR-018**: A photograph MUST be referenced by at most one collectible, enforced by the persistence
   layer. A save naming a photograph another collectible already uses — including one in the Trash —
   MUST be refused with a field-level message on the photograph. Without this, destroying one
-  collectible (FR-010, FR-011) would silently remove the photograph of another that shares it.
+  collectible (FR-010, FR-011) would fail every time while another shares its photograph: the
+  composite reference's `ON DELETE SET NULL` also clears the other collectible's `collector_id`,
+  which cannot be null, so the collector would meet a server failure and a Trash entry they cannot
+  remove. *Corrected 2026-11-10 (#73): first written as silently removing the other photograph,
+  which a reproduction showed is not what happens.*
 
 #### Amendments to feature 006
 
