@@ -65,7 +65,7 @@ Web application: `backend/` (Go) and `frontend/` (Next.js), per [plan.md](./plan
 
 **Independent Test**: add collectibles with known prices; the count and total match to the cent.
 
-- [X] T019 [US1] Create `backend/internal/store/postgres/statistics.go` with the status aggregate from data-model.md, predicated on `collector_id`, inside a single **read-only transaction** shared by all three statements so every figure describes one moment (FR-002, FR-017a, research.md Decision 10)
+- [X] T019 [US1] Create `backend/internal/store/postgres/statistics.go` with the status aggregate from data-model.md, predicated on `collector_id`, inside a single **read-only Repeatable Read transaction** shared by all three statements so every figure describes one moment (FR-002, FR-017a, research.md Decision 10)
 - [X] T020 [US1] Scan `sum(purchase_price)` into a **string** and parse it; no `float64` anywhere in the path (FR-004, research.md Decision 2)
 - [X] T021 [US1] Create `backend/internal/collection/statistics.go`, deriving the total piece count and the total of recorded prices from the four status rows in Go, never in the browser (FR-001, FR-007, FR-008)
 - [X] T022 [US1] Create `backend/internal/transport/httpapi/statistics.go` and add the response shapes to `dto.go`
@@ -76,7 +76,7 @@ Web application: `backend/` (Go) and `frontend/` (Next.js), per [plan.md](./plan
 - [X] T027 [P] [US1] Integration test: an empty vault returns zeros with success, not an error (SC-008)
 - [X] T028 [P] [US1] Integration test: one collector's figures are unaffected by another collector's vault (FR-002, SC-006)
 - [X] T029 [P] [US1] Contract test: the response matches the contract, with monetary fields as strings
-- [X] T030 [US1] Extend `backend/tests/integration/query_count_test.go`: the cost does **not move** between a small vault and a large one (FR-006, SC-004). Note in the test that `statementCount` reads `xact_commit + xact_rollback` and so counts *transactions*, not statements — assert the property, not a number whose name misleads
+- [X] T030 [US1] Extend `backend/tests/integration/query_count_test.go`: the cost does **not move** between a small vault and a large one (FR-006, SC-004). **Measurement corrected by issue #91:** count the three aggregate queries directly with operation-scoped pgx tracing; transaction totals cannot verify a SQL-query budget. See T086–T088.
 - [X] T031 [US1] Create `frontend/lib/api/statistics.ts` using the generated types; hand-write no response shape
 - [X] T032 [US1] Create `frontend/app/collection/stats/page.tsx` at its own route as an RSC forwarding cookies, computed per request so figures are never stale; no session redirects to sign-in rather than erroring (FR-028, FR-032, FR-039)
 - [X] T033 [US1] Create `frontend/components/collection/CollectionSummary.tsx` — headline figures, displaying what the API returns and computing nothing (FR-001, FR-033)
@@ -99,7 +99,7 @@ Web application: `backend/` (Go) and `frontend/` (Next.js), per [plan.md](./plan
 - [X] T039 [US2] Present Owned as the headline; show Preordered, Wishlist and Sold distinctly (FR-012)
 - [X] T040 [US2] Label the Sold figure as what was **paid**, in those words, and keep it out of the headline (FR-019)
 - [X] T041 [US2] Link each status figure to the gallery filtered to it (FR-030)
-- [X] T042 [P] [US2] Integration test: per-status counts and totals reconcile exactly with the whole-vault figures, and the three aggregates agree with each other because they share one transaction (FR-017, FR-017a, SC-003)
+- [X] T042 [P] [US2] Integration test: per-status counts and totals reconcile exactly with the whole-vault figures, and the three aggregates agree with each other; issue #93 adds an interleaved-write check of the Repeatable Read snapshot (FR-017, FR-017a, SC-003)
 - [X] T043 [P] [US2] Integration test: a status holding nothing returns a zero entry rather than being omitted (SC-007)
 - [X] T044 [P] [US2] Integration test: changing a collectible's status moves it between subtotals
 - [X] T045 [P] [US2] Unit test: all four statuses render even when three are empty
@@ -271,3 +271,46 @@ criterion was already missed at 458.6 MB; this feature adds about 2.4 MB. Issue 
 | Traceability — unspecified group | claimed 4, its link returned **4**; `?manufacturer=` returned **0**, so the empty filter is a filter and not a no-op |
 | N+1 | `TestStatisticsCostDoesNotGrowWithCollection` passed |
 | Privacy | a second collector sees `totalCount: 0`; no session answers **401**; the endpoint takes no parameters at all |
+
+## Query-count verification repair — issue #91
+
+The main CI run at `09a6e23` failed T030's statistics-cost check (1 versus 0).
+The shared helper reads asynchronously published, database-wide transaction totals,
+not the SQL queries SC-004 and FR-006 require us to bound. Product behavior is unchanged.
+
+- [X] T086 Replace the integration query-count helper with test-only pgx tracing scoped to the operation's context; count queries inside transactions and across pool connections, excluding transaction-control statements and unrelated fixture queries (FR-006, SC-004; also 001 T082 and 006 T075).
+- [X] T087 Verify the measurement against a known sequence spanning two connections and multiple queries in one transaction, and assert nonzero fixed gallery/statistics budgets so a disconnected tracer cannot silently pass (FR-006, SC-004).
+- [X] T088 Run the affected checks repeatedly against a disposable PostgreSQL database, run the full backend gate and required PR CI, and correct the measurement documentation with actual results (FR-006, SC-004).
+
+Out of scope: changing statistics isolation, product behavior, API contracts, or schema.
+
+**T086–T088 verification (2026-11-09):** `go vet ./...`, `go build ./...`,
+`go test ./tests/unit/... ./internal/...`, and `go vet -tags integration ./...`
+passed. `COMPOSE_PROJECT_NAME=vaultory-issue91 make test` passed unit, integration
+and contract suites against its disposable PostgreSQL database. The four affected
+tests (`TestQueryCounterMeasuresOnlyScopedQueries`, gallery, statistics and
+image-cleanup query budgets) passed with `-count=10` (40 executions). Gallery
+reads counted 2 queries; statistics counted 3. Edit/delete counted 4/2 queries
+with an empty queue and 24/22 with 200 pending images. The tracer calibration
+counted exactly 5 data queries, including 2 in one transaction. Required PR CI
+passed on implementation commit `23c0f21`; final-head checks remain enforced by
+the repository before merge. No development database was used.
+
+## Snapshot consistency repair — issue #93
+
+FR-017a already requires one moment across the three aggregates. Read-only mode
+alone does not establish transaction-wide snapshot isolation.
+
+- [X] T089 Add a deterministic integration regression that commits a write from another connection between the status and breakdown queries; the in-flight response stays on the original snapshot and the next request sees the write (FR-017a, FR-039).
+- [X] T090 Explicitly choose read-only Repeatable Read for Statistics and correct Decision 10, the data-model description, and obsolete test commentary (FR-017a). Keep the API, schema and three-query budget unchanged.
+- [ ] T091 Verify the regression fails before the fix and passes repeatedly after it; run the full backend gate and required PR checks before merge (FR-017a, FR-006, SC-004).
+
+**Local verification (2026-11-09, temporary source export at main b5975f3):**
+The new regression failed before the fix: total count was 1 while both breakdowns
+included the second, concurrently committed collectible. After explicitly choosing
+Repeatable Read, the snapshot regression and statistics query-budget test each
+passed with `-count=10` (20 executions). Full backend vet/build, tagged vet, unit,
+integration and contract suites passed on disposable PostgreSQL using the existing
+test image. The three data-query budget is unchanged. No development DB was used.
+T091 remains open until required PR CI passes. Git access was restored on
+2026-11-10; the repair is tracked in PR #95.
