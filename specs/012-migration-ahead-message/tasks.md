@@ -6,3 +6,26 @@
 - [X] T004 README: what this message means and what to do, under running locally
 - [X] T005 Verify the script on the host against PostgreSQL 17 with migrate 4.18.1 in every state — ahead (nothing changed), dirty, empty, behind, current, `goto` both ways, no version — and record the output (SC-001, SC-002)
 - [X] T006 Note in the PR what could not run here: `make`, Compose, and the image's busybox `sh`
+
+## Phase 2: Convergence
+
+Issue #69. Scope: FR-008 and SC-004 — the password in the migrations step's output.
+
+- [X] T007 `compose.yaml`: take the password out of `MIGRATE_DATABASE_URL` and pass it as `PGPASSWORD`, which lib/pq reads, so golang-migrate's errors have no password to quote — including the `exec`ed `up`, whose output the script never sees, per FR-008 (missing)
+- [X] T008 `backend/scripts/migrate.sh`: refuse, with exit 2 and without printing the address, an `MIGRATE_DATABASE_URL` whose user part carries a password; correct the header comment, which says the URL carries the password, per FR-008 (missing)
+- [X] T009 `compose.prod.yaml`: the production `migrate` passes the password inside `-database` on its command line, the same leak in `docker compose logs migrate`; move it to `PGPASSWORD` as `auth-role` already does, per FR-008, SC-004 (missing)
+- [X] T010 Verify on the host against PostgreSQL 17 with password authentication and migrate 4.18.1: right password from `PGPASSWORD` migrates; a wrong one fails with output containing the password 0 times, from both `version` and the `exec`ed `up`; an address with a password is refused unprinted, per SC-004 (missing)
+
+
+**T010 as run** (2026-10-31, PostgreSQL 17.6 with `scram-sha-256`, migrate 4.18.1, a dummy password): wrong password with nothing applied, and wrong password at migration 10 — both fail authentication, and the quoted address is `postgres://vaultory@127.0.0.1:55433/…`; right password from `PGPASSWORD` applies 1–10, then `no change`; `goto 9` and back `up`; an address with a password refused with exit 2. The password appears 0 times in every case. The same `migrate version` with the password in the address, as before this change, printed it once. The production form (`-database` without a password, `PGPASSWORD` set) behaves the same both ways. Not run here: Compose, and the migrate image's busybox `sh` — the guard uses only POSIX parameter expansion.
+
+## Phase 3: Convergence
+
+Issue #77, found by review of #76. Scope: FR-008's guard and its two gaps.
+
+- [X] T011 `backend/scripts/migrate.sh`: cut the authority at the first `/`, `?` or `#`, not only `/`, so a query string can neither hide a password from the user-part check nor make an `@` in it look like one, per FR-008 (partial)
+- [X] T012 `backend/scripts/migrate.sh`: refuse, without printing the address, a query parameter whose key decodes to `password` — percent-encoded letters and any case included — and keep accepting every other key, such as `sslmode`, per FR-008 (missing)
+- [X] T013 Verify on the host against PostgreSQL 17 with password authentication and migrate 4.18.1: that lib/pq does read `?password=` (so the gap is real); that the guard refuses it plain, percent-encoded and in upper case with the password printed 0 times; that `?sslmode=disable` alone, `password` as a value or as part of a longer key, and an `@` inside the query are still accepted; and every case from T010 again, per FR-008, SC-004 (missing)
+
+
+**T013 as run** (2026-11-01, PostgreSQL 17.6 with `scram-sha-256`, migrate 4.18.1, a dummy password). The gap is real: with no guard, migrate connects with `?password=` and, given a wrong one, prints it once. With the guard, `password`, `p%61ssword`, `%70%41%73%73%77%4F%72%64`, `PASSWORD`, a `;` separator and a bare `password` key are all refused with exit 2, as are a user-part password with and without a path; the password appears 0 times in each. Accepted: `sslmode` alone, `password` as a value, `passwordx` as a key, an `@` and `:` inside the query (with and without a path — before T011, the no-path form was wrongly refused), and a `#password=` fragment. T010's cases again: wrong `PGPASSWORD` prints no password; `goto 9` and `up` work.

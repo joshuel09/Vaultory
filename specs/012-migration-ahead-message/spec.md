@@ -80,6 +80,14 @@ target to version 10; the database is at 10, and `make up` on a checkout ending 
 - **FR-005**: Nothing MUST be reversed automatically. Which way to go is the developer's choice.
 - **FR-006**: A dirty database MUST be reported as dirty, with its version, and not as ahead.
 - **FR-007**: In every other case, the step MUST behave exactly as it does today.
+- **FR-008**: The database password MUST NOT appear in anything the migrations step prints,
+  including golang-migrate's own errors, which quote the whole connection string. The password
+  reaches the step separately from the database address, and a step handed an address that carries
+  a password — in its user part, or as a `password` query parameter under any spelling the
+  driver decodes to that key — MUST refuse to run rather than risk printing it. Other query
+  parameters, such as `sslmode`, MUST still be accepted. *Added 2026-10-31 (#69): since FR-003
+  put the step's output in `make up`, an authentication failure printed the password where people
+  copy from. Query parameter covered 2026-11-01 (#77).*
 
 ## Success Criteria *(mandatory)*
 
@@ -90,6 +98,8 @@ target to version 10; the database is at 10, and `make up` on a checkout ending 
 - **SC-002**: 0 changes are made to the database when it is ahead.
 - **SC-003**: Following the printed instructions starts the stack in 100% of cases where the newer
   branch is still available locally.
+- **SC-004**: With a wrong database password, the migrations step's whole output contains the
+  password 0 times, in development and in production.
 
 ## Clarifications
 

@@ -4,7 +4,8 @@ Without Docker, the script runs on the host:
 
 ```bash
 export MIGRATE_BIN=$(command -v migrate)          # golang-migrate 4.18.1
-export MIGRATE_DATABASE_URL=postgres://...         # a scratch database
+export MIGRATE_DATABASE_URL=postgres://user@host:port/db?sslmode=disable   # a scratch database, no password
+export PGPASSWORD=...                                                       # the password, if it needs one
 export MIGRATIONS_PATH=backend/migrations
 sh backend/scripts/migrate.sh                      # ahead / dirty / empty / behind / current
 sh backend/scripts/migrate.sh goto 10              # the move
