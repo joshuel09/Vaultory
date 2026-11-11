@@ -83,9 +83,11 @@ target to version 10; the database is at 10, and `make up` on a checkout ending 
 - **FR-008**: The database password MUST NOT appear in anything the migrations step prints,
   including golang-migrate's own errors, which quote the whole connection string. The password
   reaches the step separately from the database address, and a step handed an address that carries
-  a password MUST refuse to run rather than risk printing it. *Added 2026-10-31 (#69): since FR-003
+  a password — in its user part, or as a `password` query parameter under any spelling the
+  driver decodes to that key — MUST refuse to run rather than risk printing it. Other query
+  parameters, such as `sslmode`, MUST still be accepted. *Added 2026-10-31 (#69): since FR-003
   put the step's output in `make up`, an authentication failure printed the password where people
-  copy from.*
+  copy from. Query parameter covered 2026-11-01 (#77).*
 
 ## Success Criteria *(mandatory)*
 
