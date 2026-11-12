@@ -29,3 +29,15 @@ Issue #77, found by review of #76. Scope: FR-008's guard and its two gaps.
 
 
 **T013 as run** (2026-11-01, PostgreSQL 17.6 with `scram-sha-256`, migrate 4.18.1, a dummy password). The gap is real: with no guard, migrate connects with `?password=` and, given a wrong one, prints it once. With the guard, `password`, `p%61ssword`, `%70%41%73%73%77%4F%72%64`, `PASSWORD`, a `;` separator and a bare `password` key are all refused with exit 2, as are a user-part password with and without a path; the password appears 0 times in each. Accepted: `sslmode` alone, `password` as a value, `passwordx` as a key, an `@` and `:` inside the query (with and without a path — before T011, the no-path form was wrongly refused), and a `#password=` fragment. T010's cases again: wrong `PGPASSWORD` prints no password; `goto 9` and `up` work.
+
+## Phase 4: Convergence
+
+Issue #70. Scope: FR-003 as amended — which migrate run `make up` reports.
+
+- [X] T014 `Makefile`: compare the migration container StartedAt before and after startup, and read logs since the new nanosecond timestamp only when that run failed (FR-003; #70, #81).
+- [X] T015 Verify `up`'s failure path with a stand-in for `docker compose` that answers `up`, `ps` and `logs --since` as each case would: an unrelated failure with a leftover failed `migrate` (nothing printed), migrate failing in this run (printed), migrate succeeding in this run under an unrelated failure (nothing printed), and success (no log); the exit status is always `up`'s own, per FR-003 (missing)
+
+
+**T015 as run** (2026-11-01, GNU Make 3.81, a shell stand-in for `docker compose` answering `up`, `ps` and `logs --since`): an unrelated failure with a leftover `migrate` that exited 3 prints nothing (the recipe before this change printed that stale log); migrate failing in this run prints its log; migrate succeeding in this run under an unrelated failure prints nothing; no migrate container prints nothing; success prints the banner; `make` fails in every failing case, as before. `--since` received `2026-11-01T12:13:18Z`. Not run here: real Docker, so whether the daemon's log timestamps and the host clock agree to the second is not measured — Docker Desktop keeps its VM's clock in sync with the host.
+
+**Review verification (2026-11-12):** Six mock-Docker startup cases passed: stale failure suppressed, current failure printed, successful migration suppressed under unrelated failure, absent container suppressed, success banner, and newly created failure printed. Same-second nanosecond timestamps distinguish runs. Real Docker startup was not repeated in this review.

@@ -303,7 +303,7 @@ alone does not establish transaction-wide snapshot isolation.
 
 - [X] T089 Add a deterministic integration regression that commits a write from another connection between the status and breakdown queries; the in-flight response stays on the original snapshot and the next request sees the write (FR-017a, FR-039).
 - [X] T090 Explicitly choose read-only Repeatable Read for Statistics and correct Decision 10, the data-model description, and obsolete test commentary (FR-017a). Keep the API, schema and three-query budget unchanged.
-- [ ] T091 Verify the regression fails before the fix and passes repeatedly after it; run the full backend gate and required PR checks before merge (FR-017a, FR-006, SC-004).
+- [X] T091 Verify the regression fails before the fix and passes repeatedly after it; run the full backend gate and required PR checks before merge (FR-017a, FR-006, SC-004).
 
 **Local verification (2026-11-09, temporary source export at main b5975f3):**
 The new regression failed before the fix: total count was 1 while both breakdowns
@@ -314,3 +314,5 @@ integration and contract suites passed on disposable PostgreSQL using the existi
 test image. The three data-query budget is unchanged. No development DB was used.
 T091 remains open until required PR CI passes. Git access was restored on
 2026-11-10; the repair is tracked in PR #95.
+
+**T091 completed:** PR #95 final head `bf52385` passed required backend, frontend and integration CI before merge as `5be0af5`; post-merge main CI run 42829323203 passed.
