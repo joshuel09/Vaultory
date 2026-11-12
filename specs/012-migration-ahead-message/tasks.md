@@ -34,8 +34,10 @@ Issue #77, found by review of #76. Scope: FR-008's guard and its two gaps.
 
 Issue #70. Scope: FR-003 as amended — which migrate run `make up` reports.
 
-- [X] T014 `Makefile`: `up` records the time it starts, in UTC with an explicit `Z` so Docker cannot read it as local time; on failure it reads the `migrate` log with `--since` that time, and prints it only when there is some (the step ran in this invocation) and the step's exit code is not 0 (it failed). The successful lines of an earlier run no longer print above the error, per FR-003 (contradicts)
+- [X] T014 `Makefile`: compare the migration container StartedAt before and after startup, and read logs since the new nanosecond timestamp only when that run failed (FR-003; #70, #81).
 - [X] T015 Verify `up`'s failure path with a stand-in for `docker compose` that answers `up`, `ps` and `logs --since` as each case would: an unrelated failure with a leftover failed `migrate` (nothing printed), migrate failing in this run (printed), migrate succeeding in this run under an unrelated failure (nothing printed), and success (no log); the exit status is always `up`'s own, per FR-003 (missing)
 
 
 **T015 as run** (2026-11-01, GNU Make 3.81, a shell stand-in for `docker compose` answering `up`, `ps` and `logs --since`): an unrelated failure with a leftover `migrate` that exited 3 prints nothing (the recipe before this change printed that stale log); migrate failing in this run prints its log; migrate succeeding in this run under an unrelated failure prints nothing; no migrate container prints nothing; success prints the banner; `make` fails in every failing case, as before. `--since` received `2026-11-01T12:13:18Z`. Not run here: real Docker, so whether the daemon's log timestamps and the host clock agree to the second is not measured — Docker Desktop keeps its VM's clock in sync with the host.
+
+**Review verification (2026-11-12):** Six mock-Docker startup cases passed: stale failure suppressed, current failure printed, successful migration suppressed under unrelated failure, absent container suppressed, success banner, and newly created failure printed. Same-second nanosecond timestamps distinguish runs. Real Docker startup was not repeated in this review.
