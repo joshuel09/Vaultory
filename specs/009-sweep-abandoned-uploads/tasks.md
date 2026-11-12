@@ -99,3 +99,14 @@ T014 touches only frontend files and can run alongside any backend task. T016–
 
 MVP is US1 plus US2 together: a sweeper is not shippable without the race guarantee. US3 is the
 clear failure for the rare form left open past the grace period.
+
+## Phase 7: Convergence
+
+Issue #72, found by review of #57. Scope: FR-009 and SC-005 as amended; the 000011 comment.
+
+- [ ] T020 `backend/internal/collection`: the sweep an upload triggers runs after `UploadImage` returns — in a goroutine on a context that outlives the request (`context.WithoutCancel`, bounded at one minute) — and at most one at a time; `Service.WaitForBackground` waits for it, per FR-009, FR-010, SC-005 (contradicts)
+- [ ] T021 `backend/cmd/vaultory-api/main.go`: after the HTTP server has shut down, wait for background sweeps, so a deploy does not cut one off mid-batch, per FR-009 (missing)
+- [ ] T022 `backend/migrations/000011_index_image_sweep.up.sql`: stop crediting `collectible_images (created_at)` with ordering the sweep, which the planner did not use; comment only, per research Decision 4 (contradicts)
+- [ ] T023 [P] `backend/tests/integration`: test helpers wait for a service's background work on cleanup; `TestAFailingSweepDoesNotFailTheUpload` waits before asserting; a new test shows an upload's sweep still removes an abandoned upload once background work is done, and that uploads arriving while a sweep runs do not start a second one, per FR-009, FR-010 (partial)
+- [ ] T024 Full gate: backend gofmt, vet (± integration tag), build, unit, integration (with `-race` on the sweep tests), contract
+

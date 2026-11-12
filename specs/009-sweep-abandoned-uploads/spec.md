@@ -126,7 +126,11 @@ uploaded again; no collectible is created.
 - **FR-008**: The sweep MUST be bounded per run, so it never makes one request or start-up do
   unbounded work.
 - **FR-009**: The sweep MUST run without a dedicated background schedule: when new uploads arrive,
-  and once at service start, matching how feature 006 drains its deletion queue.
+  and once at service start, matching how feature 006 drains its deletion queue. The sweep an upload
+  triggers MUST run after that upload has been answered, never inside it, and at most one such sweep
+  MUST run at a time. *Amended 2026-11-12 (#72): the sweep's cost grows with every image in the
+  service, not with the backlog — it must read everything to prove nothing qualifies — and an upload
+  was paying it.*
 - **FR-010**: The sweep MUST NOT affect any collector's ability to upload or save: a failure while
   sweeping is recorded and never turns a successful upload into a failed one.
 - **FR-011**: Each run that removes anything MUST be recorded operationally with the number removed,
@@ -151,8 +155,12 @@ uploaded again; no collectible is created.
 - **SC-003**: 0 uploads younger than the grace period are removed.
 - **SC-004**: A storage fault during a sweep leaves 0 files permanently orphaned: every queued file is
   deleted once storage recovers.
-- **SC-005**: Upload response time is not noticeably affected: a sweep adds at most one bounded batch
-  of work to an upload.
+- **SC-005**: Upload response time does not include the sweep at all: the response is sent before the
+  sweep starts. *Amended 2026-11-12 (#72).* "Bounded" in FR-008 bounds what one sweep removes, not
+  what it reads: deciding whether anything qualifies reads every image and every reference, roughly
+  linear in the service's total images (measured in review: 0.1 ms at 118 images, 93 ms at 200,000,
+  with nothing to sweep). That cost is accepted, and is paid once per upload by the service rather
+  than by the collector who uploaded.
 
 ## Clarifications
 
