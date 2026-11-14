@@ -21,6 +21,20 @@ const nextConfig: NextConfig = {
    * (FR-017), and it is inert for `next dev`, so this costs the development path nothing.
    */
   output: 'standalone',
+  /**
+   * Two things the trace pulls into standalone that the running server never loads (SC-006):
+   *
+   * - sharp and libvips — Next's image optimizer, which `images.unoptimized` below switches off.
+   *   On Linux the trace carries both the glibc and musl builds of libvips.
+   * - typescript — reached through next.config.ts, but standalone's server.js embeds the compiled
+   *   config and never reads this file.
+   *
+   * Verified by booting standalone without them and serving pages. Turning the optimizer back on
+   * means removing the sharp entries here, or images will fail at runtime rather than at build.
+   */
+  outputFileTracingExcludes: {
+    '*': ['node_modules/sharp/**', 'node_modules/@img/**', 'node_modules/typescript/**'],
+  },
   async rewrites() {
     return [
       {
