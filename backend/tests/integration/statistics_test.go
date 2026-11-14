@@ -220,11 +220,8 @@ func TestStatisticsAreIsolatedBetweenCollectors(t *testing.T) {
 // sum to the total, the per-status totals sum to the total paid, and both breakdowns account for
 // every collectible too.
 //
-// The single-snapshot requirement (FR-017a) is structural rather than observable: the three
-// aggregates run inside one read-only transaction, so there is no interleaving for a test to
-// provoke. What is testable is the consequence — that the figures reconcile — and that is what this
-// asserts. A future change that split the reads would not fail here deterministically; it would fail
-// here *sometimes*, which is the reason the transaction exists.
+// This seeded-vault test checks arithmetic. The concurrent-write regression in
+// statistics_snapshot_test.go separately proves the snapshot boundary (FR-017a).
 func TestEveryAggregateAccountsForTheWholeVault(t *testing.T) {
 	_, svc := freshStore(t)
 	ctx := context.Background()

@@ -126,7 +126,7 @@ reviews:
       instructions: |
         Every documented command lives here and is the thing CI calls, so that the isolation a
         suite depends on has one definition. A target that destroys data asks for a typed
-        confirmation first, the way `reset` and `db-rewind` do.
+        confirmation first, the way `reset` and `migrate-to` do.
 
     - path: "scripts/**"
       instructions: |
