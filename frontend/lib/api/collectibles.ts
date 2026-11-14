@@ -104,7 +104,7 @@ export async function editCollectible(
 }
 
 /**
- * Delete a collectible permanently.
+ * Move a collectible to the Trash, where it is kept for 30 days (feature 010).
  *
  * Succeeds whether or not anything was there: already deleted, never existed, or another
  * collector's all answer the same way (FR-025). A retry after a lost response is therefore safe,

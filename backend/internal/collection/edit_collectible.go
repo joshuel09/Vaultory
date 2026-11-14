@@ -45,6 +45,9 @@ func (s *Service) Edit(
 	}
 
 	row, err := s.store.Edit(ctx, collectorID, collectibleID, validated)
+	if errors.Is(err, postgres.ErrImageInUse) {
+		return postgres.Row{}, []collectible.Violation{imageInUseViolation}, nil
+	}
 	if errors.Is(err, postgres.ErrUnknownImage) {
 		// The window between the check above and the update. Rare, but the database caught it.
 		return postgres.Row{}, []collectible.Violation{{

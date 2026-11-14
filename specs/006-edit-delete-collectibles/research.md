@@ -99,6 +99,11 @@ would make a collectible undeletable, and a transaction that spans a filesystem 
 rollback); leaving the image row and relying on the reference (rejected: factually does not work,
 per the above).
 
+*Revised 2026-10-25 by feature 010 (#31).* Unchanged in substance, moved in time: the image row is
+still deleted in the same transaction as the collectible, but that now happens when the collectible
+leaves the Trash for good, not when it enters. While it is in the Trash its photograph stays, so it
+can be restored. See `specs/010-recoverable-trash/research.md` Decision 2.
+
 ---
 
 ## Decision 5 — Files pending deletion are queued in a table, drained opportunistically

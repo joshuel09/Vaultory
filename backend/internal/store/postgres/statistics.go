@@ -69,7 +69,7 @@ func statusSummaries(ctx context.Context, tx pgx.Tx, collectorID uuid.UUID) ([]c
 		       count(purchase_price)                 AS priced,
 		       coalesce(sum(purchase_price), 0)::text AS total
 		FROM collectibles
-		WHERE collector_id = $1
+		WHERE collector_id = $1 AND deleted_at IS NULL
 		GROUP BY collection_status`, collectorID)
 	if err != nil {
 		return nil, fmt.Errorf("summarise by status: %w", err)
@@ -158,7 +158,7 @@ func breakdown(
 		           count(purchase_price)                    AS priced,
 		           coalesce(sum(purchase_price), 0)         AS total
 		    FROM collectibles
-		    WHERE collector_id = $1
+		    WHERE collector_id = $1 AND deleted_at IS NULL
 		    GROUP BY 1
 		),
 		ranked AS (

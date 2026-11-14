@@ -268,6 +268,9 @@ confirming the placeholder is shown in its place.
   edit fails.
 - **FR-020**: System MUST make a photograph unretrievable, by any requester including its owner, from
   the moment the collectible referencing it is deleted or the photograph is replaced or removed.
+  *Amended 2026-10-25 by feature 010 (#31): a deletion now moves the collectible to the Trash for 30
+  days; what this requirement says of deletion now applies when it leaves the Trash for good —
+  permanently deleted, or expired. See `specs/010-recoverable-trash/spec.md` FR-017.*
 - **FR-020a**: System MUST destroy the stored image file once nothing references it, and MUST NOT make
   the success of a deletion or an edit conditional on that file having been destroyed. A file that
   could not be destroyed MUST be retried rather than abandoned.
@@ -278,11 +281,17 @@ confirming the placeholder is shown in its place.
 #### Deleting
 
 - **FR-022**: Collectors MUST be able to delete a collectible they own, permanently.
+  *Amended 2026-10-25 by feature 010 (#31): a deletion now moves the collectible to the Trash for 30
+  days; what this requirement says of deletion now applies when it leaves the Trash for good —
+  permanently deleted, or expired. See `specs/010-recoverable-trash/spec.md` FR-017.*
 - **FR-022a**: System MUST offer deleting from the screen where a collectible is being edited, and MUST
   NOT offer it as an action on a collectible's entry in the gallery.
 - **FR-023**: System MUST require an explicit confirmation before deleting, which names the
   collectible being deleted and states that deletion cannot be undone; the destructive choice MUST NOT
   be the action taken by dismissing the confirmation or by pressing Enter on it.
+  *Amended 2026-10-25 by feature 010 (#31): this confirmation now says the collectible goes to the
+  Trash for 30 days (010 FR-003). The "cannot be undone" confirmation, with the same properties,
+  guards permanent deletion from the Trash (010 FR-011).*
 - **FR-024**: System MUST delete exactly the confirmed collectible and MUST NOT affect any other entry,
   including identical ones.
 - **FR-025**: System MUST answer a deletion of a collectible that is not in the acting collector's
@@ -369,6 +378,8 @@ confirming the placeholder is shown in its place.
   edit.
 - **SC-005**: 100% of photographs that have been replaced, removed, or attached to a deleted
   collectible are unretrievable afterwards, including by the collector who uploaded them.
+  *Amended 2026-10-25 by feature 010: "deleted" here means destroyed — permanently deleted or
+  expired from the Trash. A photograph in the Trash stays retrievable by its owner only (010 FR-014).*
 - **SC-006**: An edit saved from a view of the collectible that is no longer current is refused and
   reported to the collector in 100% of cases; 0 edits overwrite a newer value without the collector
   being told.

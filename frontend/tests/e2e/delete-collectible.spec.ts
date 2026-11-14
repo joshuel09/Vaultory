@@ -18,9 +18,9 @@ test.describe('deleting a collectible', () => {
 
     const dialog = page.getByTestId('delete-dialog')
     await expect(dialog).toBeVisible()
-    // FR-023: it names the collectible and says plainly that this cannot be undone.
+    // FR-023, as amended by feature 010: it names the collectible and says where it goes.
     await expect(dialog).toContainText(name)
-    await expect(dialog).toContainText(/cannot be undone/i)
+    await expect(dialog).toContainText(/Trash/)
 
     await page.getByTestId('confirm-delete').click()
     await page.waitForURL(/\/collection(\?|$)/)
