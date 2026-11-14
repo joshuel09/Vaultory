@@ -17,6 +17,14 @@ interface Props {
    * — their old photograph — and is told nothing about it.
    */
   onUploadingChange?: (uploading: boolean) => void
+  /**
+   * The server's complaint about the photograph a save named — most often that it is no longer
+   * available, because it sat unattached long enough to be swept (feature 009, FR-007).
+   *
+   * Without this the form held the message and showed only its generic banner, so the collector
+   * was told the save failed and not that the photograph was the reason.
+   */
+  error?: string
 }
 
 /**
@@ -26,7 +34,7 @@ interface Props {
  * form untouched: the collector fixes the photo or proceeds without one, and nothing they typed is
  * lost (FR-013).
  */
-export function ImagePicker({ image, onChange, onUploadingChange }: Props) {
+export function ImagePicker({ image, onChange, onUploadingChange, error }: Props) {
   const input = useRef<HTMLInputElement | null>(null)
   const [uploading, setUploading] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
@@ -127,6 +135,13 @@ export function ImagePicker({ image, onChange, onUploadingChange }: Props) {
           </p>
         </div>
       </div>
+
+      {error && !problem && (
+        <p role="alert" data-testid="image-error" className="flex items-start gap-1.5 text-xs text-danger">
+          <span aria-hidden="true">!</span>
+          <span>{error}</span>
+        </p>
+      )}
 
       {problem && (
         <p role="alert" data-testid="image-problem" className="flex items-start gap-1.5 text-xs text-danger">

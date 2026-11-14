@@ -85,7 +85,7 @@ func TestEditCannotBorrowAnotherCollectorsImage(t *testing.T) {
 		}
 		// The same words an image that never existed would get. Telling A that the image exists
 		// but is not theirs would disclose B's collection (FR-031).
-		if violations[0].Field != "imageId" || !strings.Contains(violations[0].Message, "could not be found") {
+		if violations[0].Field != "imageId" || !strings.Contains(violations[0].Message, "no longer available") {
 			t.Errorf("violation = %+v, want an indistinguishable unknown-image message", violations[0])
 		}
 	})

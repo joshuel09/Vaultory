@@ -72,6 +72,13 @@ func (s *Service) UploadImage(
 		_ = s.images.Delete(ctx, renditionKey)
 		return postgres.Image{}, err
 	}
+
+	// Every upload is a potential abandoned one, so this is where abandoned ones are reclaimed —
+	// a bounded batch, never this one (it is seconds old, not thirty days), and never able to turn
+	// this upload into a failure (feature 009, FR-009, FR-010).
+	if s.SweepAbandonedUploads(ctx) > 0 {
+		s.DrainImageDeletions(ctx)
+	}
 	return img, nil
 }
 
