@@ -117,6 +117,10 @@ func run() error {
 		slog.Info("shutting down")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		return srv.Shutdown(shutdownCtx)
+		err := srv.Shutdown(shutdownCtx)
+		// A sweep an upload started may still be running; let it finish its batch rather than cut
+		// it off. Each is bounded, so this is too (feature 009, FR-009).
+		service.WaitForBackground()
+		return err
 	}
 }

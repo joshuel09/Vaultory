@@ -49,11 +49,25 @@
   depends on the sweep (FR-010).
 - **Alternatives considered**: a ticker (rejected as in 006); sweeping on add or edit (those reduce
   orphans, not create them).
+- **Revision 2026-11-12 (#72)**: the trigger stays; the timing moves. Review measured the sweep's
+  query at 93 ms with 200,000 attached images and nothing to sweep, roughly linear in total images:
+  the planner takes a hash anti join over both tables, and `LIMIT 20` cannot stop it early, because
+  proving nothing qualifies means reading everything. That ran inside every upload. The sweep now
+  runs after the upload has been answered, in the background, at most one at a time — an upload that
+  arrives while one is running does not start another, since the running one already reads the same
+  backlog. The service waits for it on shutdown, bounded at one minute. Alternatives weighed in #72:
+  documenting the cost and leaving it on the request (the collector keeps paying); a ticker (rejected
+  for the reason above, and it reads everything whether or not anything was uploaded); an
+  `attached_at` marker with a partial index, as the Trash's `deleted_at` has (makes the query cheap,
+  but every edit that swaps a photograph must maintain it — worth revisiting if the cost becomes
+  load-bearing).
 
 ## 4. Two indexes
 
 - **Decision**: migration 000011 adds `collectible_images (created_at)` and `collectibles (image_id)`,
   with a down migration that drops both.
 - **Rationale**: the sweep orders by age and anti-joins on `collectibles.image_id`, and there was no
-  index on either. `collectibles.image_id` also serves the foreign key's existing `ON DELETE SET NULL`
+  index on either. *Note 2026-11-12 (#72): at 200,000 images the planner chose a hash anti join and
+  used neither index for the sweep; `collectibles (image_id)` still serves the foreign key and
+  feature 006's deletes.* `collectibles.image_id` also serves the foreign key's existing `ON DELETE SET NULL`
   and feature 006's deletes, which until now scanned `collectibles`.

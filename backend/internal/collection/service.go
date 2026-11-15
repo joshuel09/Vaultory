@@ -6,6 +6,8 @@
 package collection
 
 import (
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/joshuel09/vaultory/backend/internal/imagestore"
@@ -18,6 +20,11 @@ type Service struct {
 	images            imagestore.Store
 	idempotencyWindow time.Duration
 	now               func() time.Time
+
+	// Work an upload starts but does not wait for: the abandoned-upload sweep (feature 009,
+	// FR-009). sweeping keeps it to one at a time; background lets shutdown and tests wait for it.
+	sweeping   atomic.Bool
+	background sync.WaitGroup
 }
 
 func NewService(
@@ -32,6 +39,10 @@ func NewService(
 		now:               time.Now,
 	}
 }
+
+// WaitForBackground returns once work the service started in the background has finished. Each
+// piece is bounded (see sweepAfterUpload), so this does not wait indefinitely.
+func (s *Service) WaitForBackground() { s.background.Wait() }
 
 // SetClock replaces the clock. Tests use it so date rules are deterministic rather than dependent
 // on when the suite happens to run.
