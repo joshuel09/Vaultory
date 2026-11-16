@@ -108,7 +108,13 @@ func freshStore(t *testing.T) (*postgres.Store, *collection.Service) {
 	collectorA = newCollector(t, "a")
 	collectorB = newCollector(t, "b")
 
-	store := postgres.NewStore(pool)
+	return serviceForPool(t, pool)
+}
+
+// serviceForPool keeps the standard image store and fixed clock for either test pool.
+func serviceForPool(t *testing.T, db *pgxpool.Pool) (*postgres.Store, *collection.Service) {
+	t.Helper()
+	store := postgres.NewStore(db)
 	images, err := imagestore.NewFilesystem(t.TempDir())
 	if err != nil {
 		t.Fatalf("image store: %v", err)

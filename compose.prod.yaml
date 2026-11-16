@@ -46,9 +46,13 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/migrations:/migrations:ro
+    # The password goes in PGPASSWORD, not the -database URL: golang-migrate quotes that URL whole
+    # when it cannot connect, which would put the password in `docker compose logs migrate`.
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
     command:
       - -path=/migrations
-      - -database=postgres://${POSTGRES_USER:-vaultory}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-vaultory}?sslmode=disable
+      - -database=postgres://${POSTGRES_USER:-vaultory}@postgres:5432/${POSTGRES_DB:-vaultory}?sslmode=disable
       - up
     restart: "no"
 

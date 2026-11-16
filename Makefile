@@ -6,20 +6,71 @@
 COMPOSE := docker compose
 
 .DEFAULT_GOAL := help
-.PHONY: help up watch down logs ps reset test test-e2e shell-backend shell-db check migrate-to
+.PHONY: help up watch down logs ps reset test test-e2e shell-backend shell-db check migrate-to \
+	one-stack-per-checkout
+
+# compose.yaml pins the project name, and Compose resolves containers, networks and volumes by
+# that name rather than by directory — so every checkout on this machine drives the same stack. In
+# a linked worktree that is almost never what was meant: `make up` there does not start a stack for
+# the worktree, it adopts this one's and migrates its database to whatever the branch carries. That
+# happened on 29 October and left the main checkout unable to start (#87).
+#
+# A worktree is exactly detectable: its git dir is not the common one. Asked of git first, and of
+# the filesystem when git has nothing to say — a command that is missing or fails answers with two
+# empty strings, which compare equal, and a guard that reads that as "not a worktree" would wave
+# `make reset` through against the main checkout's data. What makes a linked worktree one is that
+# its `.git` is a regular file naming the real git dir, and that is true whether or not git can be
+# run at all.
+#
+# Refused rather than named automatically, because a different default would move everyone's
+# existing volumes, and because the second stack wants the same host ports — which is the
+# developer's decision, not ours.
+one-stack-per-checkout:
+	@if [ -n "$$COMPOSE_PROJECT_NAME" ]; then exit 0; fi; \
+	gitdir=$$(git rev-parse --git-dir 2>/dev/null); \
+	common=$$(git rev-parse --git-common-dir 2>/dev/null); \
+	if [ -n "$$gitdir" ] && [ -n "$$common" ]; then \
+		[ "$$gitdir" != "$$common" ] || exit 0; \
+	else \
+		[ -f "$(CURDIR)/.git" ] || exit 0; \
+	fi; \
+	{ \
+		echo "This is a linked worktree, and compose.yaml pins one project name, so this would"; \
+		echo "drive the main checkout's containers and its development database — not a stack"; \
+		echo "of its own. Give this worktree its own:"; \
+		echo; \
+		echo "  COMPOSE_PROJECT_NAME=vaultory-$$(basename "$$PWD") make $(or $(MAKECMDGOALS),up)"; \
+		echo; \
+		echo "The ports are the same either way, so stop the other stack first, or set"; \
+		echo "VAULTORY_*_PORT in a .env beside compose.yaml."; \
+		exit 2; \
+	}
 
 help: ## Show this help
-	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
+	@grep -hE '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[1m%-16s\033[0m %s\n", $$1, $$2}'
 
-up: ## Start the stack (database, migrations, backend, frontend)
+up: one-stack-per-checkout ## Start the stack (database, migrations, backend, frontend)
 	@# When the migrations step fails, its own explanation is the useful part — and `up -d` does not
 	@# print it. Show that step's output, and only when that step is what failed, so an unrelated
 	@# failure is not buried under it (feature 012).
-	@$(COMPOSE) --profile dev up --build -d || { \
+	@#
+	@# "That step" means this invocation's: the container can be left over from an earlier run, with
+	@# its exit code and log still readable (#70). Docker's own StartedAt says whether it ran now.
+	@# It changes on every start and carries nanoseconds, where `date` here gives whole seconds and
+	@# two runs inside the same second are indistinguishable by it (#81). The same value bounds the
+	@# log, because starting a container again keeps the earlier run's lines in front of the new
+	@# ones. An absent container inspects to nothing, which differs from anything and so reads as
+	@# "ran now" — correct, since there was nothing to be stale.
+	@before=$$(docker inspect -f '{{.State.StartedAt}}' \
+		"$$($(COMPOSE) --profile dev ps -aq migrate 2>/dev/null | head -n1)" 2>/dev/null); \
+	$(COMPOSE) --profile dev up --build -d || { \
 		status=$$?; \
-		if [ "$$($(COMPOSE) --profile dev ps -a --format '{{.ExitCode}}' migrate 2>/dev/null)" != "0" ]; then \
-			$(COMPOSE) --profile dev logs --no-log-prefix migrate 2>/dev/null; \
+		id=$$($(COMPOSE) --profile dev ps -aq migrate 2>/dev/null | head -n1); \
+		started=$$(docker inspect -f '{{.State.StartedAt}}' "$$id" 2>/dev/null); \
+		if [ -n "$$started" ] && [ "$$started" != "$$before" ] && \
+			[ "$$(docker inspect -f '{{.State.ExitCode}}' "$$id" 2>/dev/null)" != "0" ]; then \
+			$(COMPOSE) --profile dev logs --since "$$started" --no-log-prefix migrate; \
 		fi; \
 		exit $$status; \
 	}
@@ -31,10 +82,10 @@ up: ## Start the stack (database, migrations, backend, frontend)
 	@echo
 	@echo "  Follow the logs with:  make logs"
 
-watch: ## Start the stack and sync source changes into it as you edit
+watch: one-stack-per-checkout ## Start the stack and sync source changes into it as you edit
 	$(COMPOSE) --profile dev up --build --watch
 
-down: ## Stop the stack. Your data is kept.
+down: one-stack-per-checkout ## Stop the stack. Your data is kept.
 	$(COMPOSE) --profile dev down
 
 logs: ## Follow the logs
@@ -45,16 +96,16 @@ ps: ## Show what is running
 
 # Separated from `down` and named so nobody runs it by accident: this is the only command that
 # destroys a developer's collectibles and uploaded images (FR-007).
-reset: ## DESTROY all data — database and uploaded images — then stop
+reset: one-stack-per-checkout ## DESTROY all data — database and uploaded images — then stop
 	@printf "This deletes every collectible and uploaded image. Type 'yes' to continue: " && \
 		read ans && [ "$$ans" = "yes" ] || (echo "Cancelled."; exit 1)
 	$(COMPOSE) --profile dev down -v
 
-test: ## Run the backend suites (unit, integration, contract) against a throwaway database
+test: one-stack-per-checkout ## Run the backend suites (unit, integration, contract) against a throwaway database
 	$(COMPOSE) --profile test run --rm --build backend-test
 	@$(COMPOSE) --profile test down --remove-orphans >/dev/null 2>&1 || true
 
-test-e2e: ## Run the browser suite. Requires `make up` first.
+test-e2e: one-stack-per-checkout ## Run the browser suite. Requires `make up` first.
 	@# Both profiles: the e2e container shares the frontend's network namespace, so that service
 	@# has to be part of the project Compose is resolving. It already had to be running anyway.
 	$(COMPOSE) --profile dev --profile e2e run --rm e2e
@@ -62,8 +113,15 @@ test-e2e: ## Run the browser suite. Requires `make up` first.
 # For a database ahead of the checkout (feature 012): run from the branch whose migrations are
 # applied, since only it has the files that undo them. Never runs without a version, and never on
 # its own — `make up` only ever suggests it.
-migrate-to: ## Move the dev database to VERSION using this checkout's migrations, e.g. VERSION=10
+#
+# It asks first, the way `reset` does. Going to a lower version is the only thing this target is
+# for, and that reverses the migrations above it: a down drops what its up created, so the data in
+# there goes too. The number is typed by somebody who has just been told their database is
+# unfamiliar, which is the worst moment to act on a typo without a question.
+migrate-to: one-stack-per-checkout ## Move the dev database to VERSION using this checkout's migrations, e.g. VERSION=10
 	@[ -n "$(VERSION)" ] || { echo "Say which version: make migrate-to VERSION=10"; exit 2; }
+	@printf "This reverses every migration above $(VERSION) and deletes what they hold. Type 'yes' to continue: " && \
+		read ans && [ "$$ans" = "yes" ] || (echo "Cancelled."; exit 1)
 	$(COMPOSE) --profile dev run --rm migrate goto $(VERSION)
 
 shell-backend: ## Open a shell in the backend container
