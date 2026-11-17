@@ -82,6 +82,10 @@ func run() error {
 	// Deliberately not fatal and deliberately not in a goroutine. Nothing a collector can see
 	// depends on it — the images are already unreachable — so a failure here is worth recording and
 	// nothing more. It is bounded to one batch, so it cannot delay start-up for long.
+	//
+	// Uploads abandoned while the service was down are swept first, so their files join the drain
+	// below rather than waiting for the next upload (feature 009, FR-009).
+	service.SweepAbandonedUploads(ctx)
 	if drained := service.DrainImageDeletions(ctx); drained > 0 {
 		slog.Info("removed image files left over from a previous run", "images", drained)
 	}

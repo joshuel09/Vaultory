@@ -3,6 +3,7 @@ package collection
 import (
 	"context"
 	"log/slog"
+	"time"
 )
 
 // drainBatch is how many queued image deletions one drain attempts.
@@ -55,4 +56,38 @@ func (s *Service) DrainImageDeletions(ctx context.Context) int {
 		drained++
 	}
 	return drained
+}
+
+// abandonedUploadGrace is how long an upload nobody has attached may wait before it is swept.
+//
+// Thirty days: the time a session survives unused, so an upload older than this belongs, in the
+// ordinary case, to a form that has outlived the session it was made in. It is not a guarantee —
+// signing in again in another tab revives an old form — and nothing relies on it being one. The
+// guarantee is the locking in SweepAbandonedImages, and a form past this age gets a refusal that
+// says to upload the photograph again (feature 009, FR-002, FR-006, FR-007).
+const abandonedUploadGrace = 30 * 24 * time.Hour
+
+// sweepBatch bounds one sweep, for the same reason drainBatch bounds a drain: it runs inside a
+// collector's upload, which must not pay for the whole backlog (FR-008).
+const sweepBatch = 20
+
+// SweepAbandonedUploads removes one batch of uploads nobody attached within the grace period. Their
+// files go on the deletion queue; the caller drains it.
+//
+// It runs after an upload and once at start-up — never on a ticker, for the reason
+// DrainImageDeletions has none: abandoned uploads accrue only as fast as uploads happen, so sweeping
+// on upload works the backlog exactly as it grows (research.md Decision 3 of feature 009).
+//
+// Like the drain, it is allowed to fail. Nothing a collector does depends on it, so an error is
+// recorded and nothing more (FR-010). Returns how many uploads it removed.
+func (s *Service) SweepAbandonedUploads(ctx context.Context) int {
+	swept, err := s.store.SweepAbandonedImages(ctx, abandonedUploadGrace, sweepBatch)
+	if err != nil {
+		slog.ErrorContext(ctx, "could not sweep abandoned uploads", "error", err)
+		return 0
+	}
+	if swept > 0 {
+		slog.InfoContext(ctx, "swept abandoned uploads", "images", swept)
+	}
+	return swept
 }

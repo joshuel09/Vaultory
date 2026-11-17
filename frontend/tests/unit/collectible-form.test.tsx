@@ -161,6 +161,38 @@ describe('EditCollectibleForm', () => {
     expect(screen.getByLabelText(/purchase price/i)).toHaveValue('-5.00')
   })
 
+  it('says on the photograph when the photograph is the reason a save was refused (feature 009, FR-007)', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(400, {
+        error: {
+          code: 'validation_failed',
+          message: 'This collectible could not be saved.',
+          fields: [
+            {
+              field: 'imageId',
+              code: 'invalid_value',
+              message: 'That photograph is no longer available. Upload it again, or save without one.',
+            },
+          ],
+        },
+      }),
+    )
+    const user = userEvent.setup()
+    render(<EditCollectibleForm collectible={{ ...stored, image: anImage }} returnTo="/collection" />)
+
+    await user.clear(screen.getByLabelText(/^name/i))
+    await user.type(screen.getByLabelText(/^name/i), 'Still here')
+    await user.click(screen.getByRole('button', { name: /save changes/i }))
+
+    const onPhotograph = await screen.findByTestId('image-error')
+    expect(onPhotograph).toHaveTextContent(/no longer available\. Upload it again/i)
+    expect(screen.getByLabelText(/^name/i)).toHaveValue('Still here')
+
+    // Removing the photograph addresses the complaint, so it goes.
+    await user.click(screen.getByRole('button', { name: /^remove$/i }))
+    expect(screen.queryByTestId('image-error')).not.toBeInTheDocument()
+  })
+
   it('shows what the collectible now says when somebody changed it first (FR-027)', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse(409, {

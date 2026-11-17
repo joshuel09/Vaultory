@@ -39,7 +39,7 @@ func (s *Service) Edit(
 			return postgres.Row{}, []collectible.Violation{{
 				Field:   "imageId",
 				Code:    collectible.CodeInvalidValue,
-				Message: "That image could not be found.",
+				Message: imageUnavailableMessage,
 			}}, nil
 		}
 	}
@@ -50,7 +50,7 @@ func (s *Service) Edit(
 		return postgres.Row{}, []collectible.Violation{{
 			Field:   "imageId",
 			Code:    collectible.CodeInvalidValue,
-			Message: "That image could not be found.",
+			Message: imageUnavailableMessage,
 		}}, nil
 	}
 	if err != nil {
