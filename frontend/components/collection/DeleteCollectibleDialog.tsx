@@ -14,8 +14,8 @@ interface Props {
 }
 
 /**
- * Delete a collectible, behind a confirmation proportionate to the fact that it cannot be undone
- * (FR-023).
+ * Delete a collectible — which since feature 010 moves it to the Trash for 30 days — behind a
+ * confirmation (FR-023, as amended by feature 010 FR-003).
  *
  * A native <dialog> opened with showModal(), which gives focus containment, Escape to dismiss, the
  * inert backdrop and focus restoration on close for nothing. A dialog library would be a
@@ -25,7 +25,8 @@ interface Props {
  * What makes the confirmation proportionate rather than merely present:
  *
  *   - it names the collectible, so there is no doubt which one is about to go;
- *   - it says plainly that this cannot be undone, because it cannot;
+ *   - it says plainly where it goes and for how long, so nobody deletes believing it is gone for
+ *     good, or keeps something believing it could not be recovered;
  *   - Cancel holds the initial focus and the dialog's default action is to cancel, so pressing
  *     Enter on an untouched dialog deletes nothing;
  *   - it does not demand the collector type the name. That is the friction appropriate to bulk or
@@ -99,11 +100,11 @@ export function DeleteCollectibleDialog({ collectibleId, name, onDeleted }: Prop
       >
         <form method="dialog" className="space-y-5 p-6">
           <h2 id="delete-dialog-title" className="text-lg font-semibold tracking-tight">
-            Delete {name}?
+            Move {name} to the Trash?
           </h2>
           <p className="text-sm text-ink-muted">
-            This cannot be undone. {name} and its photograph will be removed from your vault for
-            good — there is no trash to recover it from.
+            {name} and its photograph will leave your vault and be kept in the Trash for 30 days. You
+            can restore it from there until then.
           </p>
 
           {error && (
@@ -128,7 +129,7 @@ export function DeleteCollectibleDialog({ collectibleId, name, onDeleted }: Prop
               onClick={handleDelete}
               className="bg-danger text-white hover:bg-danger/90"
             >
-              {deleting ? 'Deleting…' : 'Delete permanently'}
+              {deleting ? 'Moving…' : 'Move to Trash'}
             </Button>
           </div>
         </form>
