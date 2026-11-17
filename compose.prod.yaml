@@ -119,6 +119,8 @@ services:
       auth-role:
         condition: service_completed_successfully
     environment:
+      # Server-rendered pages call Go directly at runtime as well as through built rewrites.
+      VAULTORY_BACKEND_ORIGIN: http://backend:8080
       BETTER_AUTH_SECRET: ${VAULTORY_SESSION_SECRET:?set VAULTORY_SESSION_SECRET before starting the prod stack}
       BETTER_AUTH_URL: ${VAULTORY_PUBLIC_URL:?set VAULTORY_PUBLIC_URL, the origin collectors reach Vaultory on}
       # Defaults to the public URL. Set explicitly only when Vaultory is reached on more than one
