@@ -288,3 +288,18 @@ runs the second by accident.
 | A test run emptied the development collection | The test runner is pointed at the development database — the one thing Decision 4 exists to prevent |
 | Frontend start is slow every time | `node_modules` is not on a persisted volume (research Decision 8) |
 | The production backend image will not start | Expected until the FR-019 check in `main.go` is reconciled; see the plan's Complexity Tracking |
+
+### Production review verification — 2026-11-18
+
+On arm64, `make prod-build` completed and exported filesystems measured 13,742,592 bytes
+for the backend and 191,536,640 bytes for the frontend (191.5 decimal MB), below SC-006.
+The frontend runs as UID 65532; Sharp and TypeScript are absent from its runtime trace.
+This refreshes the earlier arm64 figure; amd64 remains unmeasured. Production server-side
+reads require `VAULTORY_BACKEND_ORIGIN=http://backend:8080` at runtime as well as build time
+(fixed in PR #98). Browser verification uses a separate Compose project, captured mail,
+and the development suite's test-only auth limits to accommodate shared-address test users.
+
+Production browser run on 2026-11-18: **406 passed, 4 failed, 2 flaky, 8 skipped**
+across desktop/tablet/mobile (7.3 minutes). The failures reported `page.goto` interrupted
+by another navigation to the same gallery URL after writes; this is not a clean pass.
+PR #53 remains open pending investigation and a passing production run.
