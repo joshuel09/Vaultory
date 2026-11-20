@@ -48,7 +48,9 @@ export async function signIn(page: Page, collector: 'primary' | 'second' = 'prim
  * server then rejects as "a name is required" — a failure that looks nothing like its cause.
  */
 export async function gotoReady(page: Page, path: string) {
-  await page.goto(path)
+  // A post-save client transition may already be taking us here. Starting the
+  // same navigation again can abort it; assertions below wait for the target UI.
+  if (new URL(path, process.env.VAULTORY_BASE_URL ?? 'http://localhost:3000').href !== page.url()) await page.goto(path)
   await page.waitForLoadState('networkidle')
 }
 
