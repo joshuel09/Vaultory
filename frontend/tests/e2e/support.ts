@@ -48,10 +48,9 @@ export async function signIn(page: Page, collector: 'primary' | 'second' = 'prim
  * server then rejects as "a name is required" — a failure that looks nothing like its cause.
  */
 export async function gotoReady(page: Page, path: string) {
-  // A client-side URL change can precede completion of its navigation. Finish that
-  // transition before starting another, or the two gallery navigations can abort each other.
-  await page.waitForLoadState('networkidle')
-  await page.goto(path)
+  // A post-save client transition may already be taking us here. Starting the
+  // same navigation again can abort it; assertions below wait for the target UI.
+  if (new URL(path, page.url()).href !== page.url()) await page.goto(path)
   await page.waitForLoadState('networkidle')
 }
 
