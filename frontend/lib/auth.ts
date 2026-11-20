@@ -1,8 +1,10 @@
 import { betterAuth } from 'better-auth'
+import { createAuthMiddleware } from 'better-auth/api'
 import { Pool } from 'pg'
 import { send } from '@/lib/mail'
 import { verificationMessage, resetMessage } from '@/lib/messages'
 import { createHash } from 'node:crypto'
+import { clearAddress, recordOutcome, refuseIfLocked } from '@/lib/sign-in-lockout'
 
 /**
  * Better Auth owns registration, sign-in, password hashing, and session issuance (issue #15).
@@ -15,6 +17,9 @@ import { createHash } from 'node:crypto'
  * here cannot read a collection even though this process holds a database handle.
  */
 const pool = new Pool({ connectionString: process.env.BETTER_AUTH_DATABASE_URL })
+
+/** Keys the sign-in lock's address hashes (feature 013); the same secret Better Auth signs with. */
+const lockoutSecret = process.env.BETTER_AUTH_SECRET ?? ''
 
 /**
  * How Better Auth stores a token when `storeIdentifier: 'hashed'` is set: SHA-256 of the
@@ -140,13 +145,33 @@ export const auth = betterAuth({
         'UPDATE "user" SET "emailVerified" = true, "updatedAt" = now() WHERE id = $1 AND "emailVerified" = false',
         [user.id],
       )
+      // And ends any sign-in lock on the address: a reset is the way back in for a collector who
+      // locked themselves out (feature 013, FR-005). Called only once the password has changed,
+      // never when a reset is merely requested.
+      await clearAddress(pool, lockoutSecret, user.email)
     },
     // FR-004. Length only: a length rule is honest about what it buys, where a composition rule
     // mostly teaches people to end passwords with "1!".
     minPasswordLength: 12,
   },
+  /*
+   * The sign-in lock (feature 013, FR-027 as amended): five consecutive failures for an email
+   * address lock sign-in for it for fifteen minutes, whether or not it has an account. The count is
+   * kept in PostgreSQL — see lib/sign-in-lockout.ts and migration 000013.
+   */
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== '/sign-in/email') return
+      await refuseIfLocked(pool, lockoutSecret, ctx.body?.email)
+    }),
+    after: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== '/sign-in/email') return
+      await recordOutcome(pool, lockoutSecret, ctx.body?.email, ctx.context.returned)
+    }),
+  },
   rateLimit: {
-    // FR-027: 10 failed sign-ins per account per 15 minutes, then 15 minutes of refusal.
+    // Per network address, which is what Better Auth's limiter counts. The per-account rule is the
+    // sign-in lock in `hooks` above; these are abuse protection around it.
     //
     // Stored in the database rather than in memory on purpose. In-memory counters reset on every
     // restart and are not shared between instances, so a limit that exists to slow guessing would
@@ -159,17 +184,13 @@ export const auth = betterAuth({
     window: 15 * 60,
     max: 2000,
     customRules: {
-      // FR-027, and the rule that actually matters: ten failed sign-ins per account per fifteen
-      // minutes, then fifteen minutes of refusal that lifts by itself. Never a permanent lock —
-      // password reset is out of scope, so a locked-out collector would have no way back in.
       /*
-       * FR-027: ten failed sign-ins per fifteen minutes.
+       * Sign-in attempts per network address, ten per fifteen minutes.
        *
-       * Better Auth keys rate limits by IP, not by account, so this is "ten per address" rather
-       * than the "ten per account" FR-027 describes. That is a real gap in feature 004's
-       * implementation, not a decision made here — it is recorded in the spec rather than left for
-       * somebody to discover. In practice it is stricter for shared networks and looser for an
-       * attacker with many addresses.
+       * Not FR-027. Feature 004 meant this to be its per-account limit, but Better Auth keys rate
+       * limits by IP, so it was "ten per address" — stricter for a shared network, looser for an
+       * attacker with many addresses. The per-account rule is now the sign-in lock in `hooks`
+       * (feature 013, issue #99); this stays as abuse protection around it.
        *
        * Configurable because the browser suite runs from one container: every account it creates
        * shares an address, and a limit meant for one person throttles the whole run.
