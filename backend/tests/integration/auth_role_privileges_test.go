@@ -52,7 +52,7 @@ func TestTheAuthRoleCannotReachACollection(t *testing.T) {
 	}
 
 	// Allowed. Without this the test would pass on a role that simply cannot connect.
-	for _, table := range []string{`"user"`, `"session"`, `"account"`, `"verification"`, `"rateLimit"`} {
+	for _, table := range []string{`"user"`, `"session"`, `"account"`, `"verification"`, `"rateLimit"`, "sign_in_lockouts"} {
 		t.Run("permitted on "+table, func(t *testing.T) {
 			var n int
 			if err := conn.QueryRow(ctx, `SELECT count(*) FROM `+table).Scan(&n); err != nil {
@@ -60,6 +60,18 @@ func TestTheAuthRoleCannotReachACollection(t *testing.T) {
 			}
 		})
 	}
+
+	// The sign-in lock's functions (feature 013): the role runs them, which is all the frontend does.
+	t.Run("permitted to run the sign-in lock", func(t *testing.T) {
+		key := "role-probe-key"
+		for _, call := range []string{
+			`SELECT sign_in_record_failure($1)`, `SELECT sign_in_is_locked($1)`, `SELECT sign_in_clear($1)`,
+		} {
+			if _, err := conn.Exec(ctx, call, key); err != nil {
+				t.Fatalf("%s as the auth role: %v", call, err)
+			}
+		}
+	})
 
 	// And registration still works, through the SECURITY DEFINER trigger: the role cannot write to
 	// collectors itself, but creating an account must still produce one.

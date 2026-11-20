@@ -89,6 +89,8 @@ with the new password immediately.
 - A sign-in refused because the email address is not yet verified is not a password failure and
   does not count; it already has its own message (feature 004).
 - A restart or a second instance of the service does not reset or split the count.
+- A count nobody has added to for 30 days is forgotten, so the record of an address that failed
+  once and never returned does not stay forever.
 - The per-network ceiling still applies on its own, as abuse protection; whichever limit is reached
   first refuses.
 
