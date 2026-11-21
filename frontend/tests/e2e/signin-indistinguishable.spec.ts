@@ -38,7 +38,8 @@ test.describe('sign-in tells an attacker nothing', () => {
 
     const unknown = `never-${Date.now()}-${Math.random().toString(36).slice(2)}@example.test`
 
-    // Several rounds: a single pair can coincide, and the sign-in limit is 10 per account.
+    // Several rounds: a single pair can coincide. Four, because the fifth consecutive failure locks
+    // the address (feature 013) — sign-in-lockout.spec.ts covers what happens from there.
     const rounds = 4
     const known: number[] = []
     const absent: number[] = []

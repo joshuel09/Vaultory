@@ -28,7 +28,7 @@ Vaultory undeployable rather than merely incomplete.
 
 ### Session 2026-09-19
 
-- Q: FR-027 requires limiting sign-in attempts but names no number. What should the limit be? → A: 10 failed attempts per account per 15 minutes, then a 15-minute lockout that lifts on its own; a successful sign-in resets the counter; the account is never permanently locked.
+- Q: FR-027 requires limiting sign-in attempts but names no number. What should the limit be? → A: 10 failed attempts per account per 15 minutes, then a 15-minute lockout that lifts on its own; a successful sign-in resets the counter; the account is never permanently locked. *Superseded by feature 013: 5 consecutive failures per email address.*
 - Q: Is the 30-day session expiry absolute from sign-in, or does it renew with use? → A: Sliding. Each authenticated request extends expiry to 30 days from that moment, subject to a hard cap of 90 days from sign-in, after which the collector must sign in again.
 - Q: What happens to the two seeded development collectors and the collectibles they own? → A: A reversible migration deletes them. They are fixtures rather than people, so nothing real is orphaned; the down migration re-seeds them.
 - Q: When a signed-out visitor opens a vault page, does the URL change? → A: Yes — redirect to the sign-in page carrying the originally requested path, and return them there after signing in.
@@ -229,11 +229,13 @@ content; visit a vault page with no session and confirm the page invites sign-in
 
 **Not being negligent**
 
-- **FR-027**: The system MUST refuse further sign-in attempts for an account after 10 failed
-  attempts within 15 minutes, for 15 minutes, and MUST say so when it refuses. A successful
-  sign-in MUST reset the count, the refusal MUST lift without intervention, and an account MUST
-  NOT become permanently locked — password reset is out of scope, so a collector locked out
-  indefinitely would have no way back in.
+- **FR-027**: The system MUST refuse sign-in for an email address after 5 consecutive failed
+  attempts, for 15 minutes, and MUST say so when it refuses — with the same response whether or not
+  the address has an account. A successful sign-in or a completed password reset MUST reset the
+  count, the refusal MUST lift without intervention, and an account MUST NOT become permanently
+  locked. *Amended 2026-11-20 by feature 013 (#99): first written as 10 per account, implemented as
+  10 per network address because of how Better Auth counts; five follows the company security
+  guideline, and password reset (feature 005) is now the way back in.*
 - **FR-028**: The system MUST record that authentication events happened — registration, sign-in,
   sign-in failure, sign-out — without recording credentials.
 
