@@ -48,5 +48,26 @@ func (s *Service) Delete(ctx context.Context, collectorID, collectibleID uuid.UU
 	// image is already unreachable, so this is reclaiming bytes rather than keeping a promise
 	// (FR-020a).
 	s.DrainImageDeletions(ctx)
+	// And audit entries past their year, for the same reason the drain runs here: without a
+	// schedule, the work that creates a backlog is what works it (feature 014, FR-007).
+	s.PurgeExpiredAudit(ctx)
 	return nil
+}
+
+// auditPurgeBatch bounds one retention pass, so it never makes a deletion do unbounded work.
+const auditPurgeBatch = 500
+
+// PurgeExpiredAudit removes one batch of audit entries over a year old (feature 014, FR-007). Like
+// the drain, it is allowed to fail: nothing a collector does depends on it, so an error is
+// recorded and nothing more.
+func (s *Service) PurgeExpiredAudit(ctx context.Context) int {
+	n, err := s.store.PurgeExpiredAudit(ctx, auditPurgeBatch)
+	if err != nil {
+		slog.ErrorContext(ctx, "could not purge expired audit entries", "error", err)
+		return 0
+	}
+	if n > 0 {
+		slog.InfoContext(ctx, "purged expired audit entries", "entries", n)
+	}
+	return n
 }
