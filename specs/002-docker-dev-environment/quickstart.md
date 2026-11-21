@@ -303,3 +303,9 @@ Production browser run on 2026-11-18: **406 passed, 4 failed, 2 flaky, 8 skipped
 across desktop/tablet/mobile (7.3 minutes). The failures reported `page.goto` interrupted
 by another navigation to the same gallery URL after writes; this is not a clean pass.
 PR #53 remains open pending investigation and a passing production run.
+
+**Final production browser verification (2026-11-21): 412 passed, 8 skipped, no
+failures or retries, 8.5 minutes**, across desktop/tablet/mobile. Includes navigation
+fixes from PRs #120 and #123. Production images used the isolated stack and test-only
+auth limits described above. amd64 size and cross-architecture verification remain
+unmeasured; this result establishes arm64 operation only.
