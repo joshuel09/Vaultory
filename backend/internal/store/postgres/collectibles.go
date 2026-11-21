@@ -179,6 +179,9 @@ func (s *Store) Add(
 	if err != nil {
 		return AddResult{}, fmt.Errorf("read back collectible: %w", err)
 	}
+	if err := recordCollectibleEvent(ctx, tx, auditCollectibleCreated, collectorID, id); err != nil {
+		return AddResult{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return AddResult{}, fmt.Errorf("commit: %w", err)
 	}
@@ -391,6 +394,9 @@ func (s *Store) Edit(
 	if err != nil {
 		return Row{}, fmt.Errorf("read back collectible: %w", err)
 	}
+	if err := recordCollectibleEvent(ctx, tx, auditCollectibleEdited, collectorID, collectibleID); err != nil {
+		return Row{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return Row{}, fmt.Errorf("commit: %w", err)
 	}
@@ -437,6 +443,10 @@ func (s *Store) Delete(ctx context.Context, collectorID, collectibleID uuid.UUID
 		}
 	}
 
+	// Only a deletion that happened is recorded: the not-found path above returned before this.
+	if err := recordCollectibleEvent(ctx, tx, auditCollectibleDeleted, collectorID, collectibleID); err != nil {
+		return false, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return false, fmt.Errorf("commit: %w", err)
 	}

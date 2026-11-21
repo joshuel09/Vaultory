@@ -73,6 +73,23 @@ func TestTheAuthRoleCannotReachACollection(t *testing.T) {
 		}
 	})
 
+	// The audit log (feature 014): the role adds entries and does nothing else with them.
+	t.Run("may add audit entries, and only add", func(t *testing.T) {
+		if _, err := conn.Exec(ctx,
+			`INSERT INTO audit_events (action, outcome) VALUES ('account.sign_in_failed', 'failed')`); err != nil {
+			t.Fatalf("the auth role could not add an audit entry: %v", err)
+		}
+		for _, stmt := range []string{
+			`SELECT count(*) FROM audit_events`,
+			`UPDATE audit_events SET outcome = 'succeeded'`,
+			`DELETE FROM audit_events`,
+		} {
+			if _, err := conn.Exec(ctx, stmt); err == nil || !strings.Contains(err.Error(), "permission denied") {
+				t.Errorf("%s as the auth role: got %v, want permission denied", strings.Fields(stmt)[0], err)
+			}
+		}
+	})
+
 	// And registration still works, through the SECURITY DEFINER trigger: the role cannot write to
 	// collectors itself, but creating an account must still produce one.
 	t.Run("registration still creates a collector", func(t *testing.T) {

@@ -4,7 +4,8 @@ import { Pool } from 'pg'
 import { send } from '@/lib/mail'
 import { verificationMessage, resetMessage } from '@/lib/messages'
 import { createHash } from 'node:crypto'
-import { clearAddress, recordOutcome, refuseIfLocked } from '@/lib/sign-in-lockout'
+import { addressKey, clearAddress, recordOutcome, refuseIfLocked } from '@/lib/sign-in-lockout'
+import { recordAccountEvent, signInEvent } from '@/lib/audit'
 
 /**
  * Better Auth owns registration, sign-in, password hashing, and session issuance (issue #15).
@@ -149,6 +150,11 @@ export const auth = betterAuth({
       // locked themselves out (feature 013, FR-005). Called only once the password has changed,
       // never when a reset is merely requested.
       await clearAddress(pool, lockoutSecret, user.email)
+      await recordAccountEvent(pool, {
+        action: 'account.password_reset',
+        outcome: 'succeeded',
+        accountId: user.id,
+      })
     },
     // FR-004. Length only: a length rule is honest about what it buys, where a composition rule
     // mostly teaches people to end passwords with "1!".
@@ -162,12 +168,72 @@ export const auth = betterAuth({
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
       if (ctx.path !== '/sign-in/email') return
-      await refuseIfLocked(pool, lockoutSecret, ctx.body?.email)
+      const email: unknown = ctx.body?.email
+      try {
+        await refuseIfLocked(pool, lockoutSecret, email)
+      } catch (refusal) {
+        // Refused before the password is checked, so the after-hook never sees it (feature 014).
+        if (typeof email === 'string') {
+          await recordAccountEvent(pool, {
+            action: 'account.sign_in_refused',
+            outcome: 'refused',
+            subjectId: addressKey(email, lockoutSecret),
+          })
+        }
+        throw refusal
+      }
     }),
     after: createAuthMiddleware(async (ctx) => {
       if (ctx.path !== '/sign-in/email') return
-      await recordOutcome(pool, lockoutSecret, ctx.body?.email, ctx.context.returned)
+      const email: unknown = ctx.body?.email
+      await recordOutcome(pool, lockoutSecret, email, ctx.context.returned)
+      if (typeof email !== 'string') return
+      const event = signInEvent(ctx.context.returned, addressKey(email, lockoutSecret))
+      if (event) await recordAccountEvent(pool, event)
     }),
+  },
+  /*
+   * Account events Better Auth reports from the database rather than from a route (feature 014).
+   * Each names the account and nothing else about it.
+   */
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (user) => {
+          await recordAccountEvent(pool, {
+            action: 'account.registered',
+            outcome: 'succeeded',
+            accountId: user.id,
+          })
+        },
+      },
+      update: {
+        after: async (user, context) => {
+          // Verification only. A completed reset also verifies the address, but it writes that
+          // directly and is recorded as the reset.
+          if (context?.path !== '/verify-email' || !user.emailVerified) return
+          await recordAccountEvent(pool, {
+            action: 'account.email_verified',
+            outcome: 'succeeded',
+            accountId: user.id,
+          })
+        },
+      },
+    },
+    session: {
+      delete: {
+        after: async (session, context) => {
+          // Only a sign-out. Sessions also end when a password is reset, and that is recorded as
+          // the reset, not as the collector signing out everywhere.
+          if (context?.path !== '/sign-out') return
+          await recordAccountEvent(pool, {
+            action: 'account.signed_out',
+            outcome: 'succeeded',
+            accountId: session.userId,
+          })
+        },
+      },
+    },
   },
   rateLimit: {
     // Per network address, which is what Better Auth's limiter counts. The per-account rule is the
