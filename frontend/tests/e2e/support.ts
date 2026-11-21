@@ -50,7 +50,10 @@ export async function signIn(page: Page, collector: 'primary' | 'second' = 'prim
 export async function gotoReady(page: Page, path: string) {
   // A post-save client transition may already be taking us here. Starting the
   // same navigation again can abort it; assertions below wait for the target UI.
-  if (new URL(path, process.env.VAULTORY_BASE_URL ?? 'http://localhost:3000').href !== page.url()) await page.goto(path)
+  const destination = new URL(path, process.env.VAULTORY_BASE_URL ?? 'http://localhost:3000')
+  // Forms deliberately reopen at the same URL to start a fresh submission.
+  const alreadyAtGallery = destination.pathname === '/collection' && destination.href === page.url()
+  if (!alreadyAtGallery) await page.goto(path)
   await page.waitForLoadState('networkidle')
 }
 
