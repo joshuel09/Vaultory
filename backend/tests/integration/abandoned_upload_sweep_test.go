@@ -29,6 +29,9 @@ func sweepService(t *testing.T, images imagestore.Store) *collection.Service {
 	t.Helper()
 	svc := collection.NewService(postgres.NewStore(pool), images, 24*time.Hour)
 	svc.SetClock(func() time.Time { return time.Date(2026, 9, 12, 12, 0, 0, 0, time.UTC) })
+	// A sweep an upload started runs in the background; it must not outlive the test into the
+	// next one's reset.
+	t.Cleanup(svc.WaitForBackground)
 	return svc
 }
 
@@ -47,6 +50,9 @@ func uploadAs(t *testing.T, svc *collection.Service, collector uuid.UUID) postgr
 	if err != nil {
 		t.Fatalf("upload: %v", err)
 	}
+	// The sweep this upload started runs in the background (FR-009). Let it finish here, so the
+	// test's own aging and sweeping happen after it, as they did when it ran inside the upload.
+	svc.WaitForBackground()
 	return img
 }
 
@@ -498,6 +504,7 @@ func TestAFailingSweepDoesNotFailTheUpload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the upload failed because the sweep did: %v", err)
 	}
+	svc.WaitForBackground() // the sweep runs after the upload is answered; let it fail first
 	if !imageRowExists(t, img.ID) {
 		t.Error("the upload reported success but has no row")
 	}
@@ -517,4 +524,33 @@ func collectibleWithKey(t *testing.T, key string) bool {
 		t.Fatalf("check submission: %v", err)
 	}
 	return exists
+}
+
+// T023 — FR-009, SC-005: the sweep an upload starts runs after the upload is answered, and still
+// reclaims an abandoned upload once that background work is done (#72).
+func TestAnUploadsSweepRunsAfterTheUploadIsAnswered(t *testing.T) {
+	_, _ = freshStore(t)
+	ctx := context.Background()
+	images := newImageStore(t)
+	svc := sweepService(t, images)
+
+	old := uploadAs(t, svc, collectorA)
+	age(t, old.ID, grace+time.Hour)
+
+	// The upload's own context is cancelled as soon as it returns, as a request's is once the
+	// response is written. The sweep must not be cut off by that.
+	reqCtx, cancel := context.WithCancel(ctx)
+	img, err := svc.UploadImage(reqCtx, collectorA, bytes.NewReader(testJPEG(t, 300, 400)))
+	cancel()
+	if err != nil {
+		t.Fatalf("upload: %v", err)
+	}
+	svc.WaitForBackground()
+
+	if imageRowExists(t, old.ID) {
+		t.Error("the abandoned upload was not swept after the upload that triggered it")
+	}
+	if !imageRowExists(t, img.ID) {
+		t.Error("the sweep took the upload that triggered it")
+	}
 }
