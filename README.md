@@ -55,6 +55,21 @@ make down       # stop; your data is kept
 make reset      # DESTROY all data, then stop
 ```
 
+#### "The database is ahead of this checkout"
+
+Run the stack on a branch that adds a migration — reviewing a pull request, say — then switch back,
+and `make up` stops with that message instead of starting. Your data is intact. The database has
+migrations this checkout does not know about, and only the branch that added them can undo them:
+
+```bash
+git switch <that branch>
+make migrate-to VERSION=<the version make up printed>
+git switch -
+make up
+```
+
+Or simply carry on with that branch. Nothing is ever rolled back for you.
+
 To change a port or any other value, create a `.env` beside `compose.yaml`. Compose reads it
 automatically and it is gitignored, so your local settings never appear in a diff:
 
@@ -192,6 +207,8 @@ The same suites run again in GitHub Actions, on every pull request and on pushes
 | Backend — vet, build, unit, and the tagged suites type-checked | yes |
 | Frontend — lint, typecheck, unit, build | yes |
 | Backend — integration and contract, via `make test` | yes |
+| Migrations — up, down, up | no, but it runs and is visible |
+| Authorship — commits carry a noreply address | no, but it runs and is visible |
 | Playwright — desktop, tablet, mobile | no, but it runs and is visible |
 
 A merge is refused until the three required checks pass, and a branch behind `main` has to be
@@ -200,6 +217,26 @@ brought up to date first — a branch can pass its own checks and still break `m
 The browser suite does not block because sixteen minutes would dominate every merge. It is worth
 reading rather than ignoring: it is steadier on a runner than on a developer machine, and it has
 caught defects the faster checks could not see.
+
+The migration check applies every migration, reverses every one of them, and applies them again.
+The constitution asks that schema changes be reversible with no exceptions, and the third step is
+the one that earns the job: a `down` that drops more than its `up` created survives the reversal
+and fails the re-apply. It runs against a PostgreSQL of its own, which is not an incidental
+detail — `vaultory_auth` is a cluster-level role, so reversing against a cluster that also holds a
+development database cannot drop it and leaves the database dirty.
+
+The authorship check reads the author, committer and `Co-authored-by:` address of every commit on
+the branch and refuses any that is not a GitHub `noreply` address. It exists because four commits
+once reached `main` authored with an address belonging to a different GitHub account, which then
+appeared in this repository's Contributors list — and removing it afterwards took a history
+rewrite, a force push, and still could not reach the copies kept in `refs/pull/*`. The check runs
+on pull requests only, which is the point: that is the last moment the branch can still be
+rewritten freely.
+
+An allowlist rather than a denylist, so no private domain is written into a public repository. If
+you are refused, the message names the commit and the address, and `git config --get user.email`
+is where to look first — note that running `git config` inside a linked worktree sets it for the
+whole repository, which is how this happened.
 
 ## Working on it
 
