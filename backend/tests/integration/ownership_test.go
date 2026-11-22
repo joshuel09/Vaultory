@@ -127,7 +127,7 @@ func TestCannotAttachAnotherCollectorsImage(t *testing.T) {
 		t.Fatalf("violations = %+v, want one on imageId", violations)
 	}
 	// The message must not distinguish "someone else's" from "does not exist" (FR-027).
-	if violations[0].Message != "That image could not be found." {
+	if violations[0].Message != "That photograph is no longer available. Upload it again, or save without one." {
 		t.Errorf("message %q reveals more than it should", violations[0].Message)
 	}
 }
