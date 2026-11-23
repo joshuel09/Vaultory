@@ -265,6 +265,12 @@ func (s *Store) Get(ctx context.Context, collectorID, collectibleID uuid.UUID) (
 // The files are a separate matter. They are queued rather than deleted here because a transaction
 // cannot roll back a filesystem, and because a storage fault must never be able to stop a
 // collector deleting something (FR-020a, research.md Decisions 4 and 5).
+//
+// Every caller must already have cleared the collectible's own reference — by updating image_id or
+// by deleting the collectible row — before calling this. That order is required, not tidy: the
+// reference is the composite (image_id, collector_id) with ON DELETE SET NULL, which nulls both
+// columns of any collectible still pointing here, and collector_id is NOT NULL, so the delete below
+// would fail (feature 010, FR-018, #73).
 func releaseImage(ctx context.Context, tx pgx.Tx, collectorID, imageID uuid.UUID) error {
 	var originalKey, renditionKey string
 	err := tx.QueryRow(ctx, `
@@ -402,6 +408,7 @@ func (s *Store) Edit(
 	// The photograph is gone from this collectible — replaced or removed. Deleting its row is what
 	// makes it unfetchable, and it happens here, inside the same transaction as the edit, so the
 	// two cannot disagree (FR-020).
+	// After the UPDATE above, never before it: see releaseImage.
 	if currentImageID != nil && (v.ImageID == nil || *v.ImageID != *currentImageID) {
 		if err := releaseImage(ctx, tx, collectorID, *currentImageID); err != nil {
 			return Row{}, err
@@ -518,6 +525,7 @@ func (s *Store) DeletePermanently(ctx context.Context, collectorID, collectibleI
 	if err != nil {
 		return false, fmt.Errorf("delete collectible: %w", err)
 	}
+	// After the DELETE above, never before it: see releaseImage.
 	if imageID != nil {
 		if err := releaseImage(ctx, tx, collectorID, *imageID); err != nil {
 			return false, err

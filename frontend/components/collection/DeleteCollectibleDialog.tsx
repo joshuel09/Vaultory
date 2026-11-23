@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { ApiError } from '@/lib/api/errors'
 import { deleteCollectible } from '@/lib/api/collectibles'
+import { TRASH_RETENTION_DAYS } from '@/lib/trash-retention'
 
 interface Props {
   collectibleId: string
@@ -103,7 +104,8 @@ export function DeleteCollectibleDialog({ collectibleId, name, onDeleted }: Prop
             Move {name} to the Trash?
           </h2>
           <p className="text-sm text-ink-muted">
-            {name} and its photograph will leave your vault and be kept in the Trash for 30 days. You
+            {name} and its photograph will leave your vault and be kept in the Trash for{' '}
+            {TRASH_RETENTION_DAYS} days. You
             can restore it from there until then.
           </p>
 
