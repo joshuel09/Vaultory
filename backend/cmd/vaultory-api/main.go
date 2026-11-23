@@ -83,6 +83,9 @@ func run() error {
 	// depends on it — the images are already unreachable — so a failure here is worth recording and
 	// nothing more. It is bounded to one batch, so it cannot delay start-up for long.
 	//
+	// Collectibles whose time in the Trash ran out while the service was down are destroyed first,
+	// so their photographs' files join the drain below (feature 010, FR-010).
+	service.PurgeExpiredTrash(ctx)
 	// Uploads abandoned while the service was down are swept first, so their files join the drain
 	// below rather than waiting for the next upload (feature 009, FR-009).
 	service.SweepAbandonedUploads(ctx)

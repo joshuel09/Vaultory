@@ -48,14 +48,17 @@ function open() {
 }
 
 describe('DeleteCollectibleDialog', () => {
-  it('names the collectible and says the deletion cannot be undone (FR-023)', async () => {
+  it('names the collectible and says it goes to the Trash for 30 days (FR-023, feature 010 FR-003)', async () => {
     const user = userEvent.setup()
     open()
     await user.click(screen.getByTestId('delete-collectible'))
 
     const dialog = screen.getByTestId('delete-dialog')
     expect(dialog).toHaveTextContent('Kaiju Sentinel')
-    expect(dialog).toHaveTextContent(/cannot be undone/i)
+    expect(dialog).toHaveTextContent(/Trash/)
+    expect(dialog).toHaveTextContent(/30 days/)
+    // It is not permanent any more, and must not say it is.
+    expect(dialog).not.toHaveTextContent(/cannot be undone/i)
   })
 
   it('focuses the way out, not the way through (FR-023, FR-037)', async () => {

@@ -305,6 +305,8 @@ services:
       CGO_ENABLED: "0"
     volumes:
       - ./backend:/app
+      # Cross-language retention contract; expose only the constant the unit test reads.
+      - ./frontend/lib/trash-retention.ts:/frontend/lib/trash-retention.ts:ro
       - gomodcache:/go/pkg/mod
       - gobuildcache:/root/.cache/go-build
     command:
