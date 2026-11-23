@@ -12,7 +12,9 @@ import (
 
 // Statistics summarises one collector's whole vault.
 //
-// All three aggregates run inside a single read-only transaction. Three independent reads observe
+// All three aggregates run inside a single read-only Repeatable Read transaction. Read Committed
+// gives each statement its own snapshot; read-only mode alone cannot stop a
+// concurrent commit appearing between aggregates. Three independent reads observe
 // three independent snapshots, and a collectible added between the status query and the series query
 // would be counted by one and not the other — a response whose figures are required to reconcile
 // (FR-017, FR-026) then fails to, through no fault of the arithmetic. It is rare, it is silent, and
@@ -21,7 +23,7 @@ import (
 // The transaction takes no locks any writer waits on; these are reads of one collector's rows, held
 // briefly.
 func (s *Store) Statistics(ctx context.Context, collectorID uuid.UUID) (collectible.CollectionStatistics, error) {
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return collectible.CollectionStatistics{}, fmt.Errorf("begin statistics: %w", err)
 	}

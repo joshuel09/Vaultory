@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -72,7 +73,42 @@ func (s *Service) UploadImage(
 		_ = s.images.Delete(ctx, renditionKey)
 		return postgres.Image{}, err
 	}
+
+	// Every upload is a potential abandoned one, so this is where abandoned ones are reclaimed —
+	// a bounded batch, never this one (it is seconds old, not thirty days), and never able to turn
+	// this upload into a failure (feature 009, FR-009, FR-010). After this upload is answered, not
+	// inside it: see sweepAfterUpload.
+	s.sweepAfterUpload(ctx)
 	return img, nil
+}
+
+// sweepTimeout bounds one background sweep and its drain, and so how long shutdown waits for one.
+const sweepTimeout = time.Minute
+
+// sweepAfterUpload starts one sweep and drain in the background, unless one is already running.
+//
+// Not in the request, because the sweep's cost is not the batch it removes but the proof that
+// nothing else qualifies: that reads every image and every reference, so it grows with the whole
+// service — 93 ms at 200,000 images with nothing to sweep — and an upload was paying it (#72).
+// One at a time, because a second would read the same backlog, and FOR UPDATE SKIP LOCKED would
+// only make it find less. An upload arriving meanwhile starts nothing; the next one will.
+//
+// The context outlives the request — the response is already sent — but keeps its values, and the
+// sweep's own bound applies.
+func (s *Service) sweepAfterUpload(ctx context.Context) {
+	if !s.sweeping.CompareAndSwap(false, true) {
+		return
+	}
+	s.background.Add(1)
+	go func() {
+		defer s.background.Done()
+		defer s.sweeping.Store(false)
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sweepTimeout)
+		defer cancel()
+		if s.SweepAbandonedUploads(ctx) > 0 {
+			s.DrainImageDeletions(ctx)
+		}
+	}()
 }
 
 // OpenRendition returns the gallery rendition of one image, for this collector only.

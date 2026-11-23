@@ -19,6 +19,15 @@ var imageInUseViolation = collectible.Violation{
 	Message: "That photograph is already used by another collectible. Choose a different one.",
 }
 
+// imageUnavailableMessage is what a collector is told when the photograph a save names cannot be
+// used: it never existed, it is another collector's, or it was swept after sitting unattached past
+// the grace period (feature 009, FR-007).
+//
+// One message for all three, deliberately. Distinguishing someone else's image from an absent one
+// would reveal that it exists (FR-027). And the advice is the same in every case — choose the
+// photograph again — so the collector loses nothing by not being told which.
+const imageUnavailableMessage = "That photograph is no longer available. Upload it again, or save without one."
+
 // AddResult is what an add produced.
 //
 // Existing is true when a replayed submission key returned the collectible it had already created.
@@ -55,7 +64,7 @@ func (s *Service) Add(
 			return AddResult{}, []collectible.Violation{{
 				Field:   "imageId",
 				Code:    collectible.CodeInvalidValue,
-				Message: "That image could not be found.",
+				Message: imageUnavailableMessage,
 			}}, nil
 		}
 	}
@@ -69,7 +78,7 @@ func (s *Service) Add(
 		return AddResult{}, []collectible.Violation{{
 			Field:   "imageId",
 			Code:    collectible.CodeInvalidValue,
-			Message: "That image could not be found.",
+			Message: imageUnavailableMessage,
 		}}, nil
 	}
 	if err != nil {

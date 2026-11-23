@@ -38,7 +38,13 @@ RUN npm run build
 # ------------------------------------------------------------------------------------------------
 # Runtime
 # ------------------------------------------------------------------------------------------------
-FROM node:22-bookworm-slim AS runtime
+# Distroless, as the backend is: no shell, no npm, no apt (SC-006, FR-017). Its entrypoint is
+# already /nodejs/bin/node, and it runs as uid 65532 by default (FR-018). The bookworm-slim runtime
+# this replaced shipped npm, corepack and apt, and weighed 266 MB before any application code.
+#
+# No shell means nothing can `docker exec` into this container to debug it. That is the trade; the
+# development image (Dockerfile.dev) is where to poke around.
+FROM gcr.io/distroless/nodejs22-debian12:nonroot AS runtime
 
 WORKDIR /app
 
@@ -52,15 +58,16 @@ ENV NODE_ENV=production \
 
 # Three copies, all of them necessary. standalone alone boots but serves no CSS or JS chunks:
 # the build deliberately leaves .next/static and public/ out of it so they can be put on a CDN.
-COPY --from=build --chown=node:node /app/.next/standalone ./
-COPY --from=build --chown=node:node /app/.next/static ./.next/static
-COPY --from=build --chown=node:node /app/public ./public
+COPY --from=build --chown=65532:65532 /app/.next/standalone ./
+COPY --from=build --chown=65532:65532 /app/.next/static ./.next/static
+COPY --from=build --chown=65532:65532 /app/public ./public
 
-# `node` is uid 1000, and ships with the base image.
-USER node
+# `nonroot`, uid 65532, ships with the base image. Stated rather than inherited, so a change of base
+# cannot quietly make this root.
+USER 65532:65532
 
 EXPOSE 3000
 
-# No npm in front of it: npm would be PID 1 and would swallow SIGTERM, leaving the container to be
-# killed on a timeout at every restart.
-CMD ["node", "server.js"]
+# The entrypoint is node itself, so this is its argument. Node is PID 1 directly — there is no npm
+# or shell in front of it to swallow SIGTERM.
+CMD ["server.js"]
