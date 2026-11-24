@@ -150,10 +150,22 @@ func (s *Store) PurgeExpiredTrash(ctx context.Context, retention time.Duration, 
 
 	purged := make([]Purged, 0, len(found))
 	for _, e := range found {
-		if _, err := tx.Exec(ctx,
-			`DELETE FROM collectibles WHERE id = $1 AND collector_id = $2`, e.id, e.collectorID); err != nil {
+		// deleted_at is checked again rather than trusted from the SELECT. A restore can commit
+		// after the SELECT took its snapshot and before it locked the row; READ COMMITTED then
+		// re-evaluates the SELECT's predicate against the restored row (EvalPlanQual) and drops it.
+		// Correctness does not rest on that here, as feature 009 Decision 2 declines to for its
+		// sweep: this DELETE reads the row afresh, and once it is locked nothing can restore it
+		// until this transaction ends. A row found restored is skipped, not destroyed (#73).
+		tag, err := tx.Exec(ctx,
+			`DELETE FROM collectibles WHERE id = $1 AND collector_id = $2 AND deleted_at IS NOT NULL`,
+			e.id, e.collectorID)
+		if err != nil {
 			return nil, fmt.Errorf("purge collectible: %w", err)
 		}
+		if tag.RowsAffected() == 0 {
+			continue
+		}
+		// After the DELETE above, never before it: see releaseImage.
 		if e.imageID != nil {
 			if err := releaseImage(ctx, tx, e.collectorID, *e.imageID); err != nil {
 				return nil, err

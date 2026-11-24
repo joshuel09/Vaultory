@@ -21,7 +21,7 @@ test.describe("changing a collectible's photograph", () => {
    * closer to what the assertion is about.
    */
   async function renditionUrlOf(page: import('@playwright/test').Page, name: string) {
-    await page.goto('/collection')
+    await gotoReady(page, '/collection')
     const img = page.getByTestId('collectible-card').filter({ hasText: name }).first().locator('img')
     await expect(img).toBeVisible()
     return (await img.getAttribute('src')) ?? ''
@@ -86,7 +86,7 @@ test.describe("changing a collectible's photograph", () => {
     await page.getByRole('button', { name: /save changes/i }).click()
     await page.waitForURL(/\/collection(\?|$)/)
 
-    await page.goto('/collection')
+    await gotoReady(page, '/collection')
     const card = page.getByTestId('collectible-card').filter({ hasText: name }).first()
     // The designed placeholder, not a broken image (FR-017).
     await expect(card.locator('img')).toHaveCount(0)
@@ -109,7 +109,7 @@ test.describe("changing a collectible's photograph", () => {
     await page.waitForURL(/\/collection(\?|$)/)
 
     expect((await page.request.get(url)).status()).toBe(200)
-    await page.goto('/collection')
+    await gotoReady(page, '/collection')
     await expect(
       page.getByTestId('collectible-card').filter({ hasText: `${name} renamed` }).first().locator('img'),
     ).toBeVisible()
@@ -127,7 +127,7 @@ test.describe("changing a collectible's photograph", () => {
     await page.waitForURL(/\/collection(\?|$)/)
 
     expect((await page.request.get(url)).status()).toBe(200)
-    await page.goto('/collection')
+    await gotoReady(page, '/collection')
     await expect(
       page.getByTestId('collectible-card').filter({ hasText: `${name} corrected` }).first().locator('img'),
     ).toBeVisible()

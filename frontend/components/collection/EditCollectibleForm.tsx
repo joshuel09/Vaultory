@@ -8,6 +8,7 @@ import { DeleteCollectibleDialog } from './DeleteCollectibleDialog'
 import { editCollectible } from '@/lib/api/collectibles'
 import { ApiError } from '@/lib/api/errors'
 import type { Collectible, CollectibleImageRef, CollectionStatus } from '@/lib/api/types'
+import { TRASH_RETENTION_DAYS } from '@/lib/trash-retention'
 
 interface Props {
   collectible: Collectible
@@ -116,7 +117,7 @@ export function EditCollectibleForm({ collectible, returnTo }: Props) {
             onDeleted={() => router.push(withDeletedMarker(returnTo, base.id))}
           />
           <p className="mt-2 text-xs text-ink-faint">
-            Deleted collectibles go to the Trash and can be restored for 30 days.
+            Deleted collectibles go to the Trash and can be restored for {TRASH_RETENTION_DAYS} days.
           </p>
         </div>
       }

@@ -151,11 +151,35 @@ use. The target supplies throwaway values; `up` still demands real ones.
 
 The images are named for the Compose project, which is `vaultory-prod`:
 
+SC-006 is measured with one command: the flattened filesystem a container of the image runs on,
+as `docker export` streams it. Not `docker image ls` or `docker image inspect`: on Docker's
+containerd image store those also count a compressed copy of every layer, which is how the first
+measurement below read 458.6 MB. Not the sum of `docker history` either, which reads a few MB
+higher. For the same frontend image the three gave 191.1, 198.4 and 259.5 MB, and only the first is
+SC-006's number:
+
 ```bash
-docker image ls --format '{{.Repository}}: {{.Size}}' | grep '^vaultory-prod'
+for i in vaultory-prod-backend vaultory-prod-frontend; do
+  c=$(docker create "$i")
+  docker export "$c" | wc -c | awk -v i="$i" '{printf "%s: %.1f MB\n", i, $1/1e6}'
+  docker rm "$c" >/dev/null
+done
+docker version --format '{{.Server.Arch}}'   # record the architecture with the figures
 ```
 
-Measured on 2026-09-17, arm64, Docker 29.8.0:
+Expected since #29 (SC-006 as amended: backend under 150 MB, frontend under 225 MB, on each
+architecture):
+
+| Image | arm64 | x86-64 |
+|---|---|---|
+| `vaultory-prod-backend` | 20.6 MB, measured 2026-10-25 | not yet measured |
+| `vaultory-prod-frontend` | **191.1 MB**, measured 2026-10-25 by `make prod-build` and `docker export` in the review of #53; it boots as uid 65532 | **not yet measured** — record the first figure here; the amd64 Node binary need not be the same size |
+
+The arm64 frontend figure confirms the projection in research.md (156.3 + 32.3 + 1.0 ≈ 190 MB),
+down from 461 MB before #29.
+
+**History** — measured on 2026-09-17, arm64, Docker 29.8.0, on the bookworm-slim runtime that #29
+replaced:
 
 | Image | Size | SC-006 (150 MB) |
 |---|---|---|
@@ -172,10 +196,9 @@ The frontend layer breakdown says why, and says that nothing in this feature cou
 | `.next/standalone` | 85.3 MB |
 | `.next/static` + `public/` | 1.0 MB |
 
-The application's own contribution is ~86 MB; the runtime underneath it is ~266 MB. Even an empty
-Next app on this base misses the criterion, so trimming the bundle cannot get there. The real
-options are a substantially smaller runtime base or a different criterion, and both are decisions
-for a later feature rather than something to reach for here.
+The application's own contribution was ~86 MB; the runtime underneath it ~266 MB. #29 took both
+options this paragraph used to name: a smaller base (distroless, 156 MB), and a revised criterion,
+because no Node runtime fits in 150 MB. See research.md, Decision 5, revision of 2026-10-22.
 
 An earlier estimate in this file put the figure near 270 MB. That was too low — it was built from
 compressed registry layer sizes and on-disk `du` output, which are not what `docker image ls`
@@ -187,8 +210,12 @@ Then confirm the images contain no toolchain and do not run as root:
 docker run --rm --entrypoint sh vaultory-prod-backend -c 'echo reachable'
 # Expect a failure: distroless has no shell at all (FR-017)
 
-docker run --rm --entrypoint id vaultory-prod-frontend -u
-# Expect 1000, not 0 (FR-018)
+docker run --rm --entrypoint sh vaultory-prod-frontend -c 'echo reachable'
+# Expect a failure: the frontend is distroless too since #29 — no shell, no npm (FR-017, SC-006)
+
+docker image inspect --format '{{.Config.User}}' vaultory-prod-backend vaultory-prod-frontend
+# Expect a non-root uid for both, 65532 for the frontend — never empty, never 0 (FR-018).
+# Inspected rather than run: neither image has an `id` binary to run.
 ```
 
 And the security check in FR-019 — **superseded by feature 004, and kept here only so the change
@@ -261,3 +288,24 @@ runs the second by accident.
 | A test run emptied the development collection | The test runner is pointed at the development database — the one thing Decision 4 exists to prevent |
 | Frontend start is slow every time | `node_modules` is not on a persisted volume (research Decision 8) |
 | The production backend image will not start | Expected until the FR-019 check in `main.go` is reconciled; see the plan's Complexity Tracking |
+
+### Production review verification — 2026-11-18
+
+On arm64, `make prod-build` completed and exported filesystems measured 13,742,592 bytes
+for the backend and 191,536,640 bytes for the frontend (191.5 decimal MB), below SC-006.
+The frontend runs as UID 65532; Sharp and TypeScript are absent from its runtime trace.
+This refreshes the earlier arm64 figure; amd64 remains unmeasured. Production server-side
+reads require `VAULTORY_BACKEND_ORIGIN=http://backend:8080` at runtime as well as build time
+(fixed in PR #98). Browser verification uses a separate Compose project, captured mail,
+and the development suite's test-only auth limits to accommodate shared-address test users.
+
+Production browser run on 2026-11-18: **406 passed, 4 failed, 2 flaky, 8 skipped**
+across desktop/tablet/mobile (7.3 minutes). The failures reported `page.goto` interrupted
+by another navigation to the same gallery URL after writes; this is not a clean pass.
+PR #53 remains open pending investigation and a passing production run.
+
+**Final production browser verification (2026-11-21): 412 passed, 8 skipped, no
+failures or retries, 8.5 minutes**, across desktop/tablet/mobile. Includes navigation
+fixes from PRs #120 and #123. Production images used the isolated stack and test-only
+auth limits described above. amd64 size and cross-architecture verification remain
+unmeasured; this result establishes arm64 operation only.

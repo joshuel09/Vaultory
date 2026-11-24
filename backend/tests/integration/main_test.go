@@ -108,7 +108,13 @@ func freshStore(t *testing.T) (*postgres.Store, *collection.Service) {
 	collectorA = newCollector(t, "a")
 	collectorB = newCollector(t, "b")
 
-	store := postgres.NewStore(pool)
+	return serviceForPool(t, pool)
+}
+
+// serviceForPool keeps the standard image store and fixed clock for either test pool.
+func serviceForPool(t *testing.T, db *pgxpool.Pool) (*postgres.Store, *collection.Service) {
+	t.Helper()
+	store := postgres.NewStore(db)
 	images, err := imagestore.NewFilesystem(t.TempDir())
 	if err != nil {
 		t.Fatalf("image store: %v", err)
@@ -116,6 +122,9 @@ func freshStore(t *testing.T) (*postgres.Store, *collection.Service) {
 	svc := collection.NewService(store, images, 24*time.Hour)
 	// A fixed clock, so the future-date rule is about the rule and not about when the suite ran.
 	svc.SetClock(func() time.Time { return time.Date(2026, 9, 12, 12, 0, 0, 0, time.UTC) })
+	// An upload's sweep runs in the background (feature 009, FR-009); it must not reach into the
+	// next test's database.
+	t.Cleanup(svc.WaitForBackground)
 	return store, svc
 }
 

@@ -50,6 +50,11 @@ services:
   # FR-002 is expressed declaratively rather than with a sleep or a retry loop.
   #
   # `up` applies only what is outstanding, so running it repeatedly is safe (FR-005).
+  #
+  # Through backend/scripts/migrate.sh rather than `migrate up` directly (feature 012). It first
+  # checks for a database *ahead* of this checkout — another branch's migrations applied while
+  # reviewing it — and explains that, instead of failing with "no migration found for version N".
+  # It also runs `make migrate-to VERSION=n`, which is `goto n` through the same script.
   # -------------------------------------------------------------------------------------------
   migrate:
     profiles: [dev]
@@ -59,10 +64,16 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/migrations:/migrations:ro
-    command:
-      - -path=/migrations
-      - -database=postgres://${POSTGRES_USER:-vaultory}:${POSTGRES_PASSWORD:-vaultory_dev_password}@postgres:5432/${POSTGRES_DB:-vaultory_dev}?sslmode=disable
-      - up
+      - ./backend/scripts/migrate.sh:/scripts/migrate.sh:ro
+    environment:
+      # In the environment rather than on the command line, so `goto` and `force` can reuse it.
+      # The password is not in it: golang-migrate quotes the whole URL in its errors, and since #62
+      # `make up` prints those. lib/pq reads PGPASSWORD instead (feature 012, FR-008).
+      MIGRATE_DATABASE_URL: postgres://${POSTGRES_USER:-vaultory}@postgres:5432/${POSTGRES_DB:-vaultory_dev}?sslmode=disable
+      PGPASSWORD: ${POSTGRES_PASSWORD:-vaultory_dev_password}
+      MIGRATIONS_PATH: /migrations
+    entrypoint: ["/bin/sh", "/scripts/migrate.sh"]
+    command: []
     restart: "no"
 
   # -------------------------------------------------------------------------------------------
@@ -294,6 +305,8 @@ services:
       CGO_ENABLED: "0"
     volumes:
       - ./backend:/app
+      # Cross-language retention contract; expose only the constant the unit test reads.
+      - ./frontend/lib/trash-retention.ts:/frontend/lib/trash-retention.ts:ro
       - gomodcache:/go/pkg/mod
       - gobuildcache:/root/.cache/go-build
     command:
