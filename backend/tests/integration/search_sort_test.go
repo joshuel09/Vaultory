@@ -7,15 +7,18 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/joshuel09/vaultory/backend/internal/collection"
 	"github.com/joshuel09/vaultory/backend/internal/domain/collectible"
+	"github.com/joshuel09/vaultory/backend/internal/imagestore"
 	"github.com/joshuel09/vaultory/backend/internal/store/postgres"
 )
 
@@ -344,6 +347,64 @@ func TestATamperedCursorValueIsRefused(t *testing.T) {
 		}
 		if _, err := svc.List(ctx, collectorA, postgres.ListFilter{Sort: order}, page.NextCursor, 10); err != nil {
 			t.Errorf("%s: its own next page was refused: %v", order, err)
+		}
+	}
+}
+
+// T027 — FR-017: the system's own cursors are accepted however the database displays dates. Each
+// session below would have rendered a date as 06/11/2026 under ::text, which FR-016's check refuses,
+// so every second page on the date and timestamp orders answered 400 (#85).
+func TestEveryOrderPagesUnderAnyDateStyle(t *testing.T) {
+	freshStore(t)
+	ctx := context.Background()
+	const n = 60
+	seedForSorting(t, collectorA, n)
+
+	for _, session := range []map[string]string{
+		{"DateStyle": "SQL, DMY", "TimeZone": "UTC"},
+		{"DateStyle": "German", "TimeZone": "Asia/Kolkata"},
+		{"DateStyle": "Postgres, MDY", "TimeZone": "America/St_Johns"},
+	} {
+		cfg, err := pgxpool.ParseConfig(os.Getenv("VAULTORY_TEST_DATABASE_URL"))
+		if err != nil {
+			t.Fatalf("parse: %v", err)
+		}
+		for k, v := range session {
+			cfg.ConnConfig.RuntimeParams[k] = v
+		}
+		p, err := pgxpool.NewWithConfig(ctx, cfg)
+		if err != nil {
+			t.Fatalf("pool: %v", err)
+		}
+		defer p.Close()
+
+		// The setting has to have reached the session, or this test proves nothing.
+		var style string
+		if err := p.QueryRow(ctx, `SHOW DateStyle`).Scan(&style); err != nil || !strings.HasPrefix(style, strings.SplitN(session["DateStyle"], ",", 2)[0]) {
+			t.Fatalf("session DateStyle = %q (%v), want %q", style, err, session["DateStyle"])
+		}
+
+		images, err := imagestore.NewFilesystem(t.TempDir())
+		if err != nil {
+			t.Fatalf("image store: %v", err)
+		}
+		svc := collection.NewService(postgres.NewStore(p), images, 24*time.Hour)
+		for _, order := range collectible.AllSortOrders() {
+			seen, cursor := 0, ""
+			for pages := 0; ; pages++ {
+				page, err := svc.List(ctx, collectorA, postgres.ListFilter{Sort: order}, cursor, 24)
+				if err != nil {
+					t.Fatalf("%s, %s: page %d: %v", session["DateStyle"], order, pages, err)
+				}
+				seen += len(page.Rows)
+				if page.NextCursor == "" || pages > n {
+					break
+				}
+				cursor = page.NextCursor
+			}
+			if seen != n {
+				t.Errorf("%s, %s: paged through %d, want %d", session["DateStyle"], order, seen, n)
+			}
 		}
 	}
 }

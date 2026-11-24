@@ -31,6 +31,8 @@ func TestGalleryCursorValues(t *testing.T) {
 		{collectible.SortPriceAsc, "1234567890.00", true},
 		{collectible.SortPurchasedAsc, "2026-10-27", true},
 		{collectible.SortReleasedDesc, "1999-02-28", true},
+		{collectible.SortAddedDesc, "2026-10-27T09:46:33.123456+00:00", true},
+		{collectible.SortAddedDesc, "1880-06-01T15:21:10+05:21:10", true},
 		{collectible.SortAddedDesc, "2026-10-27 09:46:33.123456+00", true},
 		{collectible.SortAddedAsc, "2026-10-27 18:46:33+09", true},
 		{collectible.SortAddedAsc, "2026-10-27 15:16:33.5+05:30", true},
@@ -48,6 +50,9 @@ func TestGalleryCursorValues(t *testing.T) {
 		{collectible.SortAddedDesc, "nonsense", false},
 		{collectible.SortAddedDesc, "2026-10-27", false},
 		{collectible.SortAddedAsc, "2026-13-27 09:46:33+00", false},
+		// What a non-ISO DateStyle would have rendered — never issued since to_json (#85).
+		{collectible.SortPurchasedAsc, "06/11/2026", false},
+		{collectible.SortAddedDesc, "06/11/2026 03:50:24.630137 UTC", false},
 	}
 	for _, c := range cases {
 		_, err := decodeGalleryCursor(rawCursor(c.order, "0", c.value), c.order)
@@ -70,7 +75,7 @@ func TestGalleryCursorMissingValueIsNotChecked(t *testing.T) {
 // Every order's own cursor survives the check it is now put through.
 func TestGalleryCursorRoundTrip(t *testing.T) {
 	values := map[string]string{
-		"timestamptz": "2026-10-27 09:46:33.123456+00",
+		"timestamptz": "2026-10-27T09:46:33.123456+00:00",
 		"text":        "aerith",
 		"numeric":     "42.00",
 		"date":        "2026-10-27",
