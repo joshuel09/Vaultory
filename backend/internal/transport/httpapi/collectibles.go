@@ -144,7 +144,7 @@ func (s *Server) handleListCollectibles(w http.ResponseWriter, r *http.Request, 
 		// A malformed cursor is the client's mistake, not a server failure — and so is one issued
 		// for a different order, which cannot be reinterpreted without skipping or repeating
 		// entries (feature 011, FR-012).
-		if strings.Contains(err.Error(), "cursor is not valid") {
+		if errors.Is(err, postgres.ErrCursorInvalid) {
 			WriteValidationFailed(w, []FieldError{{
 				Field:   "cursor",
 				Code:    FieldInvalidValue,

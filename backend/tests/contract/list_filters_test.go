@@ -3,6 +3,7 @@
 package contract
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -242,5 +243,27 @@ func TestSearchAndSortParameters(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodGet, h.server.URL+"/api/collectibles?sort=name_asc&cursor="+cursor, nil)
 	if resp := h.do(t, req, cookie); resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("cross-order cursor: status %d, want 400", resp.StatusCode)
+	}
+
+	// A cursor whose value is not of its order's kind is the client's mistake too — never a 500
+	// from a failed cast (FR-016, #71).
+	for order, value := range map[string]string{
+		"price_desc":    "abc",
+		"purchased_asc": "not-a-date",
+		"added_desc":    "nonsense",
+	} {
+		raw := "v2|" + order + "|0|00000000-0000-4000-8000-000000000000|" + value
+		tampered := base64.RawURLEncoding.EncodeToString([]byte(raw))
+		req, _ := http.NewRequest(http.MethodGet, h.server.URL+"/api/collectibles?sort="+order+"&cursor="+tampered, nil)
+		resp := h.do(t, req, cookie)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("%s cursor carrying %q: status %d, want 400", order, value, resp.StatusCode)
+			continue
+		}
+		errBody, _ := decode(t, resp)["error"].(map[string]any)
+		fields, _ := errBody["fields"].([]any)
+		if len(fields) != 1 || fields[0].(map[string]any)["field"] != "cursor" {
+			t.Errorf("%s cursor carrying %q: fields = %v, want one on cursor", order, value, fields)
+		}
 	}
 }
