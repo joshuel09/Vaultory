@@ -1,4 +1,4 @@
-import type { components } from '@/lib/types/api'
+import type { components, operations } from '@/lib/types/api'
 
 /**
  * Named aliases over the generated contract types.
@@ -43,4 +43,30 @@ export const STATUS_LABELS: Record<CollectionStatus, string> = {
 
 export function isCollectionStatus(value: string): value is CollectionStatus {
   return (COLLECTION_STATUSES as readonly string[]).includes(value)
+}
+
+/** The gallery's orders, from the contract (feature 011). */
+export type SortOrder = NonNullable<
+  NonNullable<operations['listCollectibles']['parameters']['query']>['sort']
+>
+
+/** The default order. Omitted from links, so a plain gallery address stays plain. */
+export const DEFAULT_SORT: SortOrder = 'added_desc'
+
+/** Every order, in the order the menu offers them, with what a collector reads. */
+export const SORT_LABELS: Record<SortOrder, string> = {
+  added_desc: 'Newest added',
+  added_asc: 'Oldest added',
+  name_asc: 'Name, A–Z',
+  name_desc: 'Name, Z–A',
+  price_desc: 'Price, highest first',
+  price_asc: 'Price, lowest first',
+  purchased_desc: 'Purchased, newest first',
+  purchased_asc: 'Purchased, oldest first',
+  released_desc: 'Release date, newest first',
+  released_asc: 'Release date, oldest first',
+}
+
+export function isSortOrder(value: string): value is SortOrder {
+  return Object.prototype.hasOwnProperty.call(SORT_LABELS, value)
 }

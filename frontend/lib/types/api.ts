@@ -13,8 +13,9 @@ export interface paths {
         };
         /**
          * Browse the acting collector's collection
-         * @description Returns one page of the acting collector's collectibles, most recently added first (FR-034),
-         *     optionally narrowed to a single collection status (FR-037). Never returns another collector's
+         * @description Returns one page of the acting collector's collectibles, most recently added first (FR-034)
+         *     unless `sort` asks otherwise, optionally narrowed to a single collection status (FR-037) and
+         *     searched with `q` (feature 011). Never returns another collector's
          *     collectibles (FR-026).
          *
          *     Paging is by opaque cursor. An empty `items` array with no `nextCursor` means there is
@@ -784,7 +785,23 @@ export interface operations {
                 series?: string;
                 /** @description Narrow to one manufacturer, with exactly the semantics of `series` above. */
                 manufacturer?: string;
-                /** @description Opaque cursor from a previous response's `nextCursor`. Omit for the first page. */
+                /**
+                 * @description Search (feature 011). Every whitespace-separated word must appear, case-insensitively and
+                 *     literally, somewhere in the collectible's name, character, series, manufacturer,
+                 *     category, scale, edition or notes — not necessarily all in the same one. Empty or
+                 *     whitespace-only means no search. Combines with every other filter.
+                 */
+                q?: string;
+                /**
+                 * @description The order (feature 011). Collectibles that do not record the sorted-by attribute come
+                 *     after all that do, in either direction, and every order is total, so paging never skips
+                 *     or repeats an entry. An unknown value is refused.
+                 */
+                sort?: "added_desc" | "added_asc" | "name_asc" | "name_desc" | "price_desc" | "price_asc" | "purchased_desc" | "purchased_asc" | "released_desc" | "released_asc";
+                /**
+                 * @description Opaque cursor from a previous response's `nextCursor`. Omit for the first page. Valid
+                 *     only with the `sort` it was issued for; under another order it is refused.
+                 */
                 cursor?: string;
                 /** @description Maximum entries to return in this page. */
                 limit?: number;
