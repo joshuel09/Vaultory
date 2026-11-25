@@ -13,8 +13,9 @@ export interface paths {
         };
         /**
          * Browse the acting collector's collection
-         * @description Returns one page of the acting collector's collectibles, most recently added first (FR-034),
-         *     optionally narrowed to a single collection status (FR-037). Never returns another collector's
+         * @description Returns one page of the acting collector's collectibles, most recently added first (FR-034)
+         *     unless `sort` asks otherwise, optionally narrowed to a single collection status (FR-037) and
+         *     searched with `q` (feature 011). Never returns another collector's
          *     collectibles (FR-026).
          *
          *     Paging is by opaque cursor. An empty `items` array with no `nextCursor` means there is
@@ -125,9 +126,12 @@ export interface paths {
         put: operations["editCollectible"];
         post?: never;
         /**
-         * Delete a collectible permanently
-         * @description Deletes one collectible owned by the acting collector (FR-022). There is no undo, no trash,
-         *     and no restore.
+         * Move a collectible to the Trash
+         * @description Moves one collectible owned by the acting collector to the Trash (FR-022, as amended by
+         *     feature 010). It leaves the vault at once — the gallery, every filter, the statistics — and
+         *     is kept, with its photograph, for 30 days, during which it can be restored from `/trash`.
+         *     After that it is destroyed. Deleting something already in the Trash does not restart its 30
+         *     days.
          *
          *     **Idempotent.** A collectible that is not in the acting collector's vault — already deleted,
          *     never existed, or belonging to someone else — is answered `204` just the same (FR-025). A
@@ -137,10 +141,94 @@ export interface paths {
          *
          *     No `404` is defined for this operation, deliberately. That is not an omission.
          *
-         *     A deleted collectible's photograph stops being retrievable at once, by anyone including its
-         *     owner (FR-020).
+         *     A trashed collectible's photograph stays retrievable by its owner, and only its owner, until
+         *     the collectible leaves the Trash for good; then it stops being retrievable at once (FR-020,
+         *     as amended by feature 010).
          */
         delete: operations["deleteCollectible"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Browse the acting collector's Trash
+         * @description Returns one page of the acting collector's deleted collectibles that are still within their
+         *     30 days, most recently deleted first (feature 010, FR-006). Never another collector's.
+         *     Something past its 30 days is not listed, whether or not it has been destroyed yet.
+         */
+        get: operations["listTrash"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trash/{collectibleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description A collectible in the acting collector's Trash. One in another collector's Trash is
+                 *     answered exactly as one that does not exist (feature 010, FR-013).
+                 */
+                collectibleId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Destroy a collectible in the Trash, now
+         * @description Destroys one collectible in the acting collector's Trash and its photograph, at once: the
+         *     photograph stops being retrievable by anyone, including its owner, and its files are removed
+         *     (feature 010, FR-011). Cannot be undone.
+         *
+         *     **Idempotent**, as every deletion is: anything not in the acting collector's Trash —
+         *     including a collectible still in the vault — is answered `204` and left alone.
+         */
+        delete: operations["deleteFromTrashPermanently"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trash/{collectibleId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A collectible in the acting collector's Trash. */
+                collectibleId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Return a collectible from the Trash to the vault
+         * @description Restores one collectible from the acting collector's Trash, exactly as it was: every
+         *     attribute, its photograph, its `version`, and its position in the gallery (feature 010,
+         *     FR-007).
+         *
+         *     Unlike deletion, this is **not** idempotent-success. A collectible that is not in the acting
+         *     collector's Trash within its 30 days — never deleted, already restored, destroyed, expired,
+         *     another collector's, or a malformed id — is answered `404`, so the collector learns it did
+         *     not come back (FR-008).
+         */
+        post: operations["restoreFromTrash"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -544,6 +632,31 @@ export interface components {
             totalUnfiltered: number;
         };
         /**
+         * @description One collectible in the Trash. The collectible is nested, not extended: it is the same
+         *     `Collectible` the vault returns, so restoring it changes nothing about its shape.
+         */
+        TrashedCollectible: {
+            collectible: components["schemas"]["Collectible"];
+            /**
+             * Format: date-time
+             * @description When it was moved to the Trash.
+             */
+            deletedAt: string;
+            /**
+             * Format: date-time
+             * @description When it will be destroyed — 30 days after `deletedAt`. Computed by the server, because
+             *     retention is a rule of the system, not of the client.
+             */
+            purgeAt: string;
+        };
+        /** @description One page of the acting collector's Trash. */
+        TrashPage: {
+            /** @description Entries in this page, most recently deleted first. */
+            items: components["schemas"]["TrashedCollectible"][];
+            /** @description Cursor for the following page, or absent when this is the last page. */
+            nextCursor?: string | null;
+        };
+        /**
          * @description The single error envelope for every failing operation. Carries codes the frontend can act on
          *     and messages fit to show a collector; never internal detail (Principle IV).
          */
@@ -672,7 +785,23 @@ export interface operations {
                 series?: string;
                 /** @description Narrow to one manufacturer, with exactly the semantics of `series` above. */
                 manufacturer?: string;
-                /** @description Opaque cursor from a previous response's `nextCursor`. Omit for the first page. */
+                /**
+                 * @description Search (feature 011). Every whitespace-separated word must appear, case-insensitively and
+                 *     literally, somewhere in the collectible's name, character, series, manufacturer,
+                 *     category, scale, edition or notes — not necessarily all in the same one. Empty or
+                 *     whitespace-only means no search. Combines with every other filter.
+                 */
+                q?: string;
+                /**
+                 * @description The order (feature 011). Collectibles that do not record the sorted-by attribute come
+                 *     after all that do, in either direction, and every order is total, so paging never skips
+                 *     or repeats an entry. An unknown value is refused.
+                 */
+                sort?: "added_desc" | "added_asc" | "name_asc" | "name_desc" | "price_desc" | "price_asc" | "purchased_desc" | "purchased_asc" | "released_desc" | "released_asc";
+                /**
+                 * @description Opaque cursor from a previous response's `nextCursor`. Omit for the first page. Valid
+                 *     only with the `sort` it was issued for; under another order it is refused.
+                 */
                 cursor?: string;
                 /** @description Maximum entries to return in this page. */
                 limit?: number;
@@ -842,7 +971,8 @@ export interface operations {
         responses: {
             /**
              * @description The collectible is not in the acting collector's vault. Returned both when this request
-             *     deleted it and when it was already absent; the two are deliberately indistinguishable.
+             *     moved it to the Trash and when it was already absent; the two are deliberately
+             *     indistinguishable.
              */
             204: {
                 headers: {
@@ -851,6 +981,86 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listTrash: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor from a previous response's `nextCursor`. Omit for the first page. */
+                cursor?: string;
+                /** @description Maximum entries to return in this page. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of the Trash. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashPage"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteFromTrashPermanently: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description A collectible in the acting collector's Trash. One in another collector's Trash is
+                 *     answered exactly as one that does not exist (feature 010, FR-013).
+                 */
+                collectibleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The collectible is not in the acting collector's Trash. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    restoreFromTrash: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A collectible in the acting collector's Trash. */
+                collectibleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The restored collectible. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Collectible"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };

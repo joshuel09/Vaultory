@@ -122,6 +122,9 @@ func serviceForPool(t *testing.T, db *pgxpool.Pool) (*postgres.Store, *collectio
 	svc := collection.NewService(store, images, 24*time.Hour)
 	// A fixed clock, so the future-date rule is about the rule and not about when the suite ran.
 	svc.SetClock(func() time.Time { return time.Date(2026, 9, 12, 12, 0, 0, 0, time.UTC) })
+	// An upload's sweep runs in the background (feature 009, FR-009); it must not reach into the
+	// next test's database.
+	t.Cleanup(svc.WaitForBackground)
 	return store, svc
 }
 

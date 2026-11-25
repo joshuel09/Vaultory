@@ -36,6 +36,9 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("GET /api/collectibles/{collectibleId}", s.requireCollector(s.handleGetCollectible))
 	mux.Handle("PUT /api/collectibles/{collectibleId}", s.requireCollector(s.handleEditCollectible))
 	mux.Handle("DELETE /api/collectibles/{collectibleId}", s.requireCollector(s.handleDeleteCollectible))
+	mux.Handle("GET /api/trash", s.requireCollector(s.handleListTrash))
+	mux.Handle("POST /api/trash/{collectibleId}/restore", s.requireCollector(s.handleRestoreFromTrash))
+	mux.Handle("DELETE /api/trash/{collectibleId}", s.requireCollector(s.handleDeletePermanently))
 	mux.Handle("POST /api/images", s.requireCollector(s.handleUploadImage))
 	mux.Handle("GET /api/images/{imageId}/rendition", s.requireCollector(s.handleGetRendition))
 

@@ -153,8 +153,10 @@ func TestDeletingACollectibleAddedWithinTheIdempotencyWindow(t *testing.T) {
 	}
 }
 
-// T055 — FR-020: a deleted collectible's photograph stops being retrievable at once.
-func TestDeletingTakesThePhotographWithIt(t *testing.T) {
+// T055 — FR-020, as amended by feature 010: a deleted collectible's photograph is kept, for its
+// owner only, while the collectible is in the Trash — and stops being retrievable the moment it is
+// deleted permanently.
+func TestDeletingPermanentlyTakesThePhotographWithIt(t *testing.T) {
 	store, svc := freshStore(t)
 	ctx := context.Background()
 
@@ -180,13 +182,28 @@ func TestDeletingTakesThePhotographWithIt(t *testing.T) {
 		t.Fatalf("delete: %v", err)
 	}
 
+	// In the Trash: still the owner's to see, so the Trash can show it and a restore can bring it
+	// back (feature 010, FR-014). Never anyone else's.
+	if rc, err := svc.OpenRendition(ctx, collectorA, img.ID); err != nil {
+		t.Errorf("the photograph of a trashed collectible should stay readable by its owner: %v", err)
+	} else {
+		_ = rc.Close()
+	}
+	if _, err := svc.OpenRendition(ctx, collectorB, img.ID); err == nil {
+		t.Error("another collector can read a trashed collectible's photograph")
+	}
+
+	if err := svc.DeletePermanently(ctx, collectorA, added.Row.Collectible.ID); err != nil {
+		t.Fatalf("delete permanently: %v", err)
+	}
+
 	// Unfetchable immediately, by its owner. Deleting the image row is what achieves this —
 	// unlinking would not, because a rendition is authorized on the image's own collector_id.
 	if _, err := svc.OpenRendition(ctx, collectorA, img.ID); err == nil {
-		t.Error("the photograph of a deleted collectible is still readable by its owner (FR-020)")
+		t.Error("the photograph of a permanently deleted collectible is still readable by its owner (FR-020)")
 	}
 	if _, err := store.GetImage(ctx, collectorA, img.ID); err == nil {
-		t.Error("the collectible_images row survived the deletion")
+		t.Error("the collectible_images row survived permanent deletion")
 	}
 }
 
@@ -228,7 +245,9 @@ func TestADeletionIsRecordedWithoutCollectionContent(t *testing.T) {
 		if err := json.Unmarshal([]byte(line), &entry); err != nil {
 			t.Fatalf("log line is not JSON: %q", line)
 		}
-		if msg, _ := entry["msg"].(string); strings.Contains(strings.ToLower(msg), "delet") {
+		// "moved to trash" since feature 010: a deletion is still a deletion, and still recorded.
+		if msg, _ := entry["msg"].(string); strings.Contains(strings.ToLower(msg), "delet") ||
+			strings.Contains(strings.ToLower(msg), "trash") {
 			records = append(records, entry)
 		}
 	}

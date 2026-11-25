@@ -10,6 +10,24 @@ import (
 	"github.com/joshuel09/vaultory/backend/internal/store/postgres"
 )
 
+// imageInUseViolation is the refusal when a save names a photograph another collectible already
+// uses — including one in the Trash, whose photograph is kept so it can be restored. A photograph
+// belongs to at most one collectible (feature 010, FR-018).
+var imageInUseViolation = collectible.Violation{
+	Field:   "imageId",
+	Code:    collectible.CodeInvalidValue,
+	Message: "That photograph is already used by another collectible. Choose a different one.",
+}
+
+// imageUnavailableMessage is what a collector is told when the photograph a save names cannot be
+// used: it never existed, it is another collector's, or it was swept after sitting unattached past
+// the grace period (feature 009, FR-007).
+//
+// One message for all three, deliberately. Distinguishing someone else's image from an absent one
+// would reveal that it exists (FR-027). And the advice is the same in every case — choose the
+// photograph again — so the collector loses nothing by not being told which.
+const imageUnavailableMessage = "That photograph is no longer available. Upload it again, or save without one."
+
 // AddResult is what an add produced.
 //
 // Existing is true when a replayed submission key returned the collectible it had already created.
@@ -46,18 +64,21 @@ func (s *Service) Add(
 			return AddResult{}, []collectible.Violation{{
 				Field:   "imageId",
 				Code:    collectible.CodeInvalidValue,
-				Message: "That image could not be found.",
+				Message: imageUnavailableMessage,
 			}}, nil
 		}
 	}
 
 	res, err := s.store.Add(ctx, collectorID, validated, s.idempotencyWindow)
+	if errors.Is(err, postgres.ErrImageInUse) {
+		return AddResult{}, []collectible.Violation{imageInUseViolation}, nil
+	}
 	if errors.Is(err, postgres.ErrUnknownImage) {
 		// The window between the check above and the insert. Rare, but the database caught it.
 		return AddResult{}, []collectible.Violation{{
 			Field:   "imageId",
 			Code:    collectible.CodeInvalidValue,
-			Message: "That image could not be found.",
+			Message: imageUnavailableMessage,
 		}}, nil
 	}
 	if err != nil {

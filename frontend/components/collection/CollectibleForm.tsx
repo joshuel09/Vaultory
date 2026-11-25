@@ -134,6 +134,20 @@ export function CollectibleForm({
     })
   }
 
+  /*
+   * Choosing or removing a photograph addresses a complaint about the photograph, the same way
+   * typing addresses a complaint about a field.
+   */
+  function chooseImage(next: CollectibleImageRef | null) {
+    setImage(next)
+    setFieldErrors((prev) => {
+      if (!prev.imageId) return prev
+      const rest = { ...prev }
+      delete rest.imageId
+      return rest
+    })
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     /*
@@ -223,7 +237,12 @@ export function CollectibleForm({
           )}
         </Field>
 
-        <ImagePicker image={image} onChange={setImage} onUploadingChange={setUploading} />
+        <ImagePicker
+          image={image}
+          onChange={chooseImage}
+          onUploadingChange={setUploading}
+          error={fieldErrors.imageId}
+        />
       </section>
 
       <section className="space-y-5">
