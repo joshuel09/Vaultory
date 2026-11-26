@@ -11,7 +11,8 @@ CREATE TABLE audit_events (
                     'account.registered', 'account.signed_in', 'account.sign_in_failed',
                     'account.sign_in_refused', 'account.signed_out', 'account.email_verified',
                     'account.password_reset',
-                    'collectible.created', 'collectible.edited', 'collectible.deleted')),
+                    'collectible.created', 'collectible.edited', 'collectible.trashed',
+                    'collectible.restored', 'collectible.permanently_deleted', 'collectible.purged')),
     outcome     text        NOT NULL CHECK (outcome IN ('succeeded', 'failed', 'refused')),
     account_id  text,
     subject_id  text

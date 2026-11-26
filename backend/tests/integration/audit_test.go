@@ -6,6 +6,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -73,7 +74,7 @@ func TestAuditRecordsCollectionChanges(t *testing.T) {
 	want := []auditEntry{
 		{"collectible.created", "succeeded", account, c.ID.String()},
 		{"collectible.edited", "succeeded", account, c.ID.String()},
-		{"collectible.deleted", "succeeded", account, c.ID.String()},
+		{"collectible.trashed", "succeeded", account, c.ID.String()},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("entries = %+v, want %+v", got, want)
@@ -190,5 +191,119 @@ func TestAuditEntriesCannotBeRewritten(t *testing.T) {
 	}
 	if len(auditFor(t, subject)) != 1 {
 		t.Error("the purge removed a recent entry")
+	}
+}
+
+// The Trash lifecycle records distinct successful transitions, never owner refusals or no-ops.
+func TestAuditTrashLifecycle(t *testing.T) {
+	st, svc := freshStore(t)
+	ctx := context.Background()
+	added, v, err := svc.Add(ctx, collectorA, draft("audit-trash", "Lifecycle"))
+	if err != nil || len(v) != 0 {
+		t.Fatalf("add: %v %v", err, v)
+	}
+	id := added.Row.Collectible.ID
+	if _, err := st.Trash(ctx, collectorB, id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Trash(ctx, collectorA, id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Trash(ctx, collectorA, id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Restore(ctx, collectorA, id, 30*24*time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Trash(ctx, collectorA, id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.DeletePermanently(ctx, collectorA, id); err != nil {
+		t.Fatal(err)
+	}
+	got := auditFor(t, id.String())
+	want := []string{"collectible.created", "collectible.trashed", "collectible.restored", "collectible.trashed", "collectible.permanently_deleted"}
+	if len(got) != len(want) {
+		t.Fatalf("events=%+v, want %v", got, want)
+	}
+	for i, action := range want {
+		if got[i].action != action || got[i].account != accountOf(t, collectorA) {
+			t.Errorf("event %d=%+v", i, got[i])
+		}
+	}
+}
+
+func TestAuditTrashMutationsRollbackWithoutTheirEntry(t *testing.T) {
+	for _, operation := range []string{"trash", "restore", "permanent", "purge"} {
+		t.Run(operation, func(t *testing.T) {
+			st, svc := freshStore(t)
+			ctx := context.Background()
+			added, v, err := svc.Add(ctx, collectorA, draft("audit-rollback-"+operation, "Rollback"))
+			if err != nil || len(v) != 0 {
+				t.Fatalf("seed: %v %v", err, v)
+			}
+			id := added.Row.Collectible.ID
+			if operation != "trash" {
+				if _, err := st.Trash(ctx, collectorA, id); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if operation == "purge" {
+				if _, err := pool.Exec(ctx, `UPDATE collectibles SET deleted_at=now()-interval '31 days' WHERE id=$1`, id); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := pool.Exec(ctx, `ALTER TABLE audit_events RENAME TO audit_events_hidden`); err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				if _, err := pool.Exec(ctx, `ALTER TABLE audit_events_hidden RENAME TO audit_events`); err != nil {
+					t.Fatal(err)
+				}
+			}()
+			switch operation {
+			case "trash":
+				_, err = st.Trash(ctx, collectorA, id)
+			case "restore":
+				_, err = st.Restore(ctx, collectorA, id, 30*24*time.Hour)
+			case "permanent":
+				_, err = st.DeletePermanently(ctx, collectorA, id)
+			case "purge":
+				_, err = st.PurgeExpiredTrash(ctx, 30*24*time.Hour, 20)
+			}
+			if err == nil {
+				t.Fatal("mutation succeeded without its audit entry")
+			}
+			var trashed bool
+			if err := pool.QueryRow(ctx, `SELECT deleted_at IS NOT NULL FROM collectibles WHERE id=$1`, id).Scan(&trashed); err != nil {
+				t.Fatal(err)
+			}
+			if trashed != (operation != "trash") {
+				t.Fatalf("mutation escaped rollback: trashed=%v", trashed)
+			}
+		})
+	}
+}
+
+func TestAuditRecordsExpiryPurge(t *testing.T) {
+	st, svc := freshStore(t)
+	ctx := context.Background()
+	added, v, err := svc.Add(ctx, collectorA, draft("audit-purge", "Expired"))
+	if err != nil || len(v) != 0 {
+		t.Fatalf("seed: %v %v", err, v)
+	}
+	id := added.Row.Collectible.ID
+	if _, err := st.Trash(ctx, collectorA, id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE collectibles SET deleted_at=now()-interval '31 days' WHERE id=$1`, id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.PurgeExpiredTrash(ctx, 30*24*time.Hour, 20); err != nil {
+		t.Fatal(err)
+	}
+	events := auditFor(t, id.String())
+	if len(events) != 3 || events[2].action != "collectible.purged" || events[2].account != accountOf(t, collectorA) {
+		t.Fatalf("events=%+v", events)
 	}
 }

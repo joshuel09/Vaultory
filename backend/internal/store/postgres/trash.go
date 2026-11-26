@@ -171,6 +171,9 @@ func (s *Store) PurgeExpiredTrash(ctx context.Context, retention time.Duration, 
 				return nil, err
 			}
 		}
+		if err := recordCollectibleEvent(ctx, tx, auditCollectiblePurged, e.collectorID, e.id); err != nil {
+			return nil, err
+		}
 		purged = append(purged, Purged{CollectorID: e.collectorID, CollectibleID: e.id})
 	}
 	if err := tx.Commit(ctx); err != nil {

@@ -23,3 +23,11 @@ No email, name, network address, password, token or collectible content.
 ## Privileges
 
 `vaultory_auth`: `INSERT` on `audit_events` and nothing else on it.
+
+### Trash lifecycle integration
+
+Collection actions are `collectible.created`, `collectible.edited`,
+`collectible.trashed`, `collectible.restored`, `collectible.permanently_deleted`,
+and `collectible.purged`. Each successful mutation inserts its action within the
+same database transaction, including Restore and expiry purge. Refused and no-op
+mutations add no success event; failed audit inserts roll back the mutation.

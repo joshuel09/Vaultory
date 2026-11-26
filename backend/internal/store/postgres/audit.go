@@ -16,9 +16,12 @@ import (
 // enforced by triggers in migration 000014, not here (FR-006).
 
 const (
-	auditCollectibleCreated = "collectible.created"
-	auditCollectibleEdited  = "collectible.edited"
-	auditCollectibleDeleted = "collectible.deleted"
+	auditCollectibleCreated  = "collectible.created"
+	auditCollectibleEdited   = "collectible.edited"
+	auditCollectibleDeleted  = "collectible.permanently_deleted"
+	auditCollectibleTrashed  = "collectible.trashed"
+	auditCollectibleRestored = "collectible.restored"
+	auditCollectiblePurged   = "collectible.purged"
 )
 
 // recordCollectibleEvent adds one entry for a collection change, inside the caller's transaction.

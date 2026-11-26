@@ -145,3 +145,10 @@ recent one; both are refused. A year-old entry is removed by the retention step.
 
 - Reading the log is done by an operator through the database; no screen is part of this feature.
 - Trash events (restore, delete permanently) follow once feature 010 is merged.
+
+### Current Trash lifecycle
+
+Audit records distinguish moving to Trash, restoring, permanent deletion, and expiry
+purge. Each successful transition and its audit record commit atomically. A missing,
+foreign, already transitioned, or expired resource must not create a success event.
+No content or identifying text is added to these records.
