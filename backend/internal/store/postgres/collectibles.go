@@ -182,6 +182,9 @@ func (s *Store) Add(
 	if err != nil {
 		return AddResult{}, fmt.Errorf("read back collectible: %w", err)
 	}
+	if err := recordCollectibleEvent(ctx, tx, auditCollectibleCreated, collectorID, id); err != nil {
+		return AddResult{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return AddResult{}, fmt.Errorf("commit: %w", err)
 	}
@@ -423,6 +426,9 @@ func (s *Store) Edit(
 	if err != nil {
 		return Row{}, fmt.Errorf("read back collectible: %w", err)
 	}
+	if err := recordCollectibleEvent(ctx, tx, auditCollectibleEdited, collectorID, collectibleID); err != nil {
+		return Row{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return Row{}, fmt.Errorf("commit: %w", err)
 	}
@@ -463,6 +469,9 @@ func (s *Store) Trash(ctx context.Context, collectorID, collectibleID uuid.UUID)
 		WHERE collectible_id = $1 AND collector_id = $2`, collectibleID, collectorID); err != nil {
 		return false, fmt.Errorf("forget submission: %w", err)
 	}
+	if err := recordCollectibleEvent(ctx, tx, auditCollectibleTrashed, collectorID, collectibleID); err != nil {
+		return false, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return false, fmt.Errorf("commit: %w", err)
 	}
@@ -482,7 +491,12 @@ func (s *Store) Trash(ctx context.Context, collectorID, collectibleID uuid.UUID)
 func (s *Store) Restore(
 	ctx context.Context, collectorID, collectibleID uuid.UUID, retention time.Duration,
 ) (Row, error) {
-	tag, err := s.pool.Exec(ctx, `
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Row{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	tag, err := tx.Exec(ctx, `
 		UPDATE collectibles SET deleted_at = NULL
 		WHERE id = $1 AND collector_id = $2
 		  AND deleted_at IS NOT NULL
@@ -494,7 +508,19 @@ func (s *Store) Restore(
 	if tag.RowsAffected() == 0 {
 		return Row{}, ErrNotFound
 	}
-	return s.Get(ctx, collectorID, collectibleID)
+	row, err := scanRow(tx.QueryRow(ctx, `SELECT `+collectibleColumns+`
+ FROM collectibles c LEFT JOIN collectible_images i ON i.id = c.image_id AND i.collector_id = c.collector_id
+ WHERE c.id = $1 AND c.collector_id = $2`, collectibleID, collectorID))
+	if err != nil {
+		return Row{}, err
+	}
+	if err := recordCollectibleEvent(ctx, tx, auditCollectibleRestored, collectorID, collectibleID); err != nil {
+		return Row{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Row{}, err
+	}
+	return row, nil
 }
 
 // DeletePermanently destroys one collectible that is in the Trash, and its photograph, now
@@ -530,6 +556,11 @@ func (s *Store) DeletePermanently(ctx context.Context, collectorID, collectibleI
 		if err := releaseImage(ctx, tx, collectorID, *imageID); err != nil {
 			return false, err
 		}
+	}
+
+	// Only a deletion that happened is recorded: the not-found path above returned before this.
+	if err := recordCollectibleEvent(ctx, tx, auditCollectibleDeleted, collectorID, collectibleID); err != nil {
+		return false, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return false, fmt.Errorf("commit: %w", err)

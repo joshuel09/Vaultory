@@ -92,6 +92,8 @@ func run() error {
 	if drained := service.DrainImageDeletions(ctx); drained > 0 {
 		slog.Info("removed image files left over from a previous run", "images", drained)
 	}
+	// Audit entries past their year (feature 014, FR-007): one batch, for the same reasons.
+	service.PurgeExpiredAudit(ctx)
 
 	server := httpapi.NewServer(service, resolver)
 
