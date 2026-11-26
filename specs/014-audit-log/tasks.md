@@ -39,12 +39,14 @@
 
 ## Current-main integration review — 2026-11-26
 
-- [ ] T029 Record moving to Trash, restoring, permanent deletion, and expiry purge as distinct audit actions in the transaction that changes the collectible. Restore must use a transaction for the mutation and audit entry; no-op/refused changes must not record success.
-- [ ] T030 Extend migration 14 action constraints and feature 014's contract/data model for the Trash lifecycle; keep migration reversible.
-- [ ] T031 Add integration regressions for each Trash lifecycle event, atomic rollback on audit failure, and owner/no-op refusals; verify migration up/down/up on disposable data.
-- [ ] T032 Reconcile existing audit and query-budget tests against current main, run backend/frontend gates and required latest-head CI, and verify account hooks still retain lockout behavior.
+- [X] T029 Record moving to Trash, restoring, permanent deletion, and expiry purge as distinct audit actions in the transaction that changes the collectible. Restore must use a transaction for the mutation and audit entry; no-op/refused changes must not record success.
+- [X] T030 Extend migration 14 action constraints and feature 014's contract/data model for the Trash lifecycle; keep migration reversible.
+- [X] T031 Add integration regressions for each Trash lifecycle event, atomic rollback on audit failure, and owner/no-op refusals; verify migration up/down/up on disposable data.
+- [X] T032 Reconcile existing audit and query-budget tests against current main, run backend/frontend gates and required latest-head CI, and verify account hooks still retain lockout behavior.
 
 The original PR recorded generic hard deletion before feature 010 merged. Current
 main changes that operation into Trash. The review found no transactional audit entry
 in Trash or Restore, and permanent deletion still used the old generic action.
 This is incomplete integration, not a verified complete audit feature.
+
+**Integration verified:** lifecycle regression failed before the fix; all four mutation rollback cases and explicit expiry-purge action pass. Restore now mutates, reads back, and records within one transaction. Local backend integration8.492s/contract and frontend154 tests/build passed; required CI and migration up/down/up passed on38ec273 (run45811888136). Final documentation head must also pass required CI before merge.
