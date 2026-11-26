@@ -5,8 +5,10 @@ import { CollectionGallery } from '@/components/collection/CollectionGallery'
 import { StatusFilter } from '@/components/collection/StatusFilter'
 import { EmptyCollection } from '@/components/collection/EmptyCollection'
 import { NoResults } from '@/components/collection/NoResults'
+import { UndoDeleteNotice } from '@/components/collection/UndoDeleteNotice'
+import { SearchAndSort } from '@/components/collection/SearchAndSort'
 import { buttonClasses } from '@/components/ui/button'
-import { isCollectionStatus, type CollectionPage } from '@/lib/api/types'
+import { isCollectionStatus, isSortOrder, type CollectionPage } from '@/lib/api/types'
 import { galleryHref, isFiltered, type GalleryFilter } from '@/lib/gallery-link'
 
 /**
@@ -32,6 +34,8 @@ async function fetchFirstPage(filter: GalleryFilter): Promise<CollectionPage> {
   if (filter.status != null) url.searchParams.set('status', filter.status)
   if (filter.series != null) url.searchParams.set('series', filter.series)
   if (filter.manufacturer != null) url.searchParams.set('manufacturer', filter.manufacturer)
+  if (filter.q) url.searchParams.set('q', filter.q)
+  if (filter.sort) url.searchParams.set('sort', filter.sort)
 
   const response = await fetch(url, {
     headers: cookieHeader ? { cookie: cookieHeader } : {},
@@ -72,7 +76,17 @@ export default async function CollectionPage({
     status,
     series: typeof params.series === 'string' ? params.series : null,
     manufacturer: typeof params.manufacturer === 'string' ? params.manufacturer : null,
+    // A blank search is no search. Over 200 characters is cut rather than sent to be refused: the
+    // field cannot produce one, so only an edited address can, and a page beats an error there.
+    q: typeof params.q === 'string' && params.q.trim() ? params.q.trim().slice(0, 200) : null,
+    // An unknown order in the address is treated as none, for the same reason (feature 011).
+    sort: typeof params.sort === 'string' && isSortOrder(params.sort) ? params.sort : null,
   }
+
+  // Set by the edit screen after a deletion, so the way back is offered where the collector lands
+  // (feature 010, FR-005). Only a well-formed id is acted on; anything else is ignored.
+  const deleted =
+    typeof params.deleted === 'string' && /^[0-9a-f-]{36}$/i.test(params.deleted) ? params.deleted : null
 
   const page = await fetchFirstPage(filter)
   const isEmptyVault = page.totalUnfiltered === 0
@@ -107,10 +121,18 @@ export default async function CollectionPage({
         </div>
       </header>
 
+      {deleted && <UndoDeleteNotice deletedId={deleted} galleryHref={galleryHref(filter)} />}
+
       {/* The filter is pointless on an empty vault, and showing it would imply there is something
           to narrow. */}
       {!isEmptyVault && (
-        <div className="mb-6">
+        <div className="mb-6 space-y-4">
+          <SearchAndSort
+            // Remount when the address changes, so the field shows the search actually applied.
+            key={`${filter.q ?? ''}|${filter.sort ?? ''}`}
+            q={filter.q ?? null}
+            sort={filter.sort ?? null}
+          />
           <StatusFilter active={status} />
         </div>
       )}

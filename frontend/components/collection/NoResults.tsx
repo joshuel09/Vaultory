@@ -16,6 +16,14 @@ import type { GalleryFilter } from '@/lib/gallery-link'
  */
 
 function describe(filter: GalleryFilter): string {
+  // A search that found nothing says what was searched for (feature 011, FR-005).
+  const q = filter.q?.trim()
+  if (q) {
+    return filter.status != null || filter.series != null || filter.manufacturer != null
+      ? `Nothing matching “${q}” with those filters`
+      : `Nothing matching “${q}”`
+  }
+
   // Against null and undefined, not truthiness: '' is the filter for pieces recording nothing, and
   // it is the one most likely to land here.
   const group =

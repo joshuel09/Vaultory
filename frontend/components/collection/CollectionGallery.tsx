@@ -52,6 +52,10 @@ export function CollectionGallery({ initialItems, initialCursor, filter }: Props
         status: filter.status ?? undefined,
         series: filter.series ?? undefined,
         manufacturer: filter.manufacturer ?? undefined,
+        // The search and order ride on every page too. The cursor belongs to its order, so a page
+        // asked for without it would be refused (feature 011, FR-012).
+        q: filter.q ?? undefined,
+        sort: filter.sort ?? undefined,
       })
       setItems((prev) => [...prev, ...page.items])
       setCursor(page.nextCursor ?? null)

@@ -146,6 +146,9 @@ func (s *Store) Add(
 		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
 			return AddResult{}, ErrUnknownImage
 		}
+		if isImageInUse(err) {
+			return AddResult{}, ErrImageInUse
+		}
 		return AddResult{}, fmt.Errorf("insert collectible: %w", err)
 	}
 
@@ -192,6 +195,20 @@ func (s *Store) Add(
 // same answer whether it never existed or belongs to someone else (FR-027).
 var ErrUnknownImage = errors.New("unknown image for this collector")
 
+// ErrImageInUse means the referenced image already belongs to another collectible — possibly one in
+// the Trash. A photograph belongs to at most one collectible, because destroying a collectible
+// deletes its image row, and a second collectible sharing it would silently lose its photograph
+// (feature 010, FR-018).
+var ErrImageInUse = errors.New("image is already used by another collectible")
+
+// imageUniqueConstraint is the index that enforces ErrImageInUse (migration 000012).
+const imageUniqueConstraint = "collectibles_image_unique"
+
+func isImageInUse(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == uniqueViolation && pgErr.ConstraintName == imageUniqueConstraint
+}
+
 // findBySubmissionKey looks for a collectible already created under this key, inside the window.
 //
 // The window is passed as seconds through make_interval rather than as a duration string: Go
@@ -206,7 +223,8 @@ func (s *Store) findBySubmissionKey(
 		JOIN collectibles c ON c.id = s.collectible_id AND c.collector_id = s.collector_id
 		LEFT JOIN collectible_images i ON i.id = c.image_id AND i.collector_id = c.collector_id
 		WHERE s.collector_id = $1 AND s.submission_key = $2
-		  AND s.created_at > now() - make_interval(secs => $3)`,
+		  AND s.created_at > now() - make_interval(secs => $3)
+		  AND c.deleted_at IS NULL`,
 		collectorID, key, window.Seconds()))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Row{}, false, nil
@@ -222,12 +240,14 @@ func (s *Store) findBySubmissionKey(
 // collector_id is part of the WHERE clause rather than something checked afterwards, so there is
 // no moment at which this code holds another collector's row and has yet to decide what to do with
 // it. Absent and someone-else's are the same answer (FR-030, FR-031).
+//
+// A collectible in the Trash is not in the vault, so it is absent here too (feature 010, FR-002).
 func (s *Store) Get(ctx context.Context, collectorID, collectibleID uuid.UUID) (Row, error) {
 	row, err := scanRow(s.pool.QueryRow(ctx, `
 		SELECT `+collectibleColumns+`
 		FROM collectibles c
 		LEFT JOIN collectible_images i ON i.id = c.image_id AND i.collector_id = c.collector_id
-		WHERE c.id = $1 AND c.collector_id = $2`, collectibleID, collectorID))
+		WHERE c.id = $1 AND c.collector_id = $2 AND c.deleted_at IS NULL`, collectibleID, collectorID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Row{}, ErrNotFound
 	}
@@ -248,6 +268,12 @@ func (s *Store) Get(ctx context.Context, collectorID, collectibleID uuid.UUID) (
 // The files are a separate matter. They are queued rather than deleted here because a transaction
 // cannot roll back a filesystem, and because a storage fault must never be able to stop a
 // collector deleting something (FR-020a, research.md Decisions 4 and 5).
+//
+// Every caller must already have cleared the collectible's own reference — by updating image_id or
+// by deleting the collectible row — before calling this. That order is required, not tidy: the
+// reference is the composite (image_id, collector_id) with ON DELETE SET NULL, which nulls both
+// columns of any collectible still pointing here, and collector_id is NOT NULL, so the delete below
+// would fail (feature 010, FR-018, #73).
 func releaseImage(ctx context.Context, tx pgx.Tx, collectorID, imageID uuid.UUID) error {
 	var originalKey, renditionKey string
 	err := tx.QueryRow(ctx, `
@@ -321,10 +347,12 @@ func (s *Store) Edit(
 	)
 	err = tx.QueryRow(ctx, `
 		SELECT version, image_id FROM collectibles
-		WHERE id = $1 AND collector_id = $2
+		WHERE id = $1 AND collector_id = $2 AND deleted_at IS NULL
 		FOR UPDATE`, collectibleID, collectorID).Scan(&currentVersion, &currentImageID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		// Absent, or another collector's. Deliberately the same answer (FR-031).
+		// Absent, another collector's, or in the Trash. Deliberately the same answer (FR-031). An
+		// edit form left open across a deletion is refused here rather than editing — or
+		// resurrecting — something the collector deleted (feature 010).
 		return Row{}, ErrNotFound
 	}
 	if err != nil {
@@ -374,12 +402,16 @@ func (s *Store) Edit(
 		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
 			return Row{}, ErrUnknownImage
 		}
+		if isImageInUse(err) {
+			return Row{}, ErrImageInUse
+		}
 		return Row{}, fmt.Errorf("update collectible: %w", err)
 	}
 
 	// The photograph is gone from this collectible — replaced or removed. Deleting its row is what
 	// makes it unfetchable, and it happens here, inside the same transaction as the edit, so the
 	// two cannot disagree (FR-020).
+	// After the UPDATE above, never before it: see releaseImage.
 	if currentImageID != nil && (v.ImageID == nil || *v.ImageID != *currentImageID) {
 		if err := releaseImage(ctx, tx, collectorID, *currentImageID); err != nil {
 			return Row{}, err
@@ -403,16 +435,85 @@ func (s *Store) Edit(
 	return row, nil
 }
 
-// Delete removes one collectible permanently, and the photograph it referenced with it.
+// Trash moves one collectible to the Trash (feature 010, FR-001).
 //
-// Reports whether a row was actually removed. The caller does not vary its response on that —
-// deleting something absent is answered as a success either way (FR-025) — but it decides whether
-// a deletion is recorded, because a record of a deletion that did not happen is wrong in exactly
-// the situation the record exists to explain (FR-040).
+// Nothing about the row changes except deleted_at — not its id, its created_at, its version, its
+// attributes or its photograph — which is what lets a restore return it exactly as it was, in its
+// original gallery position (research.md Decisions 1 and 2).
 //
-// collector_id is in the WHERE clause, so there is no path by which this reaches another
-// collector's row (FR-030).
-func (s *Store) Delete(ctx context.Context, collectorID, collectibleID uuid.UUID) (bool, error) {
+// Reports whether it moved. Something absent, another collector's, or already in the Trash is left
+// alone, and its 30 days are not restarted (FR-004). The caller answers success either way (006
+// FR-025) but records only a real move (FR-015).
+//
+// Its add's idempotency record goes in the same transaction. Otherwise a retried add carrying the
+// same submission key would find this collectible and hand back something the collector has deleted
+// (research.md Decision 5).
+func (s *Store) Trash(ctx context.Context, collectorID, collectibleID uuid.UUID) (bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return false, fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	tag, err := tx.Exec(ctx, `
+		UPDATE collectibles SET deleted_at = now()
+		WHERE id = $1 AND collector_id = $2 AND deleted_at IS NULL`, collectibleID, collectorID)
+	if err != nil {
+		return false, fmt.Errorf("move to trash: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return false, nil
+	}
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM collectible_submissions
+		WHERE collectible_id = $1 AND collector_id = $2`, collectibleID, collectorID); err != nil {
+		return false, fmt.Errorf("forget submission: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("commit: %w", err)
+	}
+	return true, nil
+}
+
+// Restore returns one collectible from the Trash to the vault, if it was deleted within retention
+// (feature 010, FR-007).
+//
+// ErrNotFound for anything else — absent, another collector's, never deleted, already restored,
+// destroyed, or older than retention — without saying which (FR-008). The cutoff is the same one
+// the listing and the purge use, so nothing is listed but unrestorable or the reverse (research.md
+// Decision 3).
+//
+// Against the purge: if the purge locked the row first, this UPDATE waits, then finds it gone. If
+// this commits first, the purge's re-check sees deleted_at NULL and passes over it (FR-012).
+func (s *Store) Restore(
+	ctx context.Context, collectorID, collectibleID uuid.UUID, retention time.Duration,
+) (Row, error) {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE collectibles SET deleted_at = NULL
+		WHERE id = $1 AND collector_id = $2
+		  AND deleted_at IS NOT NULL
+		  AND deleted_at > now() - make_interval(secs => $3)`,
+		collectibleID, collectorID, retention.Seconds())
+	if err != nil {
+		return Row{}, fmt.Errorf("restore: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return Row{}, ErrNotFound
+	}
+	return s.Get(ctx, collectorID, collectibleID)
+}
+
+// DeletePermanently destroys one collectible that is in the Trash, and its photograph, now
+// (feature 010, FR-011).
+//
+// This is feature 006's deletion, moved: the image row goes in the same transaction, so nothing can
+// observe the collectible destroyed and its photograph still fetchable (006 FR-020). The files are
+// queued and drained afterwards (006 FR-020a).
+//
+// Only from the Trash. A collectible in the vault has to be moved there first, so there is one way
+// to delete and one confirmation for it. Anything not in this collector's Trash is left alone, and
+// the caller answers success either way, as for any deletion (006 FR-025).
+func (s *Store) DeletePermanently(ctx context.Context, collectorID, collectibleID uuid.UUID) (bool, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("begin: %w", err)
@@ -422,21 +523,15 @@ func (s *Store) Delete(ctx context.Context, collectorID, collectibleID uuid.UUID
 	var imageID *uuid.UUID
 	err = tx.QueryRow(ctx, `
 		DELETE FROM collectibles
-		WHERE id = $1 AND collector_id = $2
+		WHERE id = $1 AND collector_id = $2 AND deleted_at IS NOT NULL
 		RETURNING image_id`, collectibleID, collectorID).Scan(&imageID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		// Already gone, never existed, or someone else's. Nothing to do, and nothing to disclose.
 		return false, nil
 	}
 	if err != nil {
 		return false, fmt.Errorf("delete collectible: %w", err)
 	}
-
-	// The photograph goes with it, in the same transaction. Nothing can observe a state in which
-	// the collectible is gone and its image is still fetchable (FR-020).
-	//
-	// collectible_submissions cascades on collectible_id, so a collectible added inside the
-	// idempotency window deletes cleanly rather than tripping over its own submission row.
+	// After the DELETE above, never before it: see releaseImage.
 	if imageID != nil {
 		if err := releaseImage(ctx, tx, collectorID, *imageID); err != nil {
 			return false, err
@@ -467,23 +562,32 @@ type Page struct {
 // series at all", which is the group the statistics label unspecified. Collapsing the two — which is
 // what a plain string does, because Go cannot tell an absent query parameter from a blank one —
 // makes the unspecified group's link return the whole vault (008 FR-031, research.md Decision 8).
+//
+// Search and Sort arrived with feature 011. Search is the words every result must contain, as the
+// domain parsed them; nil is no search. Sort is the order; empty is newest added first.
 type ListFilter struct {
 	Status       *collectible.CollectionStatus
 	Series       *string
 	Manufacturer *string
+	Search       []string
+	Sort         collectible.SortOrder
 }
 
-// List returns one page in creation order, newest first, optionally narrowed.
+// List returns one page of a collector's vault, narrowed, searched and ordered as asked.
 //
-// Keyset pagination on (created_at, id): page cost stays constant as a collection grows, and the
-// id tiebreaker makes the order total, so entries created in the same instant cannot be skipped or
-// repeated across pages (research.md Decision 7).
+// Keyset pagination: page cost stays constant as a collection grows, and the id tiebreaker makes
+// every order total, so entries sharing a value cannot be skipped or repeated across pages
+// (research.md Decision 7 of feature 001; Decision 2 of feature 011).
 //
 // The series and manufacturer predicates normalise both sides through PostgreSQL, in exactly the
 // form the statistics breakdown groups by: coalesce first, then btrim, then lower. Normalising the
 // parameter in Go instead would be a second implementation of the same rule, and Go's ToLower and
 // PostgreSQL's collation-dependent lower() do not have to agree on every input. When they disagree,
 // a breakdown group and the gallery it links to hold different collectibles (008 SC-010).
+//
+// The search requires every word in the collectible's searchable text. The attributes are joined
+// with a newline and a word holds no whitespace, so no match can straddle two attributes; the words
+// arrive escaped, so none acts as a wildcard (feature 011, FR-002, FR-003).
 func (s *Store) List(
 	ctx context.Context,
 	collectorID uuid.UUID,
@@ -491,16 +595,13 @@ func (s *Store) List(
 	cursor string,
 	limit int,
 ) (Page, error) {
-	var (
-		afterTime *time.Time
-		afterID   *uuid.UUID
-	)
-	if cursor != "" {
-		t, id, err := decodeCursor(cursor)
-		if err != nil {
-			return Page{}, err
-		}
-		afterTime, afterID = &t, &id
+	spec, err := specFor(filter.Sort)
+	if err != nil {
+		return Page{}, err
+	}
+	order := filter.Sort
+	if order == "" {
+		order = collectible.DefaultSortOrder
 	}
 
 	var statusArg *string
@@ -508,33 +609,66 @@ func (s *Store) List(
 		v := string(*filter.Status)
 		statusArg = &v
 	}
+	var words []string
+	for _, w := range filter.Search {
+		words = append(words, likeEscape(w))
+	}
 
-	// One extra row tells us whether a further page exists, without a second count.
-	rows, err := s.pool.Query(ctx, `
-		SELECT `+collectibleColumns+`
+	args := []any{collectorID, statusArg, filter.Series, filter.Manufacturer, words, limit + 1}
+	// The sorted-by key travels in the cursor as text. to_json renders dates and timestamps as
+	// ISO 8601 whatever the session's DateStyle, where ::text follows it — and a cursor rendered as
+	// 06/11/2026 would fail the cursor's own check on the next page (feature 011, FR-017, #85).
+	query := `
+		SELECT ` + collectibleColumns + `, to_json(` + spec.key + `) #>> '{}'
 		FROM collectibles c
 		LEFT JOIN collectible_images i ON i.id = c.image_id AND i.collector_id = c.collector_id
 		WHERE c.collector_id = $1
+		  AND c.deleted_at IS NULL
 		  AND ($2::text IS NULL OR c.collection_status = $2)
-		  AND ($3::timestamptz IS NULL OR (c.created_at, c.id) < ($3, $4))
-		  AND ($6::text IS NULL OR lower(btrim(coalesce(c.series, ''))) = lower(btrim($6)))
-		  AND ($7::text IS NULL OR lower(btrim(coalesce(c.manufacturer, ''))) = lower(btrim($7)))
-		ORDER BY c.created_at DESC, c.id DESC
-		LIMIT $5`,
-		collectorID, statusArg, afterTime, afterID, limit+1,
-		filter.Series, filter.Manufacturer)
+		  AND ($3::text IS NULL OR lower(btrim(coalesce(c.series, ''))) = lower(btrim($3)))
+		  AND ($4::text IS NULL OR lower(btrim(coalesce(c.manufacturer, ''))) = lower(btrim($4)))
+		  AND ($5::text[] IS NULL OR NOT EXISTS (
+		        SELECT 1 FROM unnest($5::text[]) AS w
+		        WHERE NOT (concat_ws(E'\n', c.name, c."character", c.series, c.manufacturer,
+		                             c.category, c.scale, c.edition, c.notes) ILIKE '%' || w || '%')))`
+	if cursor != "" {
+		after, err := decodeGalleryCursor(cursor, order)
+		if err != nil {
+			return Page{}, err
+		}
+		// NULL, not "", when the last entry had no value. The predicate's missing branch does not
+		// read it, but PostgreSQL casts a constant while planning, and ''::numeric is an error
+		// whichever branch would have run.
+		var value *string
+		if !after.missing {
+			value = &after.value
+		}
+		args = append(args, value, after.id, after.missing)
+		query += `
+		  AND ` + spec.after("$7", "$8", "$9")
+	}
+	query += `
+		ORDER BY ` + spec.orderBy() + `
+		LIMIT $6`
+
+	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
 		return Page{}, fmt.Errorf("list collectibles: %w", err)
 	}
 	defer rows.Close()
 
-	var out []Row
+	type keyed struct {
+		row Row
+		key *string
+	}
+	var out []keyed
 	for rows.Next() {
-		r, err := scanRow(rows)
+		var key *string
+		r, err := scanRow(trailing{rows, &key})
 		if err != nil {
 			return Page{}, fmt.Errorf("scan collectible: %w", err)
 		}
-		out = append(out, r)
+		out = append(out, keyed{r, key})
 	}
 	if err := rows.Err(); err != nil {
 		return Page{}, fmt.Errorf("read collectibles: %w", err)
@@ -543,16 +677,23 @@ func (s *Store) List(
 	page := Page{}
 	if len(out) > limit {
 		last := out[limit-1]
-		page.NextCursor = encodeCursor(last.Collectible.CreatedAt, last.Collectible.ID)
+		c := galleryCursor{order: order, id: last.row.Collectible.ID, missing: last.key == nil}
+		if last.key != nil {
+			c.value = *last.key
+		}
+		page.NextCursor = encodeGalleryCursor(c)
 		out = out[:limit]
 	}
-	page.Rows = out
+	page.Rows = make([]Row, 0, len(out))
+	for _, k := range out {
+		page.Rows = append(page.Rows, k.row)
+	}
 
 	// The second of the page's two statements. It is what lets the frontend tell an empty vault
-	// (FR-041) from a filter matching nothing (FR-040) without another request. Constant work per
-	// page load, not per entry.
+	// (FR-041) from a filter or search matching nothing (FR-040) without another request — so it
+	// counts the whole vault, ignoring every filter and the search. Constant work per page load.
 	if err := s.pool.QueryRow(ctx,
-		`SELECT count(*) FROM collectibles WHERE collector_id = $1`, collectorID,
+		`SELECT count(*) FROM collectibles WHERE collector_id = $1 AND deleted_at IS NULL`, collectorID,
 	).Scan(&page.TotalUnfiltered); err != nil {
 		return Page{}, fmt.Errorf("count collection: %w", err)
 	}
@@ -566,22 +707,21 @@ func encodeCursor(t time.Time, id uuid.UUID) string {
 }
 
 func decodeCursor(raw string) (time.Time, uuid.UUID, error) {
-	invalid := errors.New("cursor is not valid")
 	data, err := base64.RawURLEncoding.DecodeString(raw)
 	if err != nil {
-		return time.Time{}, uuid.Nil, invalid
+		return time.Time{}, uuid.Nil, ErrCursorInvalid
 	}
 	nanos, idPart, ok := strings.Cut(string(data), "|")
 	if !ok {
-		return time.Time{}, uuid.Nil, invalid
+		return time.Time{}, uuid.Nil, ErrCursorInvalid
 	}
 	n, err := strconv.ParseInt(nanos, 10, 64)
 	if err != nil {
-		return time.Time{}, uuid.Nil, invalid
+		return time.Time{}, uuid.Nil, ErrCursorInvalid
 	}
 	id, err := uuid.Parse(idPart)
 	if err != nil {
-		return time.Time{}, uuid.Nil, invalid
+		return time.Time{}, uuid.Nil, ErrCursorInvalid
 	}
 	return time.Unix(0, n).UTC(), id, nil
 }

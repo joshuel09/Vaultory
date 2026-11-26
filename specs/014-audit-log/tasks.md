@@ -36,3 +36,15 @@
 
 **T011**, the built app on PostgreSQL with a local SMTP sink, driven with curl: registration, email verification, one failed sign-in, a sign-in, a sign-out, five failures and a refusal for an address with no account, and a completed reset each produced exactly one entry, in that order, with the account where there is one and the address key where there is not. The sessions the reset ended were not recorded as sign-outs. 0 entries contain an address, a password or a network address.
 
+
+## Current-main integration review — 2026-11-26
+
+- [ ] T029 Record moving to Trash, restoring, permanent deletion, and expiry purge as distinct audit actions in the transaction that changes the collectible. Restore must use a transaction for the mutation and audit entry; no-op/refused changes must not record success.
+- [ ] T030 Extend migration 14 action constraints and feature 014's contract/data model for the Trash lifecycle; keep migration reversible.
+- [ ] T031 Add integration regressions for each Trash lifecycle event, atomic rollback on audit failure, and owner/no-op refusals; verify migration up/down/up on disposable data.
+- [ ] T032 Reconcile existing audit and query-budget tests against current main, run backend/frontend gates and required latest-head CI, and verify account hooks still retain lockout behavior.
+
+The original PR recorded generic hard deletion before feature 010 merged. Current
+main changes that operation into Trash. The review found no transactional audit entry
+in Trash or Restore, and permanent deletion still used the old generic action.
+This is incomplete integration, not a verified complete audit feature.

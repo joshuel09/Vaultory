@@ -82,6 +82,13 @@ func run() error {
 	// Deliberately not fatal and deliberately not in a goroutine. Nothing a collector can see
 	// depends on it — the images are already unreachable — so a failure here is worth recording and
 	// nothing more. It is bounded to one batch, so it cannot delay start-up for long.
+	//
+	// Collectibles whose time in the Trash ran out while the service was down are destroyed first,
+	// so their photographs' files join the drain below (feature 010, FR-010).
+	service.PurgeExpiredTrash(ctx)
+	// Uploads abandoned while the service was down are swept first, so their files join the drain
+	// below rather than waiting for the next upload (feature 009, FR-009).
+	service.SweepAbandonedUploads(ctx)
 	if drained := service.DrainImageDeletions(ctx); drained > 0 {
 		slog.Info("removed image files left over from a previous run", "images", drained)
 	}
@@ -115,6 +122,10 @@ func run() error {
 		slog.Info("shutting down")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		return srv.Shutdown(shutdownCtx)
+		err := srv.Shutdown(shutdownCtx)
+		// A sweep an upload started may still be running; let it finish its batch rather than cut
+		// it off. Each is bounded, so this is too (feature 009, FR-009).
+		service.WaitForBackground()
+		return err
 	}
 }
