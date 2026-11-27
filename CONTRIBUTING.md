@@ -12,9 +12,9 @@ How to run and test the stack lives in the [README](README.md).
 **Nothing is committed directly to `main`.** Every change goes through an issue, a branch, and a pull
 request, in that order.
 
-1. **Open an issue first**, on the [Vaultory project board](https://github.com/users/joshuel09/projects/1),
+1. **Open an issue first**, from the [Issues page](https://github.com/joshuel09/Vaultory/issues),
    before writing any code. The body says what the task is and why it exists, not just the title
-   again.
+   again. A maintainer adds it to the Vaultory project board before implementation starts.
 2. **Branch from `main`**, named after the issue: `<issue-number>-<short-summary>`, for example
    `26-edit-delete-collectibles`.
 3. **Reference the issue in every commit** with `Refs #<issue-number>` in the message body.

@@ -113,3 +113,15 @@ Writer B: T004 → T005 → T008                  (README.md)
 
 MVP is US1 (T001–T005): the workflow is findable and the stale section is gone. US2 then adds the
 rules, US3 the gates. One pull request for all of it — the change is small enough to review whole.
+
+## GitHub link review — 2026-11-27 (#118)
+
+Published README links to CONTRIBUTING.md near its start, and GitHub’s community
+profile recognizes the guide. All12 document/external destinations other than the
+project board resolved with HTTP200, including every fragment anchor. The board
+returned404 to anonymous visitors; the guide now links to public Issues and assigns
+board placement to a maintainer. No board visibility settings were changed.
+
+T013 remains incomplete: signed-out issue creation redirects to login, and the
+computer/browser access host was unavailable. The signed-in new-issue and new-PR
+forms were not observed, so their contribution-guideline prompts remain unverified.
