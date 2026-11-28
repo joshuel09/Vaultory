@@ -309,3 +309,26 @@ failures or retries, 8.5 minutes**, across desktop/tablet/mobile. Includes navig
 fixes from PRs #120 and #123. Production images used the isolated stack and test-only
 auth limits described above. amd64 size and cross-architecture verification remain
 unmeasured; this result establishes arm64 operation only.
+
+### Multi-platform build verification (#108)
+
+Build production Dockerfiles for both targets without publishing images:
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 --output type=oci,dest=/tmp/vaultory-backend.oci backend
+docker buildx build --platform linux/amd64,linux/arm64 --output type=oci,dest=/tmp/vaultory-frontend.oci frontend
+```
+
+Inspect each OCI archive's image index for both target manifests. These commands
+verify builds, not native x86-64 runtime behavior or exported filesystem size;
+issue #107 remains separate. Archive destinations are temporary local artifacts.
+
+**Verified 2026-11-28:** both commands completed on Docker Desktop arm64,
+BuildKit v0.33.0, source `9be8b75`. Both OCI archives contain Linux amd64 and
+arm64 image manifests, and each image configuration agrees with its platform.
+Backend manifest prefixes: amd64 `3c233d1f8070`, arm64 `1f687453a0f1`.
+Frontend manifest prefixes: amd64 `afa4e2165a43`, arm64 `af889a99e253`.
+No images were pushed. amd64 frontend build used emulation; no native x86-64
+runtime or size claim is made. CI was not expanded: this verification performs
+foreign-architecture dependency installation and a full Next.js build, so it is
+not a cheap addition to every Dockerfile PR.
