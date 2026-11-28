@@ -309,3 +309,16 @@ failures or retries, 8.5 minutes**, across desktop/tablet/mobile. Includes navig
 fixes from PRs #120 and #123. Production images used the isolated stack and test-only
 auth limits described above. amd64 size and cross-architecture verification remain
 unmeasured; this result establishes arm64 operation only.
+
+### Multi-platform build verification (#108)
+
+Build production Dockerfiles for both targets without publishing images:
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 --output type=oci,dest=/tmp/vaultory-backend.oci backend
+docker buildx build --platform linux/amd64,linux/arm64 --output type=oci,dest=/tmp/vaultory-frontend.oci frontend
+```
+
+Inspect each OCI archive's image index for both target manifests. These commands
+verify builds, not native x86-64 runtime behavior or exported filesystem size;
+issue #107 remains separate. Archive destinations are temporary local artifacts.
